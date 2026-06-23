@@ -246,16 +246,19 @@ class SmartExecutor:
 
             account = engine.get_account_state()
             position_value = quantity * price
-            available_cash = account.get("available_cash", 0)
-            total_capital = account.get("total_capital", 100000)
+            available_cash = account.get("cash") or account.get("available_cash", 0)
+            total_capital = account.get("total_equity") or account.get("total_capital", 100000)
 
             # Check cash available
             if position_value > available_cash:
                 return False
 
             # Check position size limit
-            position_pct = (position_value / total_capital) * 100
-            if position_pct > self.max_position_pct * 100:
+            if total_capital > 0:
+                position_pct = (position_value / total_capital) * 100
+                if position_pct > self.max_position_pct * 100:
+                    return False
+            else:
                 return False
 
             # Check existing positions for this symbol
@@ -295,11 +298,12 @@ class SmartExecutor:
                 return {"error": "Trading engine not initialized"}
 
             account = engine.get_account_state()
-            total_capital = account.get("total_capital", 100000)
+            total_capital = account.get("total_equity") or account.get("total_capital", 100000)
+            available_cash = account.get("cash") or account.get("available_cash", 0)
 
             position_value = quantity * price
-            position_pct = (position_value / total_capital) * 100
-            cash_after = account.get("available_cash", 0) - position_value
+            position_pct = (position_value / total_capital * 100) if total_capital > 0 else 0
+            cash_after = available_cash - position_value
 
             detector = get_regime_detector()
             if detector:
@@ -310,7 +314,6 @@ class SmartExecutor:
                 stop_price = price * 0.98
                 target_price = price * 1.02
 
-            available_cash = account.get("available_cash", 1)  # Avoid division by zero
             cash_util = (position_value / available_cash * 100) if available_cash > 0 else 0
 
             return {
