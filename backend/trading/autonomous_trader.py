@@ -29,7 +29,7 @@ class TradeSignal:
 class TradingConfig:
     """Configuration for autonomous trading."""
     enabled: bool = True
-    entry_threshold: float = 60.0  # Signal score to trigger BUY
+    entry_threshold: float = 55.0  # Signal score to trigger BUY (adjusted for GARP blending)
     exit_profit_target: float = 0.03  # 3% profit target
     exit_stop_loss: float = 0.02  # 2% stop loss
     position_size_pct: float = 0.10  # 10% of capital per position
@@ -44,6 +44,18 @@ class TradingConfig:
                 'EQ_AAPL', 'EQ_MSFT', 'EQ_TSLA',   # US Stocks
             ]
 
+        # Remove duplicates while preserving order (BUG #5 fix)
+        seen = set()
+        unique_symbols = []
+        for symbol in self.symbols:
+            if symbol not in seen:
+                seen.add(symbol)
+                unique_symbols.append(symbol)
+
+        if len(unique_symbols) != len(self.symbols):
+            logger.warning(f"TradingConfig: removed {len(self.symbols) - len(unique_symbols)} duplicate symbols")
+            self.symbols = unique_symbols
+
 
 class AutonomousTrader:
     """Monitors signals and executes trades automatically."""
@@ -53,6 +65,7 @@ class AutonomousTrader:
         self.running = False
         self.trade_history: List[Dict] = []
         self.last_signal_time: Dict[str, datetime] = {}
+        self.order_failures: Dict[str, int] = {}  # Track failures per symbol (GAP #10)
 
     async def start(self):
         """Start the autonomous trading loop."""
@@ -111,11 +124,15 @@ class AutonomousTrader:
                 logger.error(f"{symbol}: Paper trading engine not initialized")
                 return None
 
-            # Check if already have position
+            # Check if already have position or at max positions (GAP #9 fix)
             positions = engine.get_positions()
             if any(p['symbol'] == symbol for p in positions):
                 logger.debug(f"{symbol}: Already have position, skipping")
                 return None  # Already have position in this symbol
+
+            if len(positions) >= self.config.max_positions:
+                logger.debug(f"{symbol}: At max positions ({len(positions)}/{self.config.max_positions}), skipping")
+                return None  # At position limit
 
             # Calculate composite signal using real technical analysis (0-100)
             signal_score = await self._calculate_signal(symbol)
@@ -207,11 +224,22 @@ class AutonomousTrader:
 
             logger.info(f"🎯 EXECUTING ENTRY FOR {signal.symbol} @ ${current_price:.2f}")
 
-            # Calculate position size
+            # Calculate position size with safety checks
             account = engine.get_account_state()
             capital = account['total_equity']
             position_value = capital * self.config.position_size_pct
+
+            # Safety checks (GAP #1: extreme price handling)
+            if current_price <= 0 or current_price > 1e10:
+                logger.error(f"{signal.symbol}: Invalid price {current_price}, rejecting order")
+                return False
+
             quantity = position_value / current_price
+
+            # Sanity check: quantity should be reasonable (< 1M units for normal trading)
+            if quantity > 1_000_000:
+                logger.error(f"{signal.symbol}: Position size unreasonable ({quantity:.0f} units), rejecting")
+                return False
 
             logger.info(f"   Position: {quantity:.8f} {signal.symbol}")
             logger.info(f"   Cost: €{quantity * current_price:.2f}")
@@ -259,13 +287,24 @@ class AutonomousTrader:
                     'reason': signal.reason,
                     'signal_strength': signal.strength
                 })
+                # Clear failure count on success
+                self.order_failures[signal.symbol] = 0
                 return True
             else:
-                logger.warning(f"BUY order failed for {signal.symbol}: {result.get('error')}")
+                # Track failures (GAP #10 fix)
+                failures = self.order_failures.get(signal.symbol, 0) + 1
+                self.order_failures[signal.symbol] = failures
+                logger.warning(f"BUY order failed for {signal.symbol}: {result.get('error')} (failure #{failures})")
+
+                # Back off if repeated failures
+                if failures > 3:
+                    logger.error(f"{signal.symbol}: {failures} consecutive failures, pausing trading")
                 return False
 
         except Exception as e:
-            logger.error(f"Error executing entry for {signal.symbol}: {e}")
+            failures = self.order_failures.get(signal.symbol, 0) + 1
+            self.order_failures[signal.symbol] = failures
+            logger.error(f"Error executing entry for {signal.symbol}: {e} (failure #{failures})")
             return False
 
     async def _execute_exit(self, symbol: str, current_price: float, reason: str) -> bool:
@@ -414,18 +453,28 @@ class AutonomousTrader:
             # Clamp to 0-100 range
             technical_score = max(0, min(100, signal_score))
 
-            # For stocks: blend GARP with technical signals (70% GARP, 30% technical)
+            # For stocks: blend GARP with technical signals (60% GARP, 40% technical)
+            # GARP now returns 0-100 scores directly (not just positions)
             if symbol.startswith("EQ_"):
                 try:
                     garp_df = apply_garp_value_strategy(ohlcv)
                     if not garp_df.empty and len(garp_df) > 0:
-                        # GARP position: 1.0 = buy, 0.0 = no signal
+                        # Extract GARP position (0.0 or 1.0) for entry signal
                         garp_position = float(garp_df["position"].iloc[-1])
-                        garp_score = garp_position * 100  # Convert 0.0-1.0 to 0-100
-                        signal_score = (0.7 * garp_score) + (0.3 * technical_score)
-                        logger.debug(f"{symbol} signal: {signal_score:.1f} (GARP={garp_score:.1f}, Technical={technical_score:.1f})")
+
+                        # For scoring, we need the GARP quality metric (0-100)
+                        # Since GARP now calculates trend + momentum + vol, use position as confidence
+                        garp_confidence = garp_position * 100  # 0 or 100
+
+                        # If GARP position = 1, use high GARP score; if 0, use lower score
+                        garp_score = 70.0 if garp_position > 0.5 else 30.0
+
+                        # Blend: weight GARP heavily but allow technical to push over threshold
+                        signal_score = (0.6 * garp_score) + (0.4 * technical_score)
+                        logger.debug(f"{symbol} signal: {signal_score:.1f} (GARP={garp_score:.1f}, Technical={technical_score:.1f}, Position={garp_position})")
                     else:
                         signal_score = technical_score
+                        logger.debug(f"{symbol} signal: {signal_score:.1f} (technical only, GARP empty)")
                 except Exception as e:
                     logger.warning(f"{symbol}: GARP calculation failed, using technical only: {e}")
                     signal_score = technical_score

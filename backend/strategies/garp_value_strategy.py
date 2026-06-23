@@ -34,16 +34,18 @@ class GARPValueStrategy:
         Returns DataFrame with 'position' column (0.0-1.0)
         """
         result = df.copy()
+        logger.debug(f"GARP: applying strategy to {len(result)} rows")
 
         # Handle empty data
         if result.empty or len(result) < 50:
             result["position"] = 0.0
+            logger.warning(f"GARP: insufficient data ({len(result)} rows), returning zeros")
             return result[["Open", "High", "Low", "Close", "Volume", "position"]]
 
         # Merge defaults with provided params
         params = {
-            "garp_threshold": 70.0,
-            "momentum_window": 20,
+            "garp_threshold": 50.0,  # Lowered from 70 to account for technical trading
+            "momentum_window": 10,   # Faster momentum for short-term trading
             "exit_stop_loss": 0.08,
             "exit_profit_target": 0.15,
         }
@@ -55,24 +57,44 @@ class GARPValueStrategy:
         stop_loss = params["exit_stop_loss"]
         profit_target = params["exit_profit_target"]
 
-        # Calculate GARP score components
-        # Score based on: trend quality, volatility, momentum
-        daily_returns = result["Close"].pct_change()
+        # GARP for technical trading: simplified quality-based entry
+        # Avoid deprecated pct_change() default
+        daily_returns = result["Close"].pct_change(fill_method=None)
         volatility = daily_returns.rolling(window=20).std()
 
-        # Trend strength: price vs 50-day MA
-        ma_50 = result["Close"].rolling(window=50).mean()
-        price_trend = (result["Close"] / ma_50 - 1) * 100
+        # Quality criterion 1: Price above short-term MA (20-day trend)
+        ma_20 = result["Close"].rolling(window=20).mean()
+        above_ma = result["Close"] > ma_20
 
-        # GARP Score: quality (low vol) + reasonable price (good trend)
-        # Higher trend + lower volatility = higher GARP score
-        garp_scores = (70 - volatility * 50 + price_trend).clip(0, 100)
+        # Quality criterion 2: Not overextended (price not too far from 20-day MA)
+        # Within 5% of MA = good entry zone
+        price_pct_from_ma = ((result["Close"] - ma_20) / ma_20 * 100).fillna(0)
+        not_overbought = price_pct_from_ma <= 5.0
 
-        # Momentum: is GARP improving?
-        garp_momentum = garp_scores.diff(window).fillna(0)
+        # Quality criterion 3: Moderate volatility (not crashing, not too calm)
+        # Reasonable range: 0.5% to 3% daily volatility
+        vol_reasonable = (volatility >= 0.005) & (volatility <= 0.03)
+        vol_reasonable = vol_reasonable.fillna(False)
 
-        # Entry: GARP >= threshold AND momentum improving
-        entry_signal = (garp_scores >= threshold) & (garp_momentum > 0)
+        # Momentum: 5-day price rate of change
+        momentum_5d = result["Close"].pct_change(5, fill_method=None)
+        momentum_positive = momentum_5d > 0
+
+        # Volume check (GAP #11 fix): reject illiquid symbols
+        # Minimum volume: 100K units (reasonable for most crypto/stocks)
+        min_volume = 100_000
+        has_volume = result["Volume"] >= min_volume
+
+        # Entry signal: All quality criteria met + positive momentum + sufficient volume
+        entry_signal = above_ma & not_overbought & vol_reasonable & momentum_positive & has_volume
+
+        # GARP quality score (0-100) based on criteria
+        garp_scores = (
+            above_ma.astype(float) * 35 +           # 35 pts for above MA
+            not_overbought.astype(float) * 25 +     # 25 pts for good entry zone
+            vol_reasonable.astype(float) * 25 +     # 25 pts for healthy volatility
+            has_volume.astype(float) * 15           # 15 pts for sufficient volume
+        ).fillna(0)
 
         # Position tracking with stop-loss and profit target
         position = np.zeros(len(result))
@@ -100,7 +122,12 @@ class GARPValueStrategy:
                 position[i] = 0.0
 
         result["position"] = position
+        rows_before = len(result)
         result = result.dropna()
+        rows_after = len(result)
+
+        if rows_before != rows_after:
+            logger.warning(f"GARP: dropped {rows_before - rows_after} rows ({100*(rows_before-rows_after)/rows_before:.1f}%) due to NaN values")
 
         return result[["Open", "High", "Low", "Close", "Volume", "position"]]
 
