@@ -97,13 +97,8 @@ class AutonomousTrader:
             if any(p['symbol'] == symbol for p in positions):
                 return None  # Already have position in this symbol
 
-            # Get signal strength
-            signal_gen = get_signal_generator()
-            if not signal_gen:
-                return None
-
-            # Calculate composite signal (0-100)
-            signal_score = self._calculate_signal(symbol)
+            # Calculate composite signal using real technical analysis (0-100)
+            signal_score = await self._calculate_signal(symbol)
 
             if signal_score >= self.config.entry_threshold:
                 # Generate entry signal
@@ -279,30 +274,104 @@ class AutonomousTrader:
             logger.error(f"Error executing exit for {symbol}: {e}")
             return False
 
-    def _calculate_signal(self, symbol: str) -> float:
-        """Calculate composite signal (0-100) for a symbol."""
-        # This would call the actual composite signal calculation
-        # For now, return a placeholder that can be enhanced
+    async def _calculate_signal(self, symbol: str) -> float:
+        """Calculate composite signal (0-100) for a symbol using real technical analysis."""
         try:
-            signal_gen = get_signal_generator()
-            if signal_gen:
-                # Would calculate from technical indicators, ML model, etc.
-                return 65.0  # Placeholder: moderate buy signal
-            return 0.0
-        except:
+            from backend.analytics.historical_data import get_historical_service
+            from datetime import datetime, timedelta
+
+            hist_service = get_historical_service()
+            if not hist_service:
+                return 0.0
+
+            # Get last 60 days of OHLCV data for technical analysis
+            end = datetime.utcnow()
+            start = end - timedelta(days=60)
+
+            ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+            if ohlcv is None or ohlcv.empty or len(ohlcv) < 14:
+                # Not enough data for technical analysis
+                return 0.0
+
+            # Calculate technical indicators
+            prices = ohlcv['Close']
+
+            # RSI (14-period)
+            delta = prices.diff()
+            gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+            loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            rsi_value = rsi.iloc[-1]
+
+            # MACD
+            exp1 = prices.ewm(span=12, adjust=False).mean()
+            exp2 = prices.ewm(span=26, adjust=False).mean()
+            macd = exp1 - exp2
+            signal_line = macd.ewm(span=9, adjust=False).mean()
+            macd_histogram = macd - signal_line
+            macd_value = macd_histogram.iloc[-1]
+
+            # Bollinger Bands
+            sma = prices.rolling(window=20).mean()
+            std = prices.rolling(window=20).std()
+            upper_band = sma + (std * 2)
+            lower_band = sma - (std * 2)
+            current_price = prices.iloc[-1]
+            bb_position = (current_price - lower_band.iloc[-1]) / (upper_band.iloc[-1] - lower_band.iloc[-1]) if upper_band.iloc[-1] != lower_band.iloc[-1] else 0.5
+
+            # Calculate composite signal (0-100)
+            signal_score = 50.0  # Neutral baseline
+
+            # RSI component (0-30 points)
+            if rsi_value < 30:
+                signal_score += 30  # Oversold = strong buy
+            elif rsi_value < 40:
+                signal_score += 20  # Weak oversold
+            elif rsi_value > 70:
+                signal_score -= 20  # Overbought = sell
+            elif rsi_value > 60:
+                signal_score -= 10  # Slightly overbought
+
+            # MACD component (0-20 points)
+            if macd_value > 0:
+                signal_score += min(20, macd_value * 100)  # Bullish momentum
+            else:
+                signal_score += max(-20, macd_value * 100)  # Bearish momentum
+
+            # Bollinger Bands component (0-30 points)
+            if bb_position < 0.2:
+                signal_score += 30  # Near lower band = oversold
+            elif bb_position > 0.8:
+                signal_score -= 20  # Near upper band = overbought
+            elif bb_position > 0.5:
+                signal_score += 10  # Above middle = bullish
+            else:
+                signal_score -= 10  # Below middle = bearish
+
+            # Clamp to 0-100 range
+            signal_score = max(0, min(100, signal_score))
+
+            logger.debug(f"{symbol} signal: {signal_score:.1f} (RSI={rsi_value:.1f}, MACD={macd_value:.4f}, BB={bb_position:.2f})")
+            return signal_score
+
+        except Exception as e:
+            logger.error(f"Error calculating signal for {symbol}: {e}")
             return 0.0
 
     async def _get_current_prices(self) -> Dict[str, float]:
-        """Get current prices for all symbols."""
+        """Get current prices from Binance WebSocket."""
         try:
-            engine = get_paper_trading()
-            if not engine:
+            from backend.exchange.binance_stream import get_stream_client
+            client = get_stream_client()
+            if not client:
                 return {}
 
-            # In real implementation, would fetch from WebSocket
-            # For now, return empty dict (prices from actual market)
-            return {}
-        except:
+            # Get cached prices from WebSocket
+            prices = client.get_prices(self.config.symbols)
+            return prices
+        except Exception as e:
+            logger.error(f"Error fetching prices: {e}")
             return {}
 
     def get_status(self) -> Dict:
