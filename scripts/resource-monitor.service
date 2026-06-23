@@ -1,0 +1,27 @@
+[Unit]
+Description=System Resource Monitor - Stops Sentinel Bot if Resources Low
+After=network.target
+StartLimitInterval=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=trader
+WorkingDirectory=/home/trader/crypto-daytrading
+Environment="PYTHONPATH=/home/trader/crypto-daytrading"
+ExecStart=/home/trader/crypto-daytrading/venv/bin/python /home/trader/crypto-daytrading/scripts/resource_monitor.py
+
+# Critical process - restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=resource-monitor
+
+# Resource limits (monitor itself should use minimal resources)
+MemoryMax=500M
+
+[Install]
+WantedBy=multi-user.target
