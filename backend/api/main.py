@@ -1471,7 +1471,13 @@ async def get_smart_trading_status(symbol: str = "BTCUSDT") -> JSONResponse:
 
 @app.get("/")
 async def root():
-    """Root endpoint - serve dashboard or JSON info."""
+    """Root endpoint - serve unified dashboard."""
+    # Try unified dashboard first
+    unified_path = Path(__file__).parent.parent.parent / "frontend" / "unified-dashboard.html"
+    if unified_path.exists():
+        return FileResponse(unified_path, media_type="text/html")
+
+    # Fallback to index.html
     frontend_path = Path(__file__).parent.parent.parent / "frontend" / "index.html"
     if frontend_path.exists():
         return FileResponse(frontend_path, media_type="text/html")
@@ -1485,6 +1491,16 @@ async def root():
             "docs": "/docs",
         }
     )
+
+
+@app.get("/dashboard")
+async def dashboard():
+    """Dashboard endpoint - serve unified dashboard."""
+    unified_path = Path(__file__).parent.parent.parent / "frontend" / "unified-dashboard.html"
+    if unified_path.exists():
+        return FileResponse(unified_path, media_type="text/html")
+
+    raise HTTPException(status_code=404, detail="Dashboard not found")
 
 
 if __name__ == "__main__":

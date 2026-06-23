@@ -282,21 +282,22 @@ class TestFrontendServing:
         response = client.get("/")
         html = response.text
 
-        # Check for key sections
-        assert "Account Status" in html
-        assert "Strategy Allocation" in html
+        # Check for key sections (unified dashboard)
+        assert "Account Summary" in html
         assert "Open Positions" in html
         assert "Recent Trades" in html
-        assert "Real-Time Alerts" in html
-        assert "Time-Based Presets" in html
+        assert "Market Status" in html
+        assert "Strategies" in html
+        assert "Dashboard" in html
 
     def test_html_contains_api_calls(self, client):
         """HTML should have JavaScript for API calls."""
         response = client.get("/")
         html = response.text
 
-        # Check for API endpoint references
-        assert "API_BASE" in html
+        # Check for API endpoint references (unified dashboard uses const API)
+        assert "const API" in html or "API_BASE" in html
+        assert "/api/" in html
         assert "dashboard" in html.lower()
         assert "trading" in html.lower()
         assert "pause" in html.lower()
