@@ -7,6 +7,29 @@ import numpy as np
 from backend.analytics.signals import SignalGenerator
 
 
+@pytest.fixture(autouse=True)
+def cleanup_allocation():
+    """Clean up allocation file and reset manager before and after tests."""
+    from pathlib import Path
+    import backend.analytics.allocation as alloc_module
+
+    # Clean before
+    if alloc_module.ALLOCATION_FILE.exists():
+        alloc_module.ALLOCATION_FILE.unlink()
+
+    # Reset global allocation manager
+    alloc_module._allocation_manager = None
+
+    yield
+
+    # Clean after
+    if alloc_module.ALLOCATION_FILE.exists():
+        alloc_module.ALLOCATION_FILE.unlink()
+
+    # Reset global allocation manager
+    alloc_module._allocation_manager = None
+
+
 @pytest.fixture
 def signal_gen():
     """Create signal generator for tests."""

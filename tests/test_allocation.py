@@ -27,9 +27,17 @@ def client():
 @pytest.fixture(autouse=True)
 def setup_allocation():
     """Initialize and clean up allocation manager."""
+    # Clean up allocation file before test
+    import backend.analytics.allocation as alloc_module
+    if alloc_module.ALLOCATION_FILE.exists():
+        alloc_module.ALLOCATION_FILE.unlink()
+
     init_allocation()
     yield
-    # Cleanup
+
+    # Cleanup after test
+    if alloc_module.ALLOCATION_FILE.exists():
+        alloc_module.ALLOCATION_FILE.unlink()
     if TEST_ALLOCATION_FILE.exists():
         TEST_ALLOCATION_FILE.unlink()
 
@@ -351,10 +359,10 @@ class TestAllocationIntegration:
         import pandas as pd
         import numpy as np
 
-        # Get signal generator
-        from backend.analytics.signals import get_signal_generator
+        # Initialize signal generator
+        from backend.analytics.signals import init_signal_generator, get_signal_generator
 
-        signal_gen = get_signal_generator()
+        signal_gen = init_signal_generator()
         if not signal_gen:
             pytest.skip("Signal generator not initialized")
 
