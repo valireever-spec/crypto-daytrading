@@ -95,28 +95,55 @@ class BinanceStreamClient:
                     if "result" in data or "id" in data:
                         continue
 
-                    # Extract stream name
-                    stream = data.get("stream")
-                    if not stream:
+                    # Handle TWO message formats from Binance:
+                    # 1. Wrapped: {"stream": "btcusdt@kline_1m", "data": {...}}
+                    # 2. Unwrapped (default): {"e": "kline", "s": "BTCUSDT", "k": {...}}
+
+                    if "stream" in data:
+                        # Format 1: Wrapped (individual stream URLs)
+                        stream = data.get("stream")
+                        if not stream:
+                            continue
+
+                        callback = self.subscriptions.get(stream)
+                        if not callback:
+                            continue
+
+                        symbol = stream.split("@")[0].upper()
+                        payload = data.get("data", {})
+                    elif "e" in data and "s" in data:
+                        # Format 2: Unwrapped (subscription on single connection)
+                        symbol = data.get("s", "").upper()
+
+                        # Find matching stream subscription for this symbol
+                        stream = None
+                        for sub_stream in self.subscriptions:
+                            if sub_stream.lower().startswith(symbol.lower()):
+                                stream = sub_stream
+                                break
+
+                        if not stream:
+                            continue
+
+                        callback = self.subscriptions.get(stream)
+                        if not callback:
+                            continue
+
+                        payload = data  # Unwrapped data IS the payload
+                    else:
                         continue
 
-                    # Get callback for this stream
-                    callback = self.subscriptions.get(stream)
-                    if not callback:
-                        continue
-
-                    # Extract symbol (e.g., 'btcusdt' from 'btcusdt@kline_1m')
-                    symbol = stream.split("@")[0].upper()
-
-                    # Update price cache and timestamp
-                    if "k" in data:  # Kline (candle)
-                        price = float(data["k"]["c"])
+                    # Update price cache and timestamp (works for both formats)
+                    if "k" in payload:  # Kline (candle)
+                        price = float(payload["k"]["c"])
                         self.price_cache[symbol] = price
                         self.last_update[symbol] = datetime.utcnow()
-                    elif "p" in data:  # 24h ticker (price)
-                        price = float(data["p"])
+                        logger.info(f"✓ {symbol}: ${price:.2f} (kline from Binance)")
+                    elif "p" in payload:  # Trade price
+                        price = float(payload["p"])
                         self.price_cache[symbol] = price
                         self.last_update[symbol] = datetime.utcnow()
+                        logger.info(f"✓ {symbol}: ${price:.2f} (trade from Binance)")
 
                     # Call the callback
                     await callback(symbol, data)

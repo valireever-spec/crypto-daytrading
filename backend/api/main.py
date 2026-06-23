@@ -155,20 +155,27 @@ async def lifespan(app: FastAPI):
 
     # Start simulator to inject prices if WebSocket doesn't receive them
     async def inject_simulated_prices():
-        """Continuously inject simulated prices into stream cache."""
+        """Continuously inject simulated prices into stream cache (fallback only)."""
+        fallback_logged = False
         while True:
             try:
                 stream_client = get_stream_client()
                 if stream_client:
-                    # Only inject if WebSocket hasn't received real prices
-                    if len(stream_client.price_cache) == 0:
+                    # Only inject if WebSocket is connected but hasn't received real prices (timeout)
+                    if stream_client.is_connected and len(stream_client.price_cache) == 0:
+                        if not fallback_logged:
+                            logger.warning("Binance WebSocket connected but no price data. Using fallback simulator...")
+                            fallback_logged = True
                         simulator.update()
                         prices = simulator.get_prices()
                         from datetime import datetime
                         for symbol, price in prices.items():
                             stream_client.price_cache[symbol] = price
                             stream_client.last_update[symbol] = datetime.utcnow()
-                            logger.info(f"Simulated price: {symbol} = ${price:.2f}")
+                        logger.debug(f"Injected simulated prices (fallback)")
+                    elif len(stream_client.price_cache) > 0:
+                        # Real Binance data is flowing, reset fallback flag
+                        fallback_logged = False
                 await asyncio.sleep(3)  # Update every 3 seconds
             except Exception as e:
                 logger.error(f"Simulator injection error: {e}")
