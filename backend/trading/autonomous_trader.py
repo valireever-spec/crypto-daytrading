@@ -10,6 +10,7 @@ from backend.exchange.paper_trading import get_paper_trading
 from backend.analytics.regime_detector import get_regime_detector
 from backend.analytics.signals import get_signal_generator
 from backend.execution.smart_executor import get_smart_executor
+from backend.strategies.garp_value_strategy import apply_garp_value_strategy
 
 logger = logging.getLogger(__name__)
 
@@ -411,8 +412,27 @@ class AutonomousTrader:
                 signal_score -= 10  # Below middle = bearish
 
             # Clamp to 0-100 range
-            signal_score = max(0, min(100, signal_score))
+            technical_score = max(0, min(100, signal_score))
 
+            # For stocks: blend GARP with technical signals (70% GARP, 30% technical)
+            if symbol.startswith("EQ_"):
+                try:
+                    garp_df = apply_garp_value_strategy(ohlcv)
+                    if not garp_df.empty and len(garp_df) > 0:
+                        # GARP position: 1.0 = buy, 0.0 = no signal
+                        garp_position = float(garp_df["position"].iloc[-1])
+                        garp_score = garp_position * 100  # Convert 0.0-1.0 to 0-100
+                        signal_score = (0.7 * garp_score) + (0.3 * technical_score)
+                        logger.debug(f"{symbol} signal: {signal_score:.1f} (GARP={garp_score:.1f}, Technical={technical_score:.1f})")
+                    else:
+                        signal_score = technical_score
+                except Exception as e:
+                    logger.warning(f"{symbol}: GARP calculation failed, using technical only: {e}")
+                    signal_score = technical_score
+            else:
+                signal_score = technical_score
+
+            signal_score = max(0, min(100, signal_score))
             logger.debug(f"{symbol} signal: {signal_score:.1f} (RSI={rsi_value:.1f}, MACD={macd_value:.4f}, BB={bb_position:.2f})")
             return signal_score
 
