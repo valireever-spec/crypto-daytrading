@@ -21,6 +21,7 @@ from backend.analytics.allocation import init_allocation, get_allocation
 from backend.analytics.strategy_analytics import init_analytics, get_analytics
 from backend.analytics.backtest_engine import BacktestEngine
 from backend.analytics.historical_data import init_historical_service, get_historical_service
+from backend.analytics.regime_detector import init_regime_detector, get_regime_detector
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -78,6 +79,10 @@ async def lifespan(app: FastAPI):
     # Initialize historical data service
     init_historical_service()
     logger.info("Historical data service initialized")
+
+    # Initialize regime detector
+    init_regime_detector()
+    logger.info("Regime detector initialized")
 
     # Initialize Binance stream client (real prices)
     stream_client = await init_stream_client()
@@ -1150,6 +1155,315 @@ async def compare_strategies(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+
+
+# === Market Regime Detection Endpoints (Phase 2 Week 7) ===
+
+
+@app.post("/api/regime/detect")
+async def detect_market_regime(symbol: str) -> JSONResponse:
+    """Detect current market regime for a symbol.
+
+    Args:
+        symbol: Trading symbol (e.g., 'BTCUSDT')
+
+    Returns:
+        Current regime classification with confidence and metrics
+    """
+    try:
+        # Get historical data
+        hist_service = get_historical_service()
+        if not hist_service:
+            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
+        from datetime import datetime, timedelta
+        end = datetime.now()
+        start = end - timedelta(days=60)
+
+        ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+        if ohlcv is None or ohlcv.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No historical data found for {symbol}"
+            )
+
+        # Detect regime
+        detector = get_regime_detector()
+        if not detector:
+            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+
+        metrics = detector.detect_regime(ohlcv, symbol=symbol)
+
+        return JSONResponse(
+            {
+                "symbol": symbol,
+                "regime": metrics.regime,
+                "confidence": round(metrics.confidence, 2),
+                "volatility_pct": round(metrics.volatility_pct, 2),
+                "trend_strength": round(metrics.trend_strength, 2),
+                "support_level": round(metrics.support_level, 2),
+                "resistance_level": round(metrics.resistance_level, 2),
+                "ma_20": round(metrics.ma_20, 2),
+                "ma_50": round(metrics.ma_50, 2),
+                "rsi": round(metrics.rsi, 1),
+                "atr": round(metrics.atr, 2),
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Regime detection error: {e}")
+        raise HTTPException(status_code=500, detail=f"Regime detection failed: {str(e)}")
+
+
+@app.get("/api/regime/trading-rules/{regime}")
+async def get_regime_trading_rules(regime: str) -> JSONResponse:
+    """Get recommended trading rules for a market regime.
+
+    Args:
+        regime: Market regime (BULL, BEAR, SIDEWAYS, VOLATILE)
+
+    Returns:
+        Position sizing, stop loss, take profit, and recommended strategies
+    """
+    valid_regimes = ["BULL", "BEAR", "SIDEWAYS", "VOLATILE"]
+    if regime.upper() not in valid_regimes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid regime. Must be one of: {', '.join(valid_regimes)}"
+        )
+
+    try:
+        detector = get_regime_detector()
+        if not detector:
+            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+
+        rules = detector.get_regime_trading_rules(regime.upper())
+
+        return JSONResponse(
+            {
+                "regime": regime.upper(),
+                "position_size_multiplier": rules["position_size_multiplier"],
+                "stop_loss_pct": rules["stop_loss_pct"],
+                "take_profit_pct": rules["take_profit_pct"],
+                "recommended_strategies": rules["recommended_strategies"],
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Trading rules error: {e}")
+        raise HTTPException(status_code=500, detail=f"Trading rules failed: {str(e)}")
+
+
+@app.post("/api/regime/strategy-impact")
+async def analyze_regime_strategy_impact(symbol: str) -> JSONResponse:
+    """Analyze how current regime impacts each strategy's performance.
+
+    Args:
+        symbol: Trading symbol
+
+    Returns:
+        Regime-specific adjustment factors for each strategy
+    """
+    try:
+        # Detect current regime
+        hist_service = get_historical_service()
+        if not hist_service:
+            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
+        from datetime import datetime, timedelta
+        end = datetime.now()
+        start = end - timedelta(days=60)
+
+        ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+        if ohlcv is None or ohlcv.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No historical data found for {symbol}"
+            )
+
+        detector = get_regime_detector()
+        if not detector:
+            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+
+        metrics = detector.detect_regime(ohlcv, symbol=symbol)
+
+        # Get strategy adjustments for this regime
+        adjustments = {
+            "momentum": detector._get_strategy_adjustment("momentum", metrics.regime),
+            "reversion": detector._get_strategy_adjustment("reversion", metrics.regime),
+            "grid": detector._get_strategy_adjustment("grid", metrics.regime),
+        }
+
+        return JSONResponse(
+            {
+                "symbol": symbol,
+                "current_regime": metrics.regime,
+                "confidence": round(metrics.confidence, 2),
+                "strategy_adjustments": {
+                    "momentum": round(adjustments["momentum"], 2),
+                    "reversion": round(adjustments["reversion"], 2),
+                    "grid": round(adjustments["grid"], 2),
+                },
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Strategy impact analysis error: {e}")
+        raise HTTPException(status_code=500, detail=f"Strategy impact analysis failed: {str(e)}")
+
+
+# === Smart Trading Gateway Endpoints (Phase 2 Week 8) ===
+
+
+@app.post("/api/trading/smart-gateway")
+async def smart_trading_entry(
+    symbol: str,
+    quantity: float,
+    current_price: float,
+    min_confidence: float = 0.6,
+) -> JSONResponse:
+    """Smart entry decision with regime-aware execution.
+
+    Automatically determines the best strategy to use and position sizing
+    based on current market regime and confidence level.
+
+    Args:
+        symbol: Trading symbol
+        quantity: Requested quantity
+        current_price: Current market price
+        min_confidence: Minimum regime confidence to execute (0.0-1.0)
+
+    Returns:
+        Execution decision with recommended strategy and position sizing
+    """
+    try:
+        # Detect current regime
+        hist_service = get_historical_service()
+        if not hist_service:
+            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
+        from datetime import datetime, timedelta
+        end = datetime.now()
+        start = end - timedelta(days=60)
+
+        ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+        if ohlcv is None or ohlcv.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No historical data found for {symbol}"
+            )
+
+        detector = get_regime_detector()
+        if not detector:
+            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+
+        metrics = detector.detect_regime(ohlcv, symbol=symbol)
+
+        # Check confidence threshold
+        if metrics.confidence < min_confidence:
+            return JSONResponse(
+                {
+                    "decision": "WAIT",
+                    "reason": f"Regime confidence {metrics.confidence:.0%} below threshold {min_confidence:.0%}",
+                    "current_regime": metrics.regime,
+                    "confidence": round(metrics.confidence, 2),
+                }
+            )
+
+        # Get trading rules for this regime
+        rules = detector.get_regime_trading_rules(metrics.regime)
+
+        # Calculate adjusted position size
+        adjusted_quantity = quantity * rules["position_size_multiplier"]
+
+        # Determine best strategy for this regime
+        best_strategy = rules["recommended_strategies"][0] if rules["recommended_strategies"] else "grid"
+
+        return JSONResponse(
+            {
+                "decision": "EXECUTE",
+                "symbol": symbol,
+                "current_regime": metrics.regime,
+                "regime_confidence": round(metrics.confidence, 2),
+                "recommended_strategy": best_strategy,
+                "original_quantity": quantity,
+                "adjusted_quantity": round(adjusted_quantity, 4),
+                "adjustment_multiplier": round(rules["position_size_multiplier"], 2),
+                "stop_loss_pct": rules["stop_loss_pct"],
+                "take_profit_pct": rules["take_profit_pct"],
+                "entry_price": round(current_price, 2),
+                "stop_loss_price": round(current_price * (1 - rules["stop_loss_pct"] / 100), 2),
+                "take_profit_price": round(current_price * (1 + rules["take_profit_pct"] / 100), 2),
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Smart gateway error: {e}")
+        raise HTTPException(status_code=500, detail=f"Smart gateway failed: {str(e)}")
+
+
+@app.get("/api/trading/smart-status")
+async def get_smart_trading_status(symbol: str = "BTCUSDT") -> JSONResponse:
+    """Get current market regime and smart trading recommendations.
+
+    Args:
+        symbol: Trading symbol (default BTCUSDT)
+
+    Returns:
+        Current regime, confidence, and recommended strategies
+    """
+    try:
+        # Detect current regime
+        hist_service = get_historical_service()
+        if not hist_service:
+            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
+        from datetime import datetime, timedelta
+        end = datetime.now()
+        start = end - timedelta(days=60)
+
+        ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+        if ohlcv is None or ohlcv.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No historical data found for {symbol}"
+            )
+
+        detector = get_regime_detector()
+        if not detector:
+            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+
+        metrics = detector.detect_regime(ohlcv, symbol=symbol)
+        rules = detector.get_regime_trading_rules(metrics.regime)
+
+        return JSONResponse(
+            {
+                "symbol": symbol,
+                "current_regime": metrics.regime,
+                "confidence": round(metrics.confidence, 2),
+                "volatility_pct": round(metrics.volatility_pct, 2),
+                "trend_strength": round(metrics.trend_strength, 2),
+                "rsi": round(metrics.rsi, 1),
+                "recommended_strategies": rules["recommended_strategies"],
+                "position_multiplier": rules["position_size_multiplier"],
+                "risk_settings": {
+                    "stop_loss_pct": rules["stop_loss_pct"],
+                    "take_profit_pct": rules["take_profit_pct"],
+                },
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Smart status error: {e}")
+        raise HTTPException(status_code=500, detail=f"Smart status failed: {str(e)}")
 
 
 # === Root Endpoint ===
