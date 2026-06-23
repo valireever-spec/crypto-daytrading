@@ -70,7 +70,10 @@ def sideways_market_data():
     """Create sideways market OHLCV data."""
     dates = pd.date_range('2024-01-01', periods=100, freq='D')
     base_price = 100
-    prices = [base_price + np.random.normal(0, 1) for _ in range(100)]
+    # Create true sideways: constrained oscillation around base price
+    np.random.seed(42)
+    noise = np.random.normal(0, 0.5, 100)
+    prices = [base_price + noise[i] for i in range(100)]
 
     df = pd.DataFrame({
         'Open': prices,
