@@ -572,10 +572,34 @@
 
             <div class="grid">
                 <div class="card">
+                    <h2>🌐 WebSocket Connection</h2>
+                    <div class="metric-row">
+                        <div class="metric">
+                            <div class="metric-label">Status</div>
+                            <div class="metric-value" id="ws-status">--</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Subscriptions</div>
+                            <div class="metric-value" id="ws-subscriptions">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Cached Prices</div>
+                            <div class="metric-value" id="ws-cached">0</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 4px;">
+                        <div style="font-size: 11px; color: #999; margin-bottom: 5px;">Active Streams:</div>
+                        <div id="ws-streams" style="font-size: 12px; color: #333; font-family: monospace;">--</div>
+                    </div>
+                </div>
+
+                <div class="card">
                     <h2>📊 Trading Rules (Current Regime)</h2>
                     <div id="trading-rules" class="empty">Loading...</div>
                 </div>
+            </div>
 
+            <div class="grid">
                 <div class="card">
                     <h2>🎯 Strategy Impact</h2>
                     <div id="strategy-impact" class="empty">Loading...</div>
@@ -807,7 +831,7 @@
 
         async function refreshMarket() {
             try {
-                const [regime, health, prices] = await Promise.all([
+                const [regime, health, pricesResp] = await Promise.all([
                     fetch(`${API}/regime/detect?symbol=BTCUSDT`).then(r => r.json()),
                     fetch(`${API}/health`).then(r => r.json()),
                     fetch(`${API}/prices`).then(r => r.json())
@@ -856,7 +880,20 @@
                     </div>
                 `;
 
-                updatePrices(health.paper_trading || {});
+                // Update WebSocket status
+                const wsStatus = pricesResp.stream_status || {};
+                document.getElementById('ws-status').textContent = wsStatus.connected ? '✓ Connected' : '✗ Disconnected';
+                document.getElementById('ws-subscriptions').textContent = wsStatus.subscriptions || 0;
+                document.getElementById('ws-cached').textContent = wsStatus.cached_prices || 0;
+
+                // Update stream list
+                const streams = wsStatus.subscriptions > 0
+                    ? ['btcusdt@kline_1m', 'ethusdt@kline_1m', 'bnbusdt@kline_1m'].join('\n')
+                    : 'No streams';
+                document.getElementById('ws-streams').textContent = streams;
+
+                // Update prices from WebSocket data
+                updatePrices(pricesResp.prices || {});
             } catch (e) {
                 console.error('Market error:', e);
             }
@@ -969,13 +1006,23 @@
             `).join('');
         }
 
-        function updatePrices(paperTradingData) {
+        function updatePrices(pricesData) {
             const tbody = document.getElementById('prices');
-            if (!paperTradingData) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty">No price data</td></tr>';
+            if (!pricesData || Object.keys(pricesData).length === 0) {
+                const wsStatus = document.getElementById('health-ws');
+                const statusText = wsStatus ? wsStatus.textContent : 'Waiting...';
+                tbody.innerHTML = `<tr><td colspan="3" class="empty">WebSocket: ${statusText} | Waiting for Binance price ticks...</td></tr>`;
                 return;
             }
-            tbody.innerHTML = `<tr><td>BTCUSDT</td><td>${fmt(paperTradingData.cash)}</td><td>${new Date(paperTradingData.last_update).toLocaleTimeString()}</td></tr>`;
+
+            const rows = Object.entries(pricesData).map(([symbol, price]) => `
+                <tr>
+                    <td class="symbol">${symbol}</td>
+                    <td>${typeof price === 'number' ? fmt(price) : '$' + price}</td>
+                    <td>${new Date().toLocaleTimeString()}</td>
+                </tr>
+            `);
+            tbody.innerHTML = rows.length > 0 ? rows.join('') : '<tr><td colspan="3" class="empty">No prices available yet</td></tr>';
         }
 
         function updateBotStatus(isOnline) {
