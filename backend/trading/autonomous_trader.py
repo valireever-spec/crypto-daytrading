@@ -294,15 +294,30 @@ class AutonomousTrader:
                 return 0.0
 
             # Calculate technical indicators
-            prices = ohlcv['Close']
+            # Extract 'Close' prices, handling both flat and multi-level columns
+            try:
+                prices = ohlcv['Close']
+                # If prices is a DataFrame (multi-level), extract the first column as Series
+                if hasattr(prices, 'iloc'):
+                    if len(prices.shape) > 1:
+                        prices = prices.iloc[:, 0]
+            except:
+                return 0.0
 
             # RSI (14-period)
+            import pandas as pd
             delta = prices.diff()
             gain = delta.where(delta > 0, 0).rolling(window=14).mean()
             loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
-            rs = gain / loss
+
+            # Calculate RS safely handling division
+            rs = gain / loss.replace(0, 0.0001)  # Avoid division by zero
             rsi = 100 - (100 / (1 + rs))
-            rsi_value = rsi.iloc[-1]
+            try:
+                rsi_value = float(rsi.iloc[-1])
+                rsi_value = 50.0 if pd.isna(rsi_value) else rsi_value
+            except:
+                rsi_value = 50.0
 
             # MACD
             exp1 = prices.ewm(span=12, adjust=False).mean()
@@ -310,15 +325,22 @@ class AutonomousTrader:
             macd = exp1 - exp2
             signal_line = macd.ewm(span=9, adjust=False).mean()
             macd_histogram = macd - signal_line
-            macd_value = macd_histogram.iloc[-1]
+            try:
+                macd_value = float(macd_histogram.iloc[-1])
+                macd_value = 0.0 if pd.isna(macd_value) else macd_value
+            except:
+                macd_value = 0.0
 
             # Bollinger Bands
             sma = prices.rolling(window=20).mean()
             std = prices.rolling(window=20).std()
             upper_band = sma + (std * 2)
             lower_band = sma - (std * 2)
-            current_price = prices.iloc[-1]
-            bb_position = (current_price - lower_band.iloc[-1]) / (upper_band.iloc[-1] - lower_band.iloc[-1]) if upper_band.iloc[-1] != lower_band.iloc[-1] else 0.5
+            current_price = float(prices.iloc[-1])
+            upper_val = float(upper_band.iloc[-1])
+            lower_val = float(lower_band.iloc[-1])
+            band_diff = upper_val - lower_val
+            bb_position = (current_price - lower_val) / band_diff if band_diff > 0.001 else 0.5
 
             # Calculate composite signal (0-100)
             signal_score = 50.0  # Neutral baseline
