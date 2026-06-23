@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from datetime import datetime
 
 from backend.exchange.paper_trading import get_paper_trading
@@ -13,6 +13,7 @@ from backend.execution.smart_executor import get_smart_executor
 from backend.strategies.garp_value_strategy import apply_garp_value_strategy
 from backend.analytics.signal_explainer import get_signal_explainer
 from backend.analytics.volatility_manager import get_volatility_manager
+from backend.trading.portfolio_decision_coordinator import get_portfolio_decision_coordinator
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ class AutonomousTrader:
     async def _trading_loop(self):
         """Main trading loop - runs continuously."""
         loop_count = 0
+        portfolio_check_interval = 12  # Check portfolio decisions every 60 seconds (12 * 5s)
         while self.running:
             try:
                 loop_count += 1
@@ -100,6 +102,10 @@ class AutonomousTrader:
                     logger.debug("⏳ Waiting for Binance WebSocket prices...")
                     await asyncio.sleep(1)
                     continue
+
+                # Check portfolio-level decisions (Phase 318) every 60 seconds
+                if loop_count % portfolio_check_interval == 0:
+                    await self._check_portfolio_decisions()
 
                 # Monitor each symbol
                 for symbol in self.config.symbols:
@@ -273,6 +279,178 @@ class AutonomousTrader:
 
         except Exception as e:
             logger.error(f"Error checking exits: {e}", exc_info=True)
+
+    async def _check_portfolio_decisions(self):
+        """Check and execute portfolio-level regime decisions (Phase 318)."""
+        try:
+            engine = get_paper_trading()
+            if not engine:
+                return
+
+            # Get portfolio state
+            positions = engine.get_positions()
+            prices = await self._get_current_prices()
+            account = engine.get_account_state()
+            portfolio_value = account.get('total_equity', 0)
+
+            if not positions or not prices or portfolio_value <= 0:
+                return
+
+            # Fetch regime data for all positions
+            symbol_regimes = await self._fetch_all_regimes(
+                [p['symbol'] for p in positions]
+            )
+
+            if not symbol_regimes:
+                return
+
+            # Get portfolio decisions from coordinator (Phase 318)
+            coordinator = get_portfolio_decision_coordinator()
+            decisions = await coordinator.make_portfolio_decisions(
+                symbol_regimes=symbol_regimes,
+                current_positions=positions,
+                portfolio_value=portfolio_value,
+                target_allocation=self._get_target_allocation(),
+                current_prices=prices,
+            )
+
+            # Execute high-urgency decisions (exits, critical rotations)
+            for decision in decisions:
+                if decision.urgency >= 8:
+                    # High urgency: execute immediately
+                    await self._execute_portfolio_decision(decision, prices)
+                elif decision.urgency >= 6:
+                    # Medium urgency: queue for execution
+                    logger.info(f"📋 Queued portfolio decision: {decision.decision_type} "
+                              f"(urgency {decision.urgency}/10)")
+                else:
+                    # Low urgency: just log
+                    logger.debug(f"📋 Portfolio decision: {decision.decision_type} "
+                               f"(urgency {decision.urgency}/10)")
+
+        except Exception as e:
+            logger.error(f"Error checking portfolio decisions: {e}", exc_info=True)
+
+    async def _fetch_all_regimes(self, symbols: List[str]) -> Dict[str, Any]:
+        """Fetch regime info for all symbols."""
+        try:
+            from backend.analytics.historical_data import get_historical_service
+            from backend.analytics.regime_detector import get_regime_detector
+
+            hist_service = get_historical_service()
+            regime_detector = get_regime_detector()
+            regimes = {}
+
+            if not hist_service:
+                return regimes
+
+            end = datetime.utcnow()
+            start = end - timedelta(days=90)
+
+            for symbol in symbols:
+                try:
+                    ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+                    if ohlcv is not None and len(ohlcv) >= 200:
+                        regime_info = regime_detector.detect_regime(ohlcv)
+                        regimes[symbol] = regime_info
+                except Exception as e:
+                    logger.debug(f"Could not fetch regime for {symbol}: {e}")
+
+            return regimes
+
+        except Exception as e:
+            logger.error(f"Error fetching regimes: {e}")
+            return {}
+
+    def _get_target_allocation(self) -> Dict[str, float]:
+        """Get target allocation (equal weight for now)."""
+        if not self.config.symbols:
+            return {}
+
+        equal_weight = 100.0 / len(self.config.symbols)
+        return {symbol: equal_weight for symbol in self.config.symbols}
+
+    async def _execute_portfolio_decision(
+        self,
+        decision: "PortfolioDecision",  # Type hint
+        current_prices: Dict[str, float],
+    ) -> bool:
+        """Execute a portfolio-level decision (exit, rotation, rebalance)."""
+        try:
+            engine = get_paper_trading()
+            if not engine:
+                logger.error("Paper trading engine not initialized")
+                return False
+
+            logger.info(f"🚀 Executing portfolio decision: {decision.decision_type}")
+            logger.info(f"   Targets: {decision.target_symbols}")
+            logger.info(f"   Actions: {decision.actions}")
+            logger.info(f"   Rationale: {decision.rationale}")
+
+            executed_count = 0
+
+            # Execute actions in priority order
+            for symbol, action in decision.actions.items():
+                if action == "SELL":
+                    # Find and close position
+                    positions = engine.get_positions()
+                    pos = next((p for p in positions if p['symbol'] == symbol), None)
+
+                    if pos:
+                        result = await engine.place_order(
+                            symbol=symbol,
+                            side='SELL',
+                            quantity=pos['quantity'],
+                            current_price=current_prices.get(symbol, pos['entry_price']),
+                            order_type='MARKET',
+                            strategy_name='portfolio_decision_coordinator'
+                        )
+
+                        if result.get('status') == 'FILLED':
+                            logger.info(f"✅ Sold {pos['quantity']:.6f} {symbol} "
+                                      f"@ {current_prices.get(symbol, 0):.2f}")
+                            executed_count += 1
+                        else:
+                            logger.warning(f"❌ Failed to sell {symbol}: {result.get('error')}")
+
+                elif action == "BUY":
+                    # Execute BUY for rotation/rebalancing
+                    # Use conservative sizing: 5% of portfolio per symbol
+                    account = engine.get_account_state()
+                    capital = account['total_equity'] * 0.05
+                    price = current_prices.get(symbol)
+
+                    if price and price > 0:
+                        quantity = capital / price
+
+                        result = await engine.place_order(
+                            symbol=symbol,
+                            side='BUY',
+                            quantity=quantity,
+                            current_price=price,
+                            order_type='MARKET',
+                            strategy_name='portfolio_decision_coordinator'
+                        )
+
+                        if result.get('status') == 'FILLED':
+                            logger.info(f"✅ Bought {quantity:.6f} {symbol} @ {price:.2f}")
+                            executed_count += 1
+                        else:
+                            logger.warning(f"❌ Failed to buy {symbol}: {result.get('error')}")
+
+            # Mark decision as executed if all actions completed
+            if executed_count == len(decision.actions):
+                coordinator = get_portfolio_decision_coordinator()
+                coordinator.mark_decision_executed(decision)
+                logger.info(f"✅ Portfolio decision executed: {decision.decision_type}")
+                return True
+            else:
+                logger.warning(f"⚠️ Partial execution: {executed_count}/{len(decision.actions)} actions")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error executing portfolio decision: {e}", exc_info=True)
+            return False
 
     async def _execute_entry(self, signal: TradeSignal) -> bool:
         """Execute a BUY order."""
