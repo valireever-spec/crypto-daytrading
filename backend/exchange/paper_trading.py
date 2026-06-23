@@ -78,6 +78,7 @@ class PaperTradingEngine:
         current_price: float,
         order_type: Literal["MARKET", "LIMIT"] = "MARKET",
         limit_price: Optional[float] = None,
+        strategy_name: Optional[str] = None,
     ) -> Dict:
         """Place a simulated order at real Binance price.
 
@@ -88,6 +89,7 @@ class PaperTradingEngine:
             current_price: Current market price from WebSocket
             order_type: MARKET or LIMIT
             limit_price: Limit price if LIMIT order
+            strategy_name: Optional name of strategy that generated the signal (e.g., 'momentum', 'reversion')
 
         Returns:
             Order confirmation with fill details
@@ -118,6 +120,7 @@ class PaperTradingEngine:
             fee = gross_amount * self.FEE_RATE
 
             # Update positions and cash
+            entry_price_for_analytics = None
             if side == "BUY":
                 self.cash -= gross_amount + fee
                 self.positions[symbol] = Position(
@@ -137,6 +140,7 @@ class PaperTradingEngine:
                     }
 
                 position = self.positions[symbol]
+                entry_price_for_analytics = position.entry_price
                 realized_pnl = (fill_price - position.entry_price) * quantity - fee
                 self.total_pnl += realized_pnl
                 self.daily_pnl += realized_pnl
@@ -160,6 +164,23 @@ class PaperTradingEngine:
 
             self.trade_history.append(trade)
             self._log_trade(trade)
+
+            # Record to strategy analytics if strategy_name provided
+            if strategy_name and side == "SELL" and entry_price_for_analytics:
+                try:
+                    from backend.analytics.strategy_analytics import get_analytics
+                    analytics = get_analytics()
+                    if analytics:
+                        analytics.record_trade(
+                            strategy_name=strategy_name,
+                            pnl=realized_pnl,
+                            quantity=quantity,
+                            entry_price=entry_price_for_analytics,
+                            exit_price=fill_price,
+                        )
+                        logger.info(f"Recorded {strategy_name} trade for {symbol}: P&L ${realized_pnl:.2f}")
+                except Exception as e:
+                    logger.warning(f"Could not record strategy analytics: {e}")
 
             logger.info(
                 f"PAPER FILLED: {side} {quantity} {symbol} @ {fill_price:.2f} | "

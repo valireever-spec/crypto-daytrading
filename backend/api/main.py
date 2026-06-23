@@ -18,6 +18,7 @@ from backend.exchange.binance_stream import init_stream_client, get_stream_clien
 from backend.exchange.paper_trading import init_paper_trading, get_paper_trading
 from backend.analytics.signals import init_signal_generator, get_signal_generator
 from backend.analytics.allocation import init_allocation, get_allocation
+from backend.analytics.strategy_analytics import init_analytics, get_analytics
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -67,6 +68,10 @@ async def lifespan(app: FastAPI):
     # Initialize allocation manager
     init_allocation()
     logger.info("Allocation manager initialized")
+
+    # Initialize strategy analytics
+    init_analytics(lookback_days=30)
+    logger.info("Strategy analytics initialized")
 
     # Initialize Binance stream client (real prices)
     stream_client = await init_stream_client()
@@ -203,6 +208,7 @@ async def place_paper_order(
     quantity: float,
     current_price: float,
     order_type: str = "MARKET",
+    strategy_name: str = None,
 ) -> JSONResponse:
     """Place a paper trading order."""
     engine = get_paper_trading()
@@ -218,6 +224,7 @@ async def place_paper_order(
         quantity=quantity,
         current_price=current_price,
         order_type=order_type,  # type: ignore
+        strategy_name=strategy_name,
     )
 
     return JSONResponse(result)
@@ -650,6 +657,276 @@ async def get_allocation_presets() -> JSONResponse:
 
     presets = mgr.get_presets()
     return JSONResponse({"presets": presets})
+
+
+# === Strategy Analytics Endpoints (FR-011: Per-Strategy Performance) ===
+
+
+@app.post("/api/strategies/record-trade")
+async def record_strategy_trade(
+    strategy_name: str,
+    pnl: float,
+    quantity: float,
+    entry_price: float,
+    exit_price: float,
+) -> JSONResponse:
+    """Record a trade for a strategy.
+
+    Args:
+        strategy_name: Name of the strategy (e.g., 'momentum', 'reversion')
+        pnl: Profit/loss amount
+        quantity: Trade quantity
+        entry_price: Entry price
+        exit_price: Exit price
+
+    Returns:
+        Updated strategy statistics
+    """
+    analytics = get_analytics()
+    if not analytics:
+        raise HTTPException(status_code=500, detail="Analytics not initialized")
+
+    analytics.record_trade(
+        strategy_name=strategy_name,
+        pnl=pnl,
+        quantity=quantity,
+        entry_price=entry_price,
+        exit_price=exit_price,
+    )
+
+    stats = analytics.get_strategy_stats(strategy_name)
+    return JSONResponse(
+        {
+            "strategy": strategy_name,
+            "total_trades": stats.total_trades,
+            "winning_trades": stats.winning_trades,
+            "losing_trades": stats.losing_trades,
+            "win_rate_pct": round(stats.win_rate, 1),
+            "total_pnl": stats.total_pnl,
+            "avg_win": stats.avg_win,
+            "avg_loss": stats.avg_loss,
+            "expectancy": stats.expectancy,
+        }
+    )
+
+
+@app.get("/api/strategies/stats/{strategy_name}")
+async def get_strategy_stats(strategy_name: str) -> JSONResponse:
+    """Get statistics for a specific strategy.
+
+    Args:
+        strategy_name: Name of the strategy
+
+    Returns:
+        Strategy statistics and performance metrics
+    """
+    analytics = get_analytics()
+    if not analytics:
+        raise HTTPException(status_code=500, detail="Analytics not initialized")
+
+    stats = analytics.get_strategy_stats(strategy_name)
+    if not stats:
+        raise HTTPException(status_code=404, detail=f"Strategy '{strategy_name}' not found")
+
+    # Handle infinity in profit_factor (JSON-safe)
+    profit_factor = stats.profit_factor
+    if profit_factor == float('inf'):
+        profit_factor_value = 999.9
+    else:
+        profit_factor_value = round(profit_factor, 2)
+
+    return JSONResponse(
+        {
+            "strategy": strategy_name,
+            "total_trades": stats.total_trades,
+            "winning_trades": stats.winning_trades,
+            "losing_trades": stats.losing_trades,
+            "win_rate_pct": round(stats.win_rate, 1),
+            "total_pnl": stats.total_pnl,
+            "avg_win": round(stats.avg_win, 2),
+            "avg_loss": round(stats.avg_loss, 2),
+            "largest_win": stats.largest_win,
+            "largest_loss": stats.largest_loss,
+            "consecutive_wins": stats.consecutive_wins,
+            "consecutive_losses": stats.consecutive_losses,
+            "expectancy": round(stats.expectancy, 2),
+            "profit_factor": profit_factor_value,
+            "last_trade_time": stats.last_trade_time.isoformat() if stats.last_trade_time else None,
+        }
+    )
+
+
+@app.get("/api/strategies/all-stats")
+async def get_all_strategy_stats() -> JSONResponse:
+    """Get statistics for all strategies.
+
+    Returns:
+        Dictionary mapping strategy names to their statistics
+    """
+    analytics = get_analytics()
+    if not analytics:
+        raise HTTPException(status_code=500, detail="Analytics not initialized")
+
+    all_stats = analytics.get_all_stats()
+    strategies_data = {}
+
+    for name, stats in all_stats.items():
+        # Handle infinity in profit_factor (JSON-safe)
+        profit_factor = stats.profit_factor
+        if profit_factor == float('inf'):
+            profit_factor_value = 999.9
+        else:
+            profit_factor_value = round(profit_factor, 2)
+
+        strategies_data[name] = {
+            "total_trades": stats.total_trades,
+            "winning_trades": stats.winning_trades,
+            "losing_trades": stats.losing_trades,
+            "win_rate_pct": round(stats.win_rate, 1),
+            "total_pnl": stats.total_pnl,
+            "expectancy": round(stats.expectancy, 2),
+            "profit_factor": profit_factor_value,
+        }
+
+    return JSONResponse(
+        {
+            "strategies": strategies_data,
+            "count": len(all_stats),
+            "timestamp": pd.Timestamp.utcnow().isoformat(),
+        }
+    )
+
+
+@app.get("/api/strategies/best")
+async def get_best_strategy() -> JSONResponse:
+    """Get the best-performing strategy by win rate.
+
+    Returns:
+        Best strategy name and its stats, or null if insufficient data
+    """
+    analytics = get_analytics()
+    if not analytics:
+        raise HTTPException(status_code=500, detail="Analytics not initialized")
+
+    best_name = analytics.get_best_strategy()
+    if not best_name:
+        return JSONResponse(
+            {
+                "best_strategy": None,
+                "reason": "No strategies with sufficient trades (minimum 5)",
+            }
+        )
+
+    stats = analytics.get_strategy_stats(best_name)
+    return JSONResponse(
+        {
+            "best_strategy": best_name,
+            "win_rate_pct": round(stats.win_rate, 1),
+            "total_trades": stats.total_trades,
+            "expectancy": round(stats.expectancy, 2),
+            "total_pnl": stats.total_pnl,
+        }
+    )
+
+
+@app.get("/api/strategies/allocation")
+async def get_strategy_allocation() -> JSONResponse:
+    """Get optimal capital allocation across strategies.
+
+    Uses win rate and expectancy to weight allocation.
+
+    Returns:
+        Dictionary mapping strategy names to allocation percentages
+    """
+    analytics = get_analytics()
+    if not analytics:
+        raise HTTPException(status_code=500, detail="Analytics not initialized")
+
+    allocation = analytics.calculate_allocation()
+
+    return JSONResponse(
+        {
+            "allocation": {name: round(pct * 100, 1) for name, pct in allocation.items()},
+            "total_pct": 100.0,
+            "timestamp": pd.Timestamp.utcnow().isoformat(),
+        }
+    )
+
+
+@app.get("/api/strategies/recent-stats/{strategy_name}")
+async def get_recent_strategy_stats(strategy_name: str, days: int = 7) -> JSONResponse:
+    """Get statistics for recent period only.
+
+    Args:
+        strategy_name: Name of the strategy
+        days: Number of days to include (default 7)
+
+    Returns:
+        Strategy statistics for recent period
+    """
+    analytics = get_analytics()
+    if not analytics:
+        raise HTTPException(status_code=500, detail="Analytics not initialized")
+
+    recent_stats = analytics.get_recent_stats(strategy_name, days=days)
+
+    return JSONResponse(
+        {
+            "strategy": strategy_name,
+            "period_days": days,
+            "total_trades": recent_stats.total_trades,
+            "winning_trades": recent_stats.winning_trades,
+            "losing_trades": recent_stats.losing_trades,
+            "win_rate_pct": round(recent_stats.win_rate, 1),
+            "total_pnl": recent_stats.total_pnl,
+            "expectancy": round(recent_stats.expectancy, 2),
+        }
+    )
+
+
+@app.post("/api/strategies/reset/{strategy_name}")
+async def reset_strategy(strategy_name: str) -> JSONResponse:
+    """Reset statistics for a strategy.
+
+    Args:
+        strategy_name: Name of the strategy
+
+    Returns:
+        Confirmation of reset
+    """
+    analytics = get_analytics()
+    if not analytics:
+        raise HTTPException(status_code=500, detail="Analytics not initialized")
+
+    analytics.reset_strategy(strategy_name)
+
+    return JSONResponse(
+        {
+            "status": "reset",
+            "strategy": strategy_name,
+        }
+    )
+
+
+@app.post("/api/strategies/reset-all")
+async def reset_all_strategies() -> JSONResponse:
+    """Reset statistics for all strategies.
+
+    Returns:
+        Confirmation of reset
+    """
+    analytics = get_analytics()
+    if not analytics:
+        raise HTTPException(status_code=500, detail="Analytics not initialized")
+
+    analytics.reset_all()
+
+    return JSONResponse(
+        {
+            "status": "reset_all",
+            "strategies_reset": len(analytics.strategies),
+        }
+    )
 
 
 # === Root Endpoint ===
