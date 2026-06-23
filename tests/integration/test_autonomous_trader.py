@@ -83,9 +83,12 @@ class TestAutonomousTrader:
             mock_service.fetch_ohlcv = MagicMock(return_value=ohlcv)
             mock_hist.return_value = mock_service
 
-            signal = await trader._calculate_signal('BTCUSDT')
+            signal, components = await trader._calculate_signal('BTCUSDT')
             assert 0 <= signal <= 100
             assert isinstance(signal, float)
+            assert isinstance(components, dict)
+            assert "garp" in components
+            assert "technical" in components
 
     @pytest.mark.asyncio
     async def test_calculate_signal_stock_with_garp(self, trading_config):
@@ -111,11 +114,13 @@ class TestAutonomousTrader:
             mock_service.fetch_ohlcv = MagicMock(return_value=ohlcv)
             mock_hist.return_value = mock_service
 
-            signal = await trader._calculate_signal('EQ_AAPL')
+            signal, components = await trader._calculate_signal('EQ_AAPL')
             assert 0 <= signal <= 100
-            # With strong uptrend, GARP should contribute significantly
-            # 70% GARP (likely high) + 30% technical should result in decent score
             assert isinstance(signal, float)
+            assert isinstance(components, dict)
+            assert "garp" in components
+            assert "technical" in components
+            assert components["garp"] > 0  # Stock should have GARP score
 
     @pytest.mark.asyncio
     async def test_check_symbol_with_position(self, trading_config):

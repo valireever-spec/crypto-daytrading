@@ -11,6 +11,7 @@ from backend.analytics.regime_detector import get_regime_detector
 from backend.analytics.signals import get_signal_generator
 from backend.execution.smart_executor import get_smart_executor
 from backend.strategies.garp_value_strategy import apply_garp_value_strategy
+from backend.analytics.signal_explainer import get_signal_explainer
 
 logger = logging.getLogger(__name__)
 
@@ -135,8 +136,19 @@ class AutonomousTrader:
                 return None  # At position limit
 
             # Calculate composite signal using real technical analysis (0-100)
-            signal_score = await self._calculate_signal(symbol)
-            logger.info(f"{symbol}: Signal score = {signal_score:.1f} (threshold: {self.config.entry_threshold})")
+            signal_score, component_scores = await self._calculate_signal(symbol)
+
+            # Explain the signal (Phase 313)
+            explainer = get_signal_explainer()
+            asset_class = "stock" if symbol.startswith("EQ_") else "crypto"
+            explanation = explainer.explain_score(
+                symbol=symbol,
+                total_score=signal_score,
+                component_scores=component_scores,
+                asset_class=asset_class,
+            )
+
+            logger.info(f"{symbol}: {explanation['emoji']} {explanation['reasoning']} (score: {signal_score:.1f}/{self.config.entry_threshold})")
 
             if signal_score >= self.config.entry_threshold:
                 # Generate entry signal
@@ -144,7 +156,7 @@ class AutonomousTrader:
                     symbol=symbol,
                     side='BUY',
                     strength=signal_score,
-                    reason=f'Composite signal {signal_score:.0f} >= {self.config.entry_threshold}',
+                    reason=explanation['reasoning'],  # Use explanation instead of generic reason
                     timestamp=datetime.utcnow()
                 )
 
@@ -153,13 +165,18 @@ class AutonomousTrader:
                 if last_time and (datetime.utcnow() - last_time).total_seconds() < 60:
                     return None
 
+                # Log detailed breakdown
+                logger.info(f"{symbol}: Entry signal details:")
+                for comp in explanation['breakdown']:
+                    logger.info(f"  {comp['label']:30} {comp['score']:6.1f} ({comp['weight']:>3}) → {comp['contribution']:6.1f}")
+
                 # Attempt to execute trade
                 await self._execute_entry(signal)
                 self.last_signal_time[symbol] = datetime.utcnow()
                 return signal
 
         except Exception as e:
-            logger.error(f"Error checking symbol {symbol}: {e}")
+            logger.error(f"Error checking symbol {symbol}: {e}", exc_info=True)
 
         return None
 
@@ -353,15 +370,21 @@ class AutonomousTrader:
             logger.error(f"Error executing exit for {symbol}: {e}")
             return False
 
-    async def _calculate_signal(self, symbol: str) -> float:
-        """Calculate composite signal (0-100) for a symbol using real technical analysis."""
+    async def _calculate_signal(self, symbol: str) -> tuple:
+        """
+        Calculate composite signal (0-100) for a symbol using real technical analysis.
+
+        Returns:
+        --------
+        (signal_score, component_scores) where component_scores is dict with GARP and Technical scores
+        """
         try:
             from backend.analytics.historical_data import get_historical_service
             from datetime import datetime, timedelta
 
             hist_service = get_historical_service()
             if not hist_service:
-                return 0.0
+                return 0.0, {"garp": 0.0, "technical": 0.0}
 
             # Get last 60 days of OHLCV data for technical analysis
             end = datetime.utcnow()
@@ -370,7 +393,7 @@ class AutonomousTrader:
             ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
             if ohlcv is None or ohlcv.empty or len(ohlcv) < 14:
                 # Not enough data for technical analysis
-                return 0.0
+                return 0.0, {"garp": 0.0, "technical": 0.0}
 
             # Calculate technical indicators
             # Extract 'Close' prices, handling both flat and multi-level columns
@@ -381,7 +404,7 @@ class AutonomousTrader:
                     if len(prices.shape) > 1:
                         prices = prices.iloc[:, 0]
             except:
-                return 0.0
+                return 0.0, {"garp": 0.0, "technical": 0.0}
 
             # RSI (14-period)
             import pandas as pd
@@ -454,17 +477,14 @@ class AutonomousTrader:
             technical_score = max(0, min(100, signal_score))
 
             # For stocks: blend GARP with technical signals (60% GARP, 40% technical)
-            # GARP now returns 0-100 scores directly (not just positions)
+            # For crypto: use technical only
+            garp_score = 0.0
             if symbol.startswith("EQ_"):
                 try:
                     garp_df = apply_garp_value_strategy(ohlcv)
                     if not garp_df.empty and len(garp_df) > 0:
                         # Extract GARP position (0.0 or 1.0) for entry signal
                         garp_position = float(garp_df["position"].iloc[-1])
-
-                        # For scoring, we need the GARP quality metric (0-100)
-                        # Since GARP now calculates trend + momentum + vol, use position as confidence
-                        garp_confidence = garp_position * 100  # 0 or 100
 
                         # If GARP position = 1, use high GARP score; if 0, use lower score
                         garp_score = 70.0 if garp_position > 0.5 else 30.0
@@ -478,16 +498,24 @@ class AutonomousTrader:
                 except Exception as e:
                     logger.warning(f"{symbol}: GARP calculation failed, using technical only: {e}")
                     signal_score = technical_score
+                    garp_score = 0.0
             else:
                 signal_score = technical_score
+                garp_score = 0.0  # No GARP for crypto
 
             signal_score = max(0, min(100, signal_score))
             logger.debug(f"{symbol} signal: {signal_score:.1f} (RSI={rsi_value:.1f}, MACD={macd_value:.4f}, BB={bb_position:.2f})")
-            return signal_score
+
+            # Return signal score and component scores for explainer
+            component_scores = {
+                "garp": garp_score,
+                "technical": technical_score,
+            }
+            return signal_score, component_scores
 
         except Exception as e:
             logger.error(f"Error calculating signal for {symbol}: {e}")
-            return 0.0
+            return 0.0, {"garp": 0.0, "technical": 0.0}
 
     async def _get_current_prices(self) -> Dict[str, float]:
         """Get current prices from Binance WebSocket."""
