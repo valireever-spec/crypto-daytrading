@@ -118,22 +118,63 @@ class SmartExecutor:
                 )
 
             # Step 4: Get current regime metrics
-            # Note: In real execution, this would fetch from database or cache
-            # For now, we return a decision that would require regime data
+            # Fetch OHLCV data for regime detection
+            from backend.analytics.historical_data import get_historical_service
+            from datetime import datetime, timedelta
+
+            hist_service = get_historical_service()
+            if not hist_service:
+                regime_name = "UNKNOWN"
+                regime_confidence = 0.0
+            else:
+                try:
+                    # Convert Binance symbol to yfinance symbol (e.g., BTCUSDT → BTC-USD)
+                    yf_symbol = context.symbol.replace("USDT", "-USD")
+
+                    # Get last 60 days of data
+                    end = datetime.utcnow()
+                    start = end - timedelta(days=60)
+                    ohlcv = hist_service.fetch_ohlcv(yf_symbol, start, end)
+
+                    if ohlcv is not None and not ohlcv.empty and len(ohlcv) >= 20:
+                        regime_metrics = detector.detect_regime(ohlcv, context.symbol)
+                        regime_name = regime_metrics.get("regime", "UNKNOWN")
+                        regime_confidence = regime_metrics.get("confidence", 0.0)
+                    else:
+                        regime_name = "UNKNOWN"
+                        regime_confidence = 0.0
+                except Exception as e:
+                    logger.error(f"Regime detection error: {e}")
+                    regime_name = "UNKNOWN"
+                    regime_confidence = 0.0
+
             logger.info(
                 f"Entry evaluation for {context.symbol}: "
-                f"{context.quantity} @ ${context.current_price:.2f}"
+                f"{context.quantity} @ ${context.current_price:.2f} "
+                f"(Regime: {regime_name}, Confidence: {regime_confidence:.0%})"
             )
 
-            return ExecutionDecision(
-                decision="PENDING_REGIME_DATA",
-                symbol=context.symbol,
-                quantity=context.quantity,
-                price=context.current_price,
-                regime="UNKNOWN",
-                confidence=0.0,
-                reason="Awaiting regime detection",
-            )
+            # Approve entry if regime is detected with reasonable confidence
+            if regime_name != "UNKNOWN" and regime_confidence >= 0.4:
+                return ExecutionDecision(
+                    decision="EXECUTE",
+                    symbol=context.symbol,
+                    quantity=context.quantity,
+                    price=context.current_price,
+                    regime=regime_name,
+                    confidence=regime_confidence,
+                    reason=f"Regime {regime_name} detected ({regime_confidence:.0%} confidence)",
+                )
+            else:
+                return ExecutionDecision(
+                    decision="WAIT",
+                    symbol=context.symbol,
+                    quantity=context.quantity,
+                    price=context.current_price,
+                    regime=regime_name,
+                    confidence=regime_confidence,
+                    reason=f"Regime detection in progress ({regime_name}, {regime_confidence:.0%})",
+                )
 
         except Exception as e:
             logger.error(f"Entry evaluation error: {e}")
