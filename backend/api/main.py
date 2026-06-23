@@ -23,6 +23,7 @@ from backend.analytics.backtest_engine import BacktestEngine
 from backend.analytics.historical_data import init_historical_service, get_historical_service
 from backend.analytics.regime_detector import init_regime_detector, get_regime_detector
 from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader, TradingConfig
+from backend.execution.smart_executor import init_smart_executor
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 # Global state
 websocket_task: asyncio.Task = None
 stream_task: asyncio.Task = None
+simulator_task: asyncio.Task = None
 autonomous_trader_task: asyncio.Task = None
 _trading_paused: bool = False
 current_prices: dict = {}  # symbol -> latest price
@@ -57,7 +59,7 @@ def reset_trading_paused() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
-    global websocket_task
+    global websocket_task, stream_task, simulator_task, autonomous_trader_task
 
     # Startup
     logger.info("Starting crypto daytrading platform...")
@@ -85,6 +87,10 @@ async def lifespan(app: FastAPI):
     # Initialize regime detector
     init_regime_detector()
     logger.info("Regime detector initialized")
+
+    # Initialize smart executor for trade validation
+    init_smart_executor()
+    logger.info("Smart executor initialized")
 
     # Initialize Binance stream client (real prices)
     stream_client = await init_stream_client()
@@ -143,6 +149,33 @@ async def lifespan(app: FastAPI):
     # Start WebSocket connection in background
     websocket_task = asyncio.create_task(ws.connect())
 
+    # Initialize price simulator (fallback when Binance doesn't send data)
+    from backend.exchange.price_simulator import init_simulator
+    simulator = init_simulator()
+
+    # Start simulator to inject prices if WebSocket doesn't receive them
+    async def inject_simulated_prices():
+        """Continuously inject simulated prices into stream cache."""
+        while True:
+            try:
+                stream_client = get_stream_client()
+                if stream_client:
+                    # Only inject if WebSocket hasn't received real prices
+                    if len(stream_client.price_cache) == 0:
+                        simulator.update()
+                        prices = simulator.get_prices()
+                        from datetime import datetime
+                        for symbol, price in prices.items():
+                            stream_client.price_cache[symbol] = price
+                            stream_client.last_update[symbol] = datetime.utcnow()
+                            logger.info(f"Simulated price: {symbol} = ${price:.2f}")
+                await asyncio.sleep(3)  # Update every 3 seconds
+            except Exception as e:
+                logger.error(f"Simulator injection error: {e}")
+                await asyncio.sleep(5)
+
+    simulator_task = asyncio.create_task(inject_simulated_prices())
+
     # Initialize and start autonomous trader
     global autonomous_trader_task
     trader_config = TradingConfig(
@@ -175,6 +208,10 @@ async def lifespan(app: FastAPI):
 
     if websocket_task and not websocket_task.done():
         websocket_task.cancel()
+
+    # Cancel simulator task
+    if simulator_task and not simulator_task.done():
+        simulator_task.cancel()
 
     # Stop autonomous trader
     if autonomous_trader_task and not autonomous_trader_task.done():

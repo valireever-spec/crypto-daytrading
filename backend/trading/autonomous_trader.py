@@ -186,16 +186,19 @@ class AutonomousTrader:
             position_value = capital * self.config.position_size_pct
             quantity = position_value / current_price
 
-            # Validate via Smart Gateway
-            validation = executor.evaluate_new_entry(
+            # Validate via Smart Gateway using ExecutionContext
+            from backend.execution.smart_executor import ExecutionContext
+            context = ExecutionContext(
                 symbol=signal.symbol,
                 quantity=quantity,
                 current_price=current_price,
-                regime='SIDEWAYS'  # Would get actual regime
+                min_confidence=0.6,
+                max_position_pct=self.config.position_size_pct
             )
+            decision = executor.evaluate_entry(context)
 
-            if not validation['approved']:
-                logger.warning(f"Entry rejected for {signal.symbol}: {validation.get('reason')}")
+            if decision.decision != "EXECUTE":
+                logger.warning(f"Entry rejected for {signal.symbol}: {decision.reason}")
                 return False
 
             # Place order
