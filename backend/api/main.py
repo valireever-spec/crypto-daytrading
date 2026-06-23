@@ -19,6 +19,8 @@ from backend.exchange.paper_trading import init_paper_trading, get_paper_trading
 from backend.analytics.signals import init_signal_generator, get_signal_generator
 from backend.analytics.allocation import init_allocation, get_allocation
 from backend.analytics.strategy_analytics import init_analytics, get_analytics
+from backend.analytics.backtest_engine import BacktestEngine
+from backend.analytics.historical_data import init_historical_service, get_historical_service
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -72,6 +74,10 @@ async def lifespan(app: FastAPI):
     # Initialize strategy analytics
     init_analytics(lookback_days=30)
     logger.info("Strategy analytics initialized")
+
+    # Initialize historical data service
+    init_historical_service()
+    logger.info("Historical data service initialized")
 
     # Initialize Binance stream client (real prices)
     stream_client = await init_stream_client()
@@ -927,6 +933,223 @@ async def reset_all_strategies() -> JSONResponse:
             "strategies_reset": len(analytics.strategies),
         }
     )
+
+
+# === Historical Backtesting Endpoints (Phase 2 Week 6) ===
+
+
+@app.post("/api/backtest/run")
+async def run_backtest(
+    symbol: str,
+    strategy_name: str,
+    start_date: str,
+    end_date: str,
+    initial_capital: float = 10000.0,
+) -> JSONResponse:
+    """Run backtest for a strategy on historical data.
+
+    Args:
+        symbol: Trading symbol (e.g., 'BTCUSDT', 'AAPL')
+        strategy_name: Name of strategy to backtest
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+        initial_capital: Starting balance (default 10000)
+
+    Returns:
+        Backtest results with performance metrics
+    """
+    from datetime import datetime
+
+    # Parse dates
+    try:
+        start = datetime.strptime(start_date, "%Y-%m-%d")
+        end = datetime.strptime(end_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    if start >= end:
+        raise HTTPException(status_code=400, detail="Start date must be before end date")
+
+    try:
+        # Get historical data
+        hist_service = get_historical_service()
+        if not hist_service:
+            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
+        ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+        if ohlcv is None or ohlcv.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No historical data found for {symbol} in date range"
+            )
+
+        # Define strategy functions for backtesting
+        def momentum_strategy(df: pd.DataFrame) -> float:
+            """Simple momentum strategy - buy on RSI > 70, sell on RSI < 30."""
+            if len(df) < 14:
+                return 0.0
+            prices = df["Close"]
+            # Calculate RSI
+            delta = prices.diff()
+            gain = delta.where(delta > 0, 0).rolling(14).mean()
+            loss = -delta.where(delta < 0, 0).rolling(14).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            current_rsi = rsi.iloc[-1]
+            # Return position (0.5 = 50% invested)
+            return 0.5 if current_rsi > 70 else (0.0 if current_rsi < 30 else 0.25)
+
+        def reversion_strategy(df: pd.DataFrame) -> float:
+            """Simple reversion strategy - buy on RSI < 30, sell on RSI > 70."""
+            if len(df) < 14:
+                return 0.0
+            prices = df["Close"]
+            delta = prices.diff()
+            gain = delta.where(delta > 0, 0).rolling(14).mean()
+            loss = -delta.where(delta < 0, 0).rolling(14).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            current_rsi = rsi.iloc[-1]
+            return 0.5 if current_rsi < 30 else (0.0 if current_rsi > 70 else 0.25)
+
+        def grid_strategy(df: pd.DataFrame) -> float:
+            """Simple grid strategy - consistent 25% investment."""
+            return 0.25
+
+        # Get strategy function
+        strategies = {
+            "momentum": momentum_strategy,
+            "reversion": reversion_strategy,
+            "grid": grid_strategy,
+        }
+
+        if strategy_name.lower() not in strategies:
+            raise HTTPException(status_code=400, detail=f"Unknown strategy: {strategy_name}")
+
+        strategy_func = strategies[strategy_name.lower()]
+
+        # Run backtest
+        engine = BacktestEngine(initial_capital=initial_capital)
+        metrics = engine.backtest_strategy(ohlcv, strategy_func, symbol, strategy_name)
+
+        return JSONResponse(
+            {
+                "strategy": strategy_name,
+                "symbol": symbol,
+                "start_date": start_date,
+                "end_date": end_date,
+                "initial_capital": initial_capital,
+                "ending_capital": round(metrics.ending_capital, 2),
+                "total_pnl": round(metrics.total_pnl, 2),
+                "total_pnl_pct": round(metrics.total_pnl_pct, 2),
+                "total_trades": metrics.total_trades,
+                "winning_trades": metrics.winning_trades,
+                "losing_trades": metrics.losing_trades,
+                "win_rate_pct": round(metrics.win_rate_pct, 1),
+                "avg_win": round(metrics.avg_win, 2),
+                "avg_loss": round(metrics.avg_loss, 2),
+                "expectancy": round(metrics.expectancy, 2),
+                "profit_factor": round(metrics.profit_factor, 2),
+                "sharpe_ratio": round(metrics.sharpe_ratio, 2),
+                "sortino_ratio": round(metrics.sortino_ratio, 2),
+                "max_drawdown_pct": round(metrics.max_drawdown_pct, 2),
+                "recovery_factor": round(metrics.recovery_factor, 2),
+                "avg_holding_days": round(metrics.avg_holding_days, 1),
+                "largest_win": round(metrics.largest_win, 2),
+                "largest_loss": round(metrics.largest_loss, 2),
+                "consecutive_wins": metrics.consecutive_wins,
+                "max_consecutive_losses": metrics.max_consecutive_losses,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Backtest error: {e}")
+        raise HTTPException(status_code=500, detail=f"Backtest failed: {str(e)}")
+
+
+@app.get("/api/backtest/data-range/{symbol}")
+async def get_backtest_data_range(symbol: str) -> JSONResponse:
+    """Get available data date range for backtesting.
+
+    Args:
+        symbol: Trading symbol
+
+    Returns:
+        Available start and end dates
+    """
+    hist_service = get_historical_service()
+    if not hist_service:
+        raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
+    date_range = hist_service.get_data_range(symbol)
+
+    if date_range is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No historical data available for {symbol}"
+        )
+
+    start_date, end_date = date_range
+    return JSONResponse(
+        {
+            "symbol": symbol,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "days_available": (end_date - start_date).days,
+        }
+    )
+
+
+@app.post("/api/backtest/compare")
+async def compare_strategies(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    initial_capital: float = 10000.0,
+) -> JSONResponse:
+    """Compare all strategies on historical data.
+
+    Args:
+        symbol: Trading symbol
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+        initial_capital: Starting balance
+
+    Returns:
+        Comparison of all strategies
+    """
+    from datetime import datetime
+
+    try:
+        # Parse dates
+        try:
+            start = datetime.strptime(start_date, "%Y-%m-%d")
+            end = datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid date format. Use YYYY-MM-DD")
+
+        # Run backtest for each strategy
+        strategies = ["momentum", "reversion", "grid"]
+        results = {}
+
+        for strategy in strategies:
+            try:
+                response = await run_backtest(symbol, strategy, start_date, end_date, initial_capital)
+                results[strategy] = response.body
+            except HTTPException:
+                results[strategy] = {"error": "Backtest failed"}
+
+        return JSONResponse(
+            {
+                "symbol": symbol,
+                "start_date": start_date,
+                "end_date": end_date,
+                "strategies": results,
+            }
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
 
 
 # === Root Endpoint ===
