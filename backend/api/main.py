@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.core.config import settings
 from backend.core.logging import setup_logging
 from backend.exchange.binance_websocket import init_websocket, get_websocket
+from backend.exchange.binance_stream import init_stream_client, get_stream_client
 from backend.exchange.paper_trading import init_paper_trading, get_paper_trading
 from backend.analytics.signals import init_signal_generator, get_signal_generator
 from backend.analytics.allocation import init_allocation, get_allocation
@@ -66,7 +67,35 @@ async def lifespan(app: FastAPI):
     init_allocation()
     logger.info("Allocation manager initialized")
 
-    # Initialize WebSocket
+    # Initialize Binance stream client (real prices)
+    stream_client = await init_stream_client()
+    logger.info("Binance stream client initialized")
+
+    # Subscribe to price streams
+    async def on_price_update(symbol: str, data: dict) -> None:
+        """Handle price updates from Binance stream."""
+        try:
+            if "k" in data:  # Kline (candle)
+                price = float(data["k"]["c"])
+            elif "p" in data:  # Ticker
+                price = float(data["p"])
+            else:
+                return
+
+            logger.debug(f"{symbol}: ${price:.2f}")
+        except Exception as e:
+            logger.error(f"Error processing price update: {e}")
+
+    # Subscribe to major pairs
+    pairs = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+    for pair in pairs:
+        stream_name = f"{pair.lower()}@kline_1m"
+        stream_client.subscribe(stream_name, on_price_update)
+
+    # Start stream in background
+    stream_task = asyncio.create_task(stream_client.connect())
+
+    # Initialize old WebSocket (keeping for backward compatibility)
     ws = await init_websocket(testnet=settings.binance_testnet)
 
     # Subscribe to demo streams (BTCUSDT)
@@ -99,6 +128,12 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down crypto daytrading platform...")
+
+    # Disconnect stream client
+    stream_client = get_stream_client()
+    if stream_client:
+        await stream_client.disconnect()
+
     if websocket_task and not websocket_task.done():
         websocket_task.cancel()
     if ws:
@@ -404,6 +439,77 @@ async def get_dashboard() -> JSONResponse:
             "timestamp": pd.Timestamp.now().isoformat(),
         }
     )
+
+
+# === Price Feed Endpoints (FR-010: Binance WebSocket) ===
+
+
+@app.get("/api/prices")
+async def get_live_prices() -> JSONResponse:
+    """Get current live prices from Binance.
+
+    Returns:
+        Dict mapping symbol -> latest price
+    """
+    client = get_stream_client()
+    if not client:
+        raise HTTPException(status_code=500, detail="Stream client not initialized")
+
+    prices = client.get_prices(["BTCUSDT", "ETHUSDT", "BNBUSDT"])
+    status = await client.get_connection_status()
+
+    return JSONResponse(
+        {
+            "prices": prices,
+            "stream_status": status,
+            "timestamp": pd.Timestamp.utcnow().isoformat(),
+        }
+    )
+
+
+@app.get("/api/price/{symbol}")
+async def get_price(symbol: str) -> JSONResponse:
+    """Get current price for a symbol.
+
+    Args:
+        symbol: Trading symbol (e.g., 'BTCUSDT')
+
+    Returns:
+        Current price and update timestamp
+    """
+    client = get_stream_client()
+    if not client:
+        raise HTTPException(status_code=500, detail="Stream client not initialized")
+
+    price = client.get_price(symbol.upper())
+    if price is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No price data yet for {symbol}. Stream may still be connecting.",
+        )
+
+    return JSONResponse(
+        {
+            "symbol": symbol.upper(),
+            "price": price,
+            "timestamp": pd.Timestamp.utcnow().isoformat(),
+        }
+    )
+
+
+@app.get("/api/stream/status")
+async def get_stream_status() -> JSONResponse:
+    """Get Binance WebSocket stream connection status.
+
+    Returns:
+        Stream status with connection state, subscriptions, cache size
+    """
+    client = get_stream_client()
+    if not client:
+        raise HTTPException(status_code=500, detail="Stream client not initialized")
+
+    status = await client.get_connection_status()
+    return JSONResponse(status)
 
 
 # === Allocation Management Endpoints (FR-009) ===
