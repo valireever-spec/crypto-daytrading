@@ -832,53 +832,63 @@
         async function refreshMarket() {
             try {
                 const [regime, health, pricesResp] = await Promise.all([
-                    fetch(`${API}/regime/detect?symbol=BTCUSDT`).then(r => r.json()),
+                    fetch(`${API}/regime/detect?symbol=BTCUSDT`, { method: 'POST' }).then(r => r.json()),
                     fetch(`${API}/health`).then(r => r.json()),
                     fetch(`${API}/prices`).then(r => r.json())
                 ]);
 
-                document.getElementById('regime').textContent = regime.regime;
-                document.getElementById('regime-confidence').textContent = (regime.confidence * 100).toFixed(0) + '%';
-                document.getElementById('regime-volatility').textContent = regime.volatility_pct.toFixed(2) + '%';
-                document.getElementById('trend-strength').textContent = regime.trend_strength.toFixed(2);
-                document.getElementById('regime-rsi').textContent = regime.rsi.toFixed(1);
-                document.getElementById('support-level').textContent = fmt(regime.support_level);
+                if (!regime || !regime.regime) {
+                    console.warn('Invalid regime response:', regime);
+                    document.getElementById('regime').textContent = 'ERROR';
+                    return;
+                }
+
+                document.getElementById('regime').textContent = regime.regime || '--';
+                document.getElementById('regime-confidence').textContent = ((regime.confidence || 0) * 100).toFixed(0) + '%';
+                document.getElementById('regime-volatility').textContent = (regime.volatility_pct || 0).toFixed(2) + '%';
+                document.getElementById('trend-strength').textContent = (regime.trend_strength || 0).toFixed(2);
+                document.getElementById('regime-rsi').textContent = (regime.rsi || 0).toFixed(1);
+                document.getElementById('support-level').textContent = fmt(regime.support_level || 0);
 
                 const rules = await fetch(`${API}/regime/trading-rules/${regime.regime}`).then(r => r.json());
                 document.getElementById('trading-rules').innerHTML = `
                     <div class="metric-row">
                         <div class="metric">
                             <div class="metric-label">Position Size</div>
-                            <div class="metric-value">${(rules.position_size_multiplier * 100).toFixed(0)}%</div>
+                            <div class="metric-value">${((rules.position_size_multiplier || 0) * 100).toFixed(0)}%</div>
                         </div>
                         <div class="metric">
                             <div class="metric-label">Stop Loss</div>
-                            <div class="metric-value">${rules.stop_loss_pct}%</div>
+                            <div class="metric-value">${rules.stop_loss_pct || 0}%</div>
                         </div>
                         <div class="metric">
                             <div class="metric-label">Take Profit</div>
-                            <div class="metric-value">${rules.take_profit_pct}%</div>
+                            <div class="metric-value">${rules.take_profit_pct || 0}%</div>
                         </div>
                     </div>
                 `;
 
-                const impact = await fetch(`${API}/regime/strategy-impact?symbol=BTCUSDT`).then(r => r.json());
-                document.getElementById('strategy-impact').innerHTML = `
-                    <div class="metric-row">
-                        <div class="metric">
-                            <div class="metric-label">Momentum</div>
-                            <div class="metric-value">${(impact.strategy_adjustments.momentum).toFixed(2)}x</div>
+                const impact = await fetch(`${API}/regime/strategy-impact?symbol=BTCUSDT`, { method: 'POST' }).then(r => r.json());
+                if (impact && impact.strategy_adjustments) {
+                    document.getElementById('strategy-impact').innerHTML = `
+                        <div class="metric-row">
+                            <div class="metric">
+                                <div class="metric-label">Momentum</div>
+                                <div class="metric-value">${(impact.strategy_adjustments.momentum || 1).toFixed(2)}x</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Reversion</div>
+                                <div class="metric-value">${(impact.strategy_adjustments.reversion || 1).toFixed(2)}x</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Grid</div>
+                                <div class="metric-value">${(impact.strategy_adjustments.grid || 1).toFixed(2)}x</div>
+                            </div>
                         </div>
-                        <div class="metric">
-                            <div class="metric-label">Reversion</div>
-                            <div class="metric-value">${(impact.strategy_adjustments.reversion).toFixed(2)}x</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Grid</div>
-                            <div class="metric-value">${(impact.strategy_adjustments.grid).toFixed(2)}x</div>
-                        </div>
-                    </div>
-                `;
+                    `;
+                } else {
+                    document.getElementById('strategy-impact').innerHTML = '<div class="empty">Unable to load strategy impact</div>';
+                }
 
                 // Update WebSocket status
                 const wsStatus = pricesResp.stream_status || {};
