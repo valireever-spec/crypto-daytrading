@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction History - Crypto Daytrading</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .header-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-value.positive {
+            color: #10b981;
+        }
+
+        .stat-value.negative {
+            color: #ef4444;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .control-group label {
+            font-weight: 500;
+            color: #333;
+        }
+
+        select, input {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+        }
+
+        button.secondary {
+            background: #6b7280;
+        }
+
+        button.secondary:hover {
+            background: #4b5563;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e5e7eb;
+            color: #555;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .symbol {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .side {
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: fit-content;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .side.buy {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .side.sell {
+            background: #fee2e2;
+            color: #7f1d1d;
+        }
+
+        .status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status.filled {
+            background: #dbeafe;
+            color: #0c4a6e;
+        }
+
+        .status.pending {
+            background: #fef3c7;
+            color: #78350f;
+        }
+
+        .number {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .pnl {
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .pnl.positive {
+            color: #10b981;
+        }
+
+        .pnl.negative {
+            color: #ef4444;
+        }
+
+        .export-section {
+            margin-top: 30px;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .tax-summary {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .tax-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .tax-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .tax-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .tax-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        @media (max-width: 768px) {
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 10px;
+            }
+
+            .header-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .control-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>📊 Transaction History</h1>
+            <p style="color: #666; margin-top: 5px;">All your trades, profits, and tax calculations</p>
+            <div class="header-stats">
+                <div class="stat-card">
+                    <div class="stat-label">Total Trades</div>
+                    <div class="stat-value" id="totalTrades">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Volume</div>
+                    <div class="stat-value" id="totalVolume">€0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Realized P&L</div>
+                    <div class="stat-value" id="realizedPnL">€0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Estimated Tax</div>
+                    <div class="stat-value" id="estimatedTax">€0.00</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-group">
+                <label>Filter by:</label>
+                <select id="filterSymbol">
+                    <option value="">All Symbols</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Side:</label>
+                <select id="filterSide">
+                    <option value="">All</option>
+                    <option value="BUY">Buy Only</option>
+                    <option value="SELL">Sell Only</option>
+                </select>
+            </div>
+            <button onclick="loadTransactions()" class="secondary">Refresh</button>
+            <button onclick="syncTaxData()">Sync Tax Data</button>
+            <button onclick="exportTransactions('csv')" class="secondary">Export CSV</button>
+        </div>
+
+        <!-- Transactions Table -->
+        <div class="table-container">
+            <div id="transactionTableContainer">
+                <div class="loading">Loading transactions...</div>
+            </div>
+        </div>
+
+        <!-- Tax Summary -->
+        <div class="tax-summary" id="taxSummary" style="display: none;">
+            <h2>💰 Tax Summary</h2>
+            <div class="tax-grid">
+                <div class="tax-item">
+                    <div class="tax-label">Jurisdiction</div>
+                    <div class="tax-value" id="taxJurisdiction">—</div>
+                </div>
+                <div class="tax-item">
+                    <div class="tax-label">Net Position</div>
+                    <div class="tax-value" id="taxNetPosition">—</div>
+                </div>
+                <div class="tax-item">
+                    <div class="tax-label">Estimated Tax</div>
+                    <div class="tax-value" id="taxEstimate">—</div>
+                </div>
+                <div class="tax-item">
+                    <div class="tax-label">After Tax</div>
+                    <div class="tax-value" id="taxAfterTax">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="export-section">
+            <h3>📥 Export & Share</h3>
+            <p style="color: #666; margin-top: 5px;">Download your transaction data for tax advisor or backup</p>
+            <div class="export-buttons">
+                <button onclick="exportTransactions('csv')">📊 Export as CSV</button>
+                <button onclick="exportTaxReport('json')">📋 Export Tax Report (JSON)</button>
+                <button onclick="exportTaxReport('csv')">📋 Export Tax Report (CSV)</button>
+                <button onclick="copyToClipboard()" class="secondary">📋 Copy to Clipboard</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '';
+        let allTransactions = [];
+        let uniqueSymbols = new Set();
+
+        // Load transactions on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTransactions();
+            setInterval(loadTransactions, 10000); // Refresh every 10 seconds
+        });
+
+        async function loadTransactions() {
+            try {
+                const response = await fetch(`${API}/api/paper/trades?limit=100`);
+                const data = await response.json();
+                allTransactions = data.trades || [];
+
+                // Populate symbol filter
+                uniqueSymbols.clear();
+                allTransactions.forEach(t => uniqueSymbols.add(t.symbol));
+                const filterSymbol = document.getElementById('filterSymbol');
+                const currentValue = filterSymbol.value;
+                filterSymbol.innerHTML = '<option value="">All Symbols</option>';
+                Array.from(uniqueSymbols).sort().forEach(symbol => {
+                    const option = document.createElement('option');
+                    option.value = symbol;
+                    option.textContent = symbol;
+                    filterSymbol.appendChild(option);
+                });
+                filterSymbol.value = currentValue;
+
+                renderTransactions();
+                updateStats();
+                loadTaxSummary();
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+                document.getElementById('transactionTableContainer').innerHTML =
+                    `<div class="empty"><div class="empty-icon">⚠️</div><p>Error loading transactions: ${error.message}</p></div>`;
+            }
+        }
+
+        function renderTransactions() {
+            const filterSymbol = document.getElementById('filterSymbol').value;
+            const filterSide = document.getElementById('filterSide').value;
+
+            let filtered = allTransactions;
+            if (filterSymbol) filtered = filtered.filter(t => t.symbol === filterSymbol);
+            if (filterSide) filtered = filtered.filter(t => t.side === filterSide);
+
+            // Sort by timestamp descending (newest first)
+            filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            if (filtered.length === 0) {
+                document.getElementById('transactionTableContainer').innerHTML =
+                    '<div class="empty"><div class="empty-icon">📭</div><p>No transactions yet. Start trading to see them here!</p></div>';
+                return;
+            }
+
+            const table = document.createElement('table');
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Symbol</th>
+                        <th>Side</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Total Cost</th>
+                        <th>Fee</th>
+                        <th>P&L</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filtered.map(t => {
+                        const totalCost = (t.quantity * t.price).toFixed(2);
+                        const pnlClass = t.realized_pnl >= 0 ? 'positive' : 'negative';
+                        const pnlSign = t.realized_pnl >= 0 ? '+' : '';
+                        return `
+                            <tr>
+                                <td>${new Date(t.timestamp).toLocaleString()}</td>
+                                <td><span class="symbol">${t.symbol}</span></td>
+                                <td><span class="side ${t.side.toLowerCase()}">${t.side}</span></td>
+                                <td class="number">${parseFloat(t.quantity).toFixed(8)}</td>
+                                <td class="number">€${parseFloat(t.price).toFixed(2)}</td>
+                                <td class="number">€${totalCost}</td>
+                                <td class="number">€${parseFloat(t.fee).toFixed(2)}</td>
+                                <td class="number pnl ${pnlClass}">${pnlSign}€${parseFloat(t.realized_pnl).toFixed(2)}</td>
+                                <td><span class="status ${t.status.toLowerCase()}">${t.status}</span></td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            `;
+            document.getElementById('transactionTableContainer').innerHTML = '';
+            document.getElementById('transactionTableContainer').appendChild(table);
+        }
+
+        function updateStats() {
+            const totalTrades = allTransactions.length;
+            const totalVolume = allTransactions.reduce((sum, t) => sum + (t.quantity * t.price), 0);
+            const realizedPnL = allTransactions.reduce((sum, t) => sum + (t.realized_pnl || 0), 0);
+
+            document.getElementById('totalTrades').textContent = totalTrades;
+            document.getElementById('totalVolume').textContent = `€${totalVolume.toFixed(2)}`;
+
+            const pnlElement = document.getElementById('realizedPnL');
+            pnlElement.textContent = `€${realizedPnL.toFixed(2)}`;
+            pnlElement.className = 'stat-value ' + (realizedPnL >= 0 ? 'positive' : 'negative');
+        }
+
+        async function loadTaxSummary() {
+            try {
+                const response = await fetch(`${API}/api/tax/summary`);
+                if (!response.ok) return; // Tax system may not be initialized
+
+                const data = await response.json();
+                const taxElement = document.getElementById('taxSummary');
+                taxElement.style.display = 'block';
+
+                document.getElementById('taxJurisdiction').textContent = data.jurisdiction;
+                document.getElementById('taxNetPosition').textContent = `€${data.net_position.toFixed(2)}`;
+                document.getElementById('taxEstimate').textContent = `€${data.estimated_tax.toFixed(2)}`;
+                document.getElementById('taxAfterTax').textContent = `€${data.net_after_tax.toFixed(2)}`;
+
+                document.getElementById('estimatedTax').textContent = `€${data.estimated_tax.toFixed(2)}`;
+            } catch (error) {
+                // Tax system not initialized, skip
+            }
+        }
+
+        async function syncTaxData() {
+            try {
+                const response = await fetch(`${API}/api/tax/sync-from-paper-trading`);
+                const data = await response.json();
+                alert(`✅ Synced ${data.trades_synced} trades\n💰 Deductible fees: €${data.total_fees_deductible.toFixed(2)}`);
+                loadTaxSummary();
+            } catch (error) {
+                alert('❌ Error syncing tax data: ' + error.message);
+            }
+        }
+
+        function exportTransactions(format) {
+            if (format === 'csv') {
+                const headers = ['Date', 'Symbol', 'Side', 'Quantity', 'Price', 'Total', 'Fee', 'P&L', 'Status'];
+                const rows = allTransactions.map(t => [
+                    new Date(t.timestamp).toLocaleString(),
+                    t.symbol,
+                    t.side,
+                    t.quantity.toFixed(8),
+                    t.price.toFixed(2),
+                    (t.quantity * t.price).toFixed(2),
+                    t.fee.toFixed(2),
+                    t.realized_pnl.toFixed(2),
+                    t.status
+                ]);
+                downloadCSV(headers, rows, 'transactions.csv');
+            }
+        }
+
+        async function exportTaxReport(format) {
+            try {
+                const response = await fetch(`${API}/api/tax/export/${format}`);
+                const data = await response.json();
+
+                if (format === 'json') {
+                    downloadJSON(data.data, 'tax_report.json');
+                } else {
+                    downloadCSV(null, data.data, 'tax_report.csv');
+                }
+            } catch (error) {
+                alert('❌ Error exporting tax report: ' + error.message);
+            }
+        }
+
+        function downloadCSV(headers, rows, filename) {
+            let csv = '';
+            if (headers) {
+                csv += headers.join(',') + '\n';
+            }
+            rows.forEach(row => {
+                csv += row.map(cell => `"${cell}"`).join(',') + '\n';
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+        }
+
+        function downloadJSON(data, filename) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+        }
+
+        function copyToClipboard() {
+            const csv = allTransactions.map(t =>
+                [
+                    new Date(t.timestamp).toLocaleString(),
+                    t.symbol,
+                    t.side,
+                    t.quantity.toFixed(8),
+                    t.price.toFixed(2),
+                    (t.quantity * t.price).toFixed(2),
+                    t.fee.toFixed(2),
+                    t.realized_pnl.toFixed(2),
+                    t.status
+                ].join('\t')
+            ).join('\n');
+
+            navigator.clipboard.writeText(csv).then(() => {
+                alert('✅ Transaction data copied to clipboard');
+            });
+        }
+
+        // Re-render when filters change
+        document.getElementById('filterSymbol').addEventListener('change', renderTransactions);
+        document.getElementById('filterSide').addEventListener('change', renderTransactions);
+    </script>
+</body>
+</html>
