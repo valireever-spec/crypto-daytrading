@@ -404,6 +404,7 @@
         <button class="tab-button active" data-tab="dashboard">📊 Dashboard</button>
         <button class="tab-button" data-tab="market">📈 Market Status</button>
         <button class="tab-button" data-tab="strategies">🎯 Strategies</button>
+        <button class="tab-button" data-tab="autonomous">🤖 Autonomous Trader</button>
         <button class="tab-button" data-tab="health">🏥 Health</button>
         <button class="tab-button" data-tab="api">🔌 API Reference</button>
     </div>
@@ -679,6 +680,89 @@
             </div>
         </div>
 
+        <!-- AUTONOMOUS TRADER TAB -->
+        <div id="autonomous" class="tab-content">
+            <div class="button-group">
+                <button onclick="refreshAutonomous()">🔄 Refresh</button>
+                <button onclick="startAutonomousTrader()" style="background: #4CAF50;">▶️ Start Trading</button>
+                <button onclick="stopAutonomousTrader()" style="background: #f44336;">⏹ Stop Trading</button>
+            </div>
+
+            <div class="grid half">
+                <div class="card">
+                    <h2>🤖 Autonomous Trader Status</h2>
+                    <div style="padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <span style="font-size: 12px; color: #666;">Status</span>
+                                <div id="autonomous-status" style="font-size: 16px; font-weight: bold; color: #4CAF50;">RUNNING</div>
+                            </div>
+                            <div>
+                                <span style="font-size: 12px; color: #666;">Enabled</span>
+                                <div id="autonomous-enabled" style="font-size: 16px; font-weight: bold; color: #4CAF50;">YES</div>
+                            </div>
+                            <div>
+                                <span style="font-size: 12px; color: #666;">Active Positions</span>
+                                <div id="autonomous-positions" style="font-size: 16px; font-weight: bold;">0</div>
+                            </div>
+                            <div>
+                                <span style="font-size: 12px; color: #666;">Total Trades</span>
+                                <div id="autonomous-trades" style="font-size: 16px; font-weight: bold;">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid half">
+                <div class="card">
+                    <h2>⚙️ Trading Configuration</h2>
+                    <div style="display: grid; gap: 10px; font-size: 13px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div><strong>Entry Threshold:</strong></div>
+                            <div id="config-entry" style="text-align: right;">60.0</div>
+                            <div><strong>Exit Profit Target:</strong></div>
+                            <div id="config-profit" style="text-align: right;">3.0%</div>
+                            <div><strong>Exit Stop Loss:</strong></div>
+                            <div id="config-stop" style="text-align: right;">2.0%</div>
+                            <div><strong>Position Size:</strong></div>
+                            <div id="config-size" style="text-align: right;">10.0%</div>
+                            <div><strong>Max Positions:</strong></div>
+                            <div id="config-max" style="text-align: right;">5</div>
+                        </div>
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
+                            <strong style="font-size: 12px;">Monitored Symbols:</strong>
+                            <div id="config-symbols" style="margin-top: 5px; font-size: 12px;">BTCUSDT, ETHUSDT, BNBUSDT</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid full">
+                <div class="card">
+                    <h2>📋 Recent Trades</h2>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Symbol</th>
+                                    <th>Side</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Signal Strength</th>
+                                    <th>Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="autonomous-trades-table">
+                                <tr><td colspan="7" class="empty">No trades yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- HEALTH TAB -->
         <div id="health" class="tab-content">
             <div class="button-group">
@@ -784,12 +868,13 @@
 
                 if (tabName === 'market') refreshMarket();
                 else if (tabName === 'strategies') refreshStrategies();
+                else if (tabName === 'autonomous') refreshAutonomous();
                 else if (tabName === 'health') refreshHealth();
             });
         });
 
         async function refreshAll() {
-            await Promise.all([refreshDashboard(), refreshMarket(), refreshHealth()]);
+            await Promise.all([refreshDashboard(), refreshMarket(), refreshHealth(), refreshAutonomous()]);
         }
 
         async function refreshDashboard() {
@@ -959,6 +1044,69 @@
             } catch (e) {
                 console.error('Health error:', e);
                 updateBotStatus(false);
+            }
+        }
+
+        async function refreshAutonomous() {
+            try {
+                const status = await fetch(`${API}/autonomous/status`).then(r => r.json());
+                document.getElementById('autonomous-status').textContent = status.running ? 'RUNNING' : 'STOPPED';
+                document.getElementById('autonomous-status').style.color = status.running ? '#4CAF50' : '#f44336';
+                document.getElementById('autonomous-enabled').textContent = status.enabled ? 'YES' : 'NO';
+                document.getElementById('autonomous-enabled').style.color = status.enabled ? '#4CAF50' : '#ff9800';
+                document.getElementById('autonomous-positions').textContent = status.active_positions;
+                document.getElementById('autonomous-trades').textContent = status.total_trades;
+
+                const config = status.config;
+                document.getElementById('config-entry').textContent = config.entry_threshold.toFixed(1);
+                document.getElementById('config-profit').textContent = (config.exit_profit_target * 100).toFixed(1) + '%';
+                document.getElementById('config-stop').textContent = (config.exit_stop_loss * 100).toFixed(1) + '%';
+                document.getElementById('config-size').textContent = (config.position_size_pct * 100).toFixed(1) + '%';
+                document.getElementById('config-max').textContent = config.max_positions;
+                document.getElementById('config-symbols').textContent = config.symbols.join(', ');
+
+                const tradesTable = document.getElementById('autonomous-trades-table');
+                if (status.recent_trades && status.recent_trades.length > 0) {
+                    tradesTable.innerHTML = status.recent_trades.map(t => `
+                        <tr>
+                            <td style="font-size: 12px;">${new Date(t.timestamp).toLocaleString()}</td>
+                            <td>${t.symbol}</td>
+                            <td style="font-weight: bold; color: ${t.side === 'BUY' ? '#4CAF50' : '#f44336'}">${t.side}</td>
+                            <td>${t.quantity.toFixed(6)}</td>
+                            <td>${t.price.toFixed(2)}</td>
+                            <td>${t.signal_strength ? t.signal_strength.toFixed(0) + '/100' : 'N/A'}</td>
+                            <td style="font-size: 12px;">${t.reason}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tradesTable.innerHTML = '<tr><td colspan="7" class="empty">No trades yet</td></tr>';
+                }
+            } catch (e) {
+                console.error('Autonomous trader error:', e);
+                document.getElementById('autonomous-status').textContent = 'ERROR';
+                document.getElementById('autonomous-status').style.color = '#f44336';
+            }
+        }
+
+        async function startAutonomousTrader() {
+            try {
+                const resp = await fetch(`${API}/autonomous/start`, { method: 'POST' }).then(r => r.json());
+                alert(resp.message || 'Autonomous trading started');
+                refreshAutonomous();
+            } catch (e) {
+                console.error('Start error:', e);
+                alert('Failed to start autonomous trader: ' + e.message);
+            }
+        }
+
+        async function stopAutonomousTrader() {
+            try {
+                const resp = await fetch(`${API}/autonomous/stop`, { method: 'POST' }).then(r => r.json());
+                alert(resp.message || 'Autonomous trading stopped');
+                refreshAutonomous();
+            } catch (e) {
+                console.error('Stop error:', e);
+                alert('Failed to stop autonomous trader: ' + e.message);
             }
         }
 
