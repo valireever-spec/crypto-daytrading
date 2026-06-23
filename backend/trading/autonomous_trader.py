@@ -13,6 +13,7 @@ from backend.execution.smart_executor import get_smart_executor
 from backend.strategies.garp_value_strategy import apply_garp_value_strategy
 from backend.analytics.signal_explainer import get_signal_explainer
 from backend.analytics.volatility_manager import get_volatility_manager
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,10 @@ class AutonomousTrader:
             # Calculate composite signal using real technical analysis (0-100)
             signal_score, component_scores = await self._calculate_signal(symbol)
 
+            # Get market regime and adaptive entry threshold (Phase 316)
+            regime_detector = get_regime_detector()
+            regime_info, adaptive_threshold = await self._get_adaptive_entry_threshold(symbol, regime_detector)
+
             # Explain the signal (Phase 313)
             explainer = get_signal_explainer()
             asset_class = "stock" if symbol.startswith("EQ_") else "crypto"
@@ -149,9 +154,19 @@ class AutonomousTrader:
                 asset_class=asset_class,
             )
 
-            logger.info(f"{symbol}: {explanation['emoji']} {explanation['reasoning']} (score: {signal_score:.1f}/{self.config.entry_threshold})")
+            # Add regime info to explanation
+            regime_emoji = {
+                "bull": "✅",
+                "bear": "⛔",
+                "sideways": "↔️",
+                "volatile": "⚠️",
+                "unknown": "❓"
+            }.get(regime_info.get("regime", "unknown"), "?")
+            regime_str = f"{regime_emoji} {regime_info.get('regime', 'unknown')} (entry_threshold: {adaptive_threshold:.1f})"
 
-            if signal_score >= self.config.entry_threshold:
+            logger.info(f"{symbol}: {explanation['emoji']} {explanation['reasoning']} (score: {signal_score:.1f}/{adaptive_threshold:.1f}) | Regime: {regime_str}")
+
+            if signal_score >= adaptive_threshold:
                 # Generate entry signal
                 signal = TradeSignal(
                     symbol=symbol,
@@ -182,7 +197,7 @@ class AutonomousTrader:
         return None
 
     async def _check_exits(self):
-        """Check if any positions should be exited (Phase 314: Dynamic stops)."""
+        """Check if any positions should be exited (Phase 314/316: Dynamic stops + regime-aware)."""
         try:
             engine = get_paper_trading()
             if not engine:
@@ -191,6 +206,7 @@ class AutonomousTrader:
             positions = engine.get_positions()
             prices = await self._get_current_prices()
             vol_mgr = get_volatility_manager()
+            regime_detector = get_regime_detector()
 
             for pos in positions:
                 symbol = pos['symbol']
@@ -201,24 +217,37 @@ class AutonomousTrader:
                 entry_price = pos['entry_price']
                 pnl_pct = (current_price - entry_price) / entry_price
 
-                # Get dynamic stops if available
+                # Get dynamic stops and regime-aware thresholds
                 from backend.analytics.historical_data import get_historical_service
                 hist_service = get_historical_service()
                 dynamic_stops = None
+                exit_thresholds = None
 
                 if hist_service:
                     end = datetime.utcnow()
                     start = end - timedelta(days=60)
                     ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
                     if ohlcv is not None and len(ohlcv) >= 14:
+                        # Get dynamic stops from volatility manager
                         dynamic_stops = vol_mgr.calculate_stops(entry_price, ohlcv)
+                        # Get regime-aware exit thresholds
+                        regime_info = regime_detector.detect_regime(ohlcv)
+                        exit_thresholds = regime_detector.get_adaptive_thresholds(regime_info)
 
-                # Use dynamic stops if available, otherwise fall back to fixed
-                if dynamic_stops:
+                # Use dynamic stops and regime thresholds if available, otherwise fall back to fixed
+                if dynamic_stops and exit_thresholds:
+                    # Use regime-adjusted thresholds (Phase 316)
+                    stop_loss_pct = exit_thresholds.get("stop_loss", self.config.exit_stop_loss)
+                    take_profit_pct = exit_thresholds.get("profit_target", self.config.exit_profit_target)
+                    regime_name = regime_info.get("regime", "unknown")
+                    logger.debug(f"{symbol}: Regime-aware exits ({regime_name}) - TP: {take_profit_pct*100:.2f}%, SL: {stop_loss_pct*100:.2f}%")
+                elif dynamic_stops:
+                    # Use dynamic ATR-based stops
                     stop_loss_pct = dynamic_stops["stop_loss_pct"]
                     take_profit_pct = dynamic_stops["take_profit_pct"]
                     logger.debug(f"{symbol}: Dynamic stops - SL: {stop_loss_pct*100:.2f}%, TP: {take_profit_pct*100:.2f}%")
                 else:
+                    # Fall back to fixed config
                     stop_loss_pct = self.config.exit_stop_loss
                     take_profit_pct = self.config.exit_profit_target
 
@@ -266,14 +295,15 @@ class AutonomousTrader:
 
             logger.info(f"🎯 EXECUTING ENTRY FOR {signal.symbol} @ ${current_price:.2f}")
 
-            # Calculate position size with volatility adjustments (Phase 314)
+            # Calculate position size with volatility & regime adjustments (Phase 314/316)
             account = engine.get_account_state()
             capital = account['total_equity']
 
-            # Get volatility manager for dynamic sizing and stops
+            # Get volatility manager and regime detector for dynamic sizing and stops
             vol_mgr = get_volatility_manager()
+            regime_detector = get_regime_detector()
 
-            # Fetch historical data for volatility calculation
+            # Fetch historical data for volatility and regime calculation
             from backend.analytics.historical_data import get_historical_service
             hist_service = get_historical_service()
             if hist_service:
@@ -283,10 +313,19 @@ class AutonomousTrader:
             else:
                 ohlcv_hist = None
 
-            # Calculate volatility metrics
+            # Calculate volatility metrics and regime
+            regime_info = None
+            regime_adjustment = 1.0
             if ohlcv_hist is not None and len(ohlcv_hist) >= 20:
                 vol_metrics = vol_mgr.calculate_volatility(ohlcv_hist)
                 logger.info(f"   Volatility: {vol_metrics.get('vol_20d', 0):.1f}% ({vol_metrics.get('regime', '?')})")
+
+                # Get regime-aware position sizing adjustment (Phase 316)
+                if len(ohlcv_hist) >= 200:  # Need 200+ candles for regime detector
+                    regime_info = regime_detector.detect_regime(ohlcv_hist)
+                    regime_thresholds = regime_detector.get_adaptive_thresholds(regime_info)
+                    regime_adjustment = regime_thresholds.get("position_size_adjustment", 1.0)
+                    logger.info(f"   Regime: {regime_info.get('regime', 'unknown')} (size multiplier: {regime_adjustment:.2f}x)")
             else:
                 vol_metrics = {"current_vol": 0.30, "regime": "medium", "vol_20d": None}
                 logger.warning(f"   Insufficient data for volatility, using defaults")
@@ -296,15 +335,22 @@ class AutonomousTrader:
                 logger.error(f"{signal.symbol}: Invalid price {current_price}, rejecting order")
                 return False
 
-            # Dynamic position sizing based on volatility
+            # Dynamic position sizing based on volatility and regime (Phase 314/316)
             sizing = vol_mgr.calculate_position_size(
                 account_equity=capital,
                 current_price=current_price,
                 vol_metrics=vol_metrics,
                 entry_signal_strength=signal.strength,
             )
-            quantity = sizing["position_quantity"]
-            position_value = sizing["position_value_eur"]
+
+            # Apply regime adjustment to position size
+            base_position_pct = sizing["position_size_pct"]
+            adjusted_position_pct = base_position_pct * regime_adjustment
+            adjusted_position_pct = max(0.01, min(adjusted_position_pct, 0.10))  # Clamp to 1-10%
+
+            adjusted_position_value = capital * adjusted_position_pct
+            quantity = adjusted_position_value / current_price
+            position_value = adjusted_position_value
 
             # Sanity check: quantity should be reasonable
             if quantity > 1_000_000:
@@ -313,7 +359,7 @@ class AutonomousTrader:
 
             logger.info(f"   Position: {quantity:.8f} {signal.symbol}")
             logger.info(f"   Cost: €{position_value:.2f}")
-            logger.info(f"   Sizing: {sizing['reason']}")
+            logger.info(f"   Sizing: {sizing['reason']} | Regime adjustment: {regime_adjustment:.2f}x")
 
             # Validate via Smart Gateway using ExecutionContext
             from backend.execution.smart_executor import ExecutionContext
@@ -571,6 +617,36 @@ class AutonomousTrader:
         except Exception as e:
             logger.error(f"Error calculating signal for {symbol}: {e}")
             return 0.0, {"garp": 0.0, "technical": 0.0}
+
+    async def _get_adaptive_entry_threshold(self, symbol: str, regime_detector) -> tuple:
+        """
+        Get adaptive entry threshold based on market regime.
+
+        Returns:
+        --------
+        (regime_info, adaptive_threshold)
+        """
+        try:
+            from backend.analytics.historical_data import get_historical_service
+            hist_service = get_historical_service()
+            regime_info = {"regime": "unknown"}
+            adaptive_threshold = self.config.entry_threshold  # Default fallback
+
+            if hist_service:
+                end = datetime.utcnow()
+                start = end - timedelta(days=90)
+                ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+
+                if ohlcv is not None and len(ohlcv) >= 200:  # Need 200+ candles for regime detection
+                    regime_info = regime_detector.detect_regime(ohlcv)
+                    thresholds = regime_detector.get_adaptive_thresholds(regime_info)
+                    adaptive_threshold = thresholds.get("entry_threshold", self.config.entry_threshold)
+
+            return regime_info, adaptive_threshold
+
+        except Exception as e:
+            logger.debug(f"Error getting adaptive threshold for {symbol}: {e}")
+            return {"regime": "unknown"}, self.config.entry_threshold
 
     async def _get_current_prices(self) -> Dict[str, float]:
         """Get current prices from Binance WebSocket."""
