@@ -67,11 +67,24 @@ class AutonomousTrader:
 
     async def _trading_loop(self):
         """Main trading loop - runs continuously."""
+        loop_count = 0
         while self.running:
             try:
+                loop_count += 1
+                logger.debug(f"🔄 Trading loop iteration {loop_count}")
+
+                # Get current prices - if empty, WebSocket hasn't connected yet
+                prices = await self._get_current_prices()
+                if not prices:
+                    logger.debug("⏳ Waiting for Binance WebSocket prices...")
+                    await asyncio.sleep(1)
+                    continue
+
                 # Monitor each symbol
                 for symbol in self.config.symbols:
-                    await self._check_symbol(symbol)
+                    signal = await self._check_symbol(symbol)
+                    if signal:
+                        logger.info(f"✅ Signal generated for {symbol}: {signal.reason}")
 
                 # Check exits for existing positions
                 await self._check_exits()
@@ -79,7 +92,7 @@ class AutonomousTrader:
                 # Sleep briefly before next iteration (check every 5 seconds)
                 await asyncio.sleep(5)
             except Exception as e:
-                logger.error(f"Error in trading loop: {e}")
+                logger.error(f"Error in trading loop: {e}", exc_info=True)
                 await asyncio.sleep(5)
 
     async def _check_symbol(self, symbol: str) -> Optional[TradeSignal]:
@@ -90,15 +103,18 @@ class AutonomousTrader:
         try:
             engine = get_paper_trading()
             if not engine:
+                logger.error(f"{symbol}: Paper trading engine not initialized")
                 return None
 
             # Check if already have position
             positions = engine.get_positions()
             if any(p['symbol'] == symbol for p in positions):
+                logger.debug(f"{symbol}: Already have position, skipping")
                 return None  # Already have position in this symbol
 
             # Calculate composite signal using real technical analysis (0-100)
             signal_score = await self._calculate_signal(symbol)
+            logger.info(f"{symbol}: Signal score = {signal_score:.1f} (threshold: {self.config.entry_threshold})")
 
             if signal_score >= self.config.entry_threshold:
                 # Generate entry signal
@@ -170,21 +186,30 @@ class AutonomousTrader:
         try:
             engine = get_paper_trading()
             executor = get_smart_executor()
-            if not engine or not executor:
+            if not engine:
+                logger.error(f"{signal.symbol}: Paper trading engine not initialized")
+                return False
+            if not executor:
+                logger.error(f"{signal.symbol}: Smart executor not initialized")
                 return False
 
             # Get current price
             prices = await self._get_current_prices()
             current_price = prices.get(signal.symbol)
             if not current_price:
-                logger.warning(f"No price available for {signal.symbol}")
+                logger.error(f"{signal.symbol}: No price available for execution")
                 return False
+
+            logger.info(f"🎯 EXECUTING ENTRY FOR {signal.symbol} @ ${current_price:.2f}")
 
             # Calculate position size
             account = engine.get_account_state()
             capital = account['total_equity']
             position_value = capital * self.config.position_size_pct
             quantity = position_value / current_price
+
+            logger.info(f"   Position: {quantity:.8f} {signal.symbol}")
+            logger.info(f"   Cost: €{quantity * current_price:.2f}")
 
             # Validate via Smart Gateway using ExecutionContext
             from backend.execution.smart_executor import ExecutionContext
@@ -197,9 +222,14 @@ class AutonomousTrader:
             )
             decision = executor.evaluate_entry(context)
 
+            logger.info(f"   Smart Executor Decision: {decision.decision}")
+            logger.info(f"   Reason: {decision.reason}")
+
             if decision.decision != "EXECUTE":
-                logger.warning(f"Entry rejected for {signal.symbol}: {decision.reason}")
+                logger.warning(f"❌ ENTRY REJECTED for {signal.symbol}: {decision.reason}")
                 return False
+
+            logger.info(f"   ✅ Approval granted - Placing order...")
 
             # Place order
             result = await engine.place_order(
@@ -211,8 +241,10 @@ class AutonomousTrader:
                 strategy_name='autonomous_trader'
             )
 
+            logger.info(f"   Order Result: {result}")
+
             if result.get('status') == 'FILLED':
-                logger.info(f"BUY {quantity:.6f} {signal.symbol} @ {current_price} - {signal.reason}")
+                logger.info(f"🚀 BUY EXECUTED: {quantity:.6f} {signal.symbol} @ ${current_price:.2f} - {signal.reason}")
                 self.trade_history.append({
                     'timestamp': datetime.utcnow().isoformat(),
                     'symbol': signal.symbol,
