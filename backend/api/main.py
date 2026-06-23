@@ -29,6 +29,7 @@ from backend.api.routers.tax import router as tax_router
 from backend.analytics.stock_analyzer import init_stock_optimizer
 from backend.api.routers.stocks import router as stocks_router
 from backend.api.routers.backup_analytics import router as backup_analytics_router
+from backend.analytics.portfolio_analyzer import init_portfolio_analyzer
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -76,6 +77,10 @@ async def lifespan(app: FastAPI):
     # Initialize signal generator
     init_signal_generator()
     logger.info("Signal generator initialized")
+
+    # Initialize portfolio analyzer (for backup analytics)
+    init_portfolio_analyzer()
+    logger.info("Portfolio analyzer initialized")
 
     # Initialize allocation manager
     init_allocation()

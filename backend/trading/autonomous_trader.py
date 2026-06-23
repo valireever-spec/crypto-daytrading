@@ -37,7 +37,11 @@ class TradingConfig:
 
     def __post_init__(self):
         if self.symbols is None:
-            self.symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
+            # Crypto + major stocks
+            self.symbols = [
+                'BTCUSDT', 'ETHUSDT', 'BNBUSDT',  # Crypto
+                'EQ_AAPL', 'EQ_MSFT', 'EQ_TSLA',   # US Stocks
+            ]
 
 
 class AutonomousTrader:
