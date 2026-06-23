@@ -657,9 +657,42 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            loadAllocation();
             loadDashboard();
             setInterval(loadDashboard, 2000); // Update every 2 seconds
         });
+
+        // Load allocation from API
+        async function loadAllocation() {
+            try {
+                const response = await fetch(`${API_BASE}/allocation`);
+                const data = await response.json();
+
+                // Update sliders
+                document.getElementById('momentumSlider').value = data.momentum;
+                document.getElementById('reversionSlider').value = data.reversion;
+                document.getElementById('gridSlider').value = data.grid;
+
+                // Update display
+                document.getElementById('momentumValue').textContent = data.momentum + '%';
+                document.getElementById('reversionValue').textContent = data.reversion + '%';
+                document.getElementById('gridValue').textContent = data.grid + '%';
+
+                // Update state
+                state.allocation.momentum = data.momentum;
+                state.allocation.reversion = data.reversion;
+                state.allocation.grid = data.grid;
+
+                // Update preset display
+                if (data.preset !== 'custom') {
+                    state.timePreset = data.preset;
+                    updatePresetButtons();
+                }
+
+            } catch (error) {
+                console.error('Error loading allocation:', error);
+            }
+        }
 
         // Load dashboard data
         async function loadDashboard() {
@@ -829,7 +862,7 @@
         }
 
         // Update allocation
-        function updateAllocation(type) {
+        async function updateAllocation(type) {
             const momentumVal = parseInt(document.getElementById('momentumSlider').value);
             const reversionVal = parseInt(document.getElementById('reversionSlider').value);
             const gridVal = parseInt(document.getElementById('gridSlider').value);
@@ -852,37 +885,75 @@
             document.getElementById('reversionValue').textContent = state.allocation.reversion + '%';
             document.getElementById('gridValue').textContent = state.allocation.grid + '%';
 
-            addAlert(`Strategy allocation updated: ${state.allocation.momentum}% Momentum, ${state.allocation.reversion}% Reversion, ${state.allocation.grid}% Grid`, 'info');
+            // Save to API
+            try {
+                const response = await fetch(`${API_BASE}/allocation/save?momentum=${state.allocation.momentum}&reversion=${state.allocation.reversion}&grid=${state.allocation.grid}`, {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    addAlert(`Strategy allocation updated: ${state.allocation.momentum}% Momentum, ${state.allocation.reversion}% Reversion, ${state.allocation.grid}% Grid`, 'success');
+                } else {
+                    addAlert('Error saving allocation', 'danger');
+                }
+            } catch (error) {
+                console.error('Error saving allocation:', error);
+                addAlert('Error saving allocation', 'danger');
+            }
+        }
+
+        // Update preset button visual state
+        function updatePresetButtons() {
+            document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.querySelector(`button[onclick="setTimePreset('${state.timePreset}')"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
         }
 
         // Set time preset
-        function setTimePreset(preset) {
+        async function setTimePreset(preset) {
             state.timePreset = preset;
 
             // Update button states
-            document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`button[onclick="setTimePreset('${preset}')"]`).classList.add('active');
+            updatePresetButtons();
 
             // Update allocation based on preset
             if (preset === 'morning') {
-                document.getElementById('momentumSlider').value = 50;
-                document.getElementById('reversionSlider').value = 30;
-                document.getElementById('gridSlider').value = 20;
                 document.getElementById('currentPreset').textContent = 'Morning (Aggressive)';
             } else if (preset === 'afternoon') {
-                document.getElementById('momentumSlider').value = 30;
-                document.getElementById('reversionSlider').value = 40;
-                document.getElementById('gridSlider').value = 30;
                 document.getElementById('currentPreset').textContent = 'Afternoon (Conservative)';
             } else if (preset === 'evening') {
-                document.getElementById('momentumSlider').value = 40;
-                document.getElementById('reversionSlider').value = 35;
-                document.getElementById('gridSlider').value = 25;
                 document.getElementById('currentPreset').textContent = 'Evening (Balanced)';
             }
 
-            updateAllocation('time');
-            addAlert(`Time preset changed to ${preset}`, 'info');
+            // Save preset to API
+            try {
+                const response = await fetch(`${API_BASE}/allocation/preset?preset=${preset}`, {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    // Update sliders with new allocation
+                    document.getElementById('momentumSlider').value = data.momentum;
+                    document.getElementById('reversionSlider').value = data.reversion;
+                    document.getElementById('gridSlider').value = data.grid;
+
+                    state.allocation.momentum = data.momentum;
+                    state.allocation.reversion = data.reversion;
+                    state.allocation.grid = data.grid;
+
+                    document.getElementById('momentumValue').textContent = data.momentum + '%';
+                    document.getElementById('reversionValue').textContent = data.reversion + '%';
+                    document.getElementById('gridValue').textContent = data.grid + '%';
+
+                    addAlert(`Time preset changed to ${preset}`, 'success');
+                } else {
+                    addAlert('Error setting preset', 'danger');
+                }
+            } catch (error) {
+                console.error('Error setting preset:', error);
+                addAlert('Error setting preset', 'danger');
+            }
         }
 
         // Partial exit

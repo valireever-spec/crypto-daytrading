@@ -16,6 +16,7 @@ from backend.core.logging import setup_logging
 from backend.exchange.binance_websocket import init_websocket, get_websocket
 from backend.exchange.paper_trading import init_paper_trading, get_paper_trading
 from backend.analytics.signals import init_signal_generator, get_signal_generator
+from backend.analytics.allocation import init_allocation, get_allocation
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -60,6 +61,10 @@ async def lifespan(app: FastAPI):
     # Initialize signal generator
     init_signal_generator()
     logger.info("Signal generator initialized")
+
+    # Initialize allocation manager
+    init_allocation()
+    logger.info("Allocation manager initialized")
 
     # Initialize WebSocket
     ws = await init_websocket(testnet=settings.binance_testnet)
@@ -399,6 +404,140 @@ async def get_dashboard() -> JSONResponse:
             "timestamp": pd.Timestamp.now().isoformat(),
         }
     )
+
+
+# === Allocation Management Endpoints (FR-009) ===
+
+
+@app.get("/api/allocation")
+async def get_current_allocation() -> JSONResponse:
+    """Get current strategy allocation.
+
+    Returns:
+        Current allocation with momentum, reversion, grid weights
+    """
+    mgr = get_allocation()
+    if not mgr:
+        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+
+    state = mgr.get_allocation()
+    return JSONResponse(
+        {
+            "momentum": state.momentum,
+            "reversion": state.reversion,
+            "grid": state.grid,
+            "preset": state.preset,
+        }
+    )
+
+
+@app.post("/api/allocation/save")
+async def save_allocation(
+    momentum: float, reversion: float, grid: float
+) -> JSONResponse:
+    """Save custom strategy allocation.
+
+    Args:
+        momentum: Momentum strategy weight (0-100)
+        reversion: Reversion strategy weight (0-100)
+        grid: Grid trading weight (0-100)
+
+    Returns:
+        Updated allocation
+    """
+    if momentum + reversion + grid != 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Allocation weights must sum to 100",
+        )
+
+    mgr = get_allocation()
+    if not mgr:
+        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+
+    try:
+        allocation = mgr.set_allocation(
+            momentum=momentum, reversion=reversion, grid=grid, preset="custom"
+        )
+        logger.info(f"Allocation saved: {allocation}")
+        return JSONResponse(
+            {
+                "status": "saved",
+                "momentum": allocation["momentum"],
+                "reversion": allocation["reversion"],
+                "grid": allocation["grid"],
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/allocation/preset")
+async def set_allocation_preset(preset: str) -> JSONResponse:
+    """Apply a time-based allocation preset.
+
+    Args:
+        preset: Preset name (morning, afternoon, evening)
+
+    Returns:
+        Updated allocation
+    """
+    mgr = get_allocation()
+    if not mgr:
+        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+
+    try:
+        allocation = mgr.set_preset(preset)
+        logger.info(f"Preset '{preset}' applied: {allocation}")
+        return JSONResponse(
+            {
+                "status": "preset_applied",
+                "preset": preset,
+                "momentum": allocation["momentum"],
+                "reversion": allocation["reversion"],
+                "grid": allocation["grid"],
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/allocation/reset")
+async def reset_allocation() -> JSONResponse:
+    """Reset allocation to defaults.
+
+    Returns:
+        Default allocation
+    """
+    mgr = get_allocation()
+    if not mgr:
+        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+
+    allocation = mgr.reset_to_default()
+    logger.info("Allocation reset to defaults")
+    return JSONResponse(
+        {
+            "status": "reset",
+            "momentum": allocation["momentum"],
+            "reversion": allocation["reversion"],
+            "grid": allocation["grid"],
+        }
+    )
+
+
+@app.get("/api/allocation/presets")
+async def get_allocation_presets() -> JSONResponse:
+    """Get all available allocation presets.
+
+    Returns:
+        Dict of preset name -> allocation weights
+    """
+    mgr = get_allocation()
+    if not mgr:
+        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+
+    presets = mgr.get_presets()
+    return JSONResponse({"presets": presets})
 
 
 # === Root Endpoint ===

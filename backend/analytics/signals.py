@@ -5,6 +5,8 @@ from typing import Dict, Optional
 import pandas as pd
 import numpy as np
 
+from backend.analytics.allocation import get_allocation
+
 logger = logging.getLogger(__name__)
 
 
@@ -159,8 +161,15 @@ class SignalGenerator:
             else:
                 bb_score = 0  # Neutral
 
-            # Weighted average: RSI 40%, MACD 35%, BB 25%
-            composite_score = (rsi_score * 0.4) + (macd_score * 0.35) + (bb_score * 0.25)
+            # Apply user allocation weights or use defaults
+            allocation_mgr = get_allocation()
+            if allocation_mgr:
+                composite_score = allocation_mgr.apply_to_signal(
+                    rsi_score, macd_score, bb_score
+                )
+            else:
+                # Fallback: default weights (RSI 40%, MACD 35%, BB 25%)
+                composite_score = (rsi_score * 0.4) + (macd_score * 0.35) + (bb_score * 0.25)
 
             # Determine grade
             if composite_score >= 70:
