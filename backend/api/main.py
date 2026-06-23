@@ -28,6 +28,7 @@ from backend.analytics.tax_calculator import init_tax_calculator, Jurisdiction
 from backend.api.routers.tax import router as tax_router
 from backend.analytics.stock_analyzer import init_stock_optimizer
 from backend.api.routers.stocks import router as stocks_router
+from backend.api.routers.backup_analytics import router as backup_analytics_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -255,6 +256,7 @@ app = FastAPI(
 # Include routers
 app.include_router(tax_router)
 app.include_router(stocks_router)
+app.include_router(backup_analytics_router)  # Backup analytics (standby mode)
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"
