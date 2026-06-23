@@ -12,6 +12,7 @@ from backend.analytics.signals import get_signal_generator
 from backend.execution.smart_executor import get_smart_executor
 from backend.strategies.garp_value_strategy import apply_garp_value_strategy
 from backend.analytics.signal_explainer import get_signal_explainer
+from backend.analytics.volatility_manager import get_volatility_manager
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,7 @@ class AutonomousTrader:
         return None
 
     async def _check_exits(self):
-        """Check if any positions should be exited."""
+        """Check if any positions should be exited (Phase 314: Dynamic stops)."""
         try:
             engine = get_paper_trading()
             if not engine:
@@ -189,6 +190,7 @@ class AutonomousTrader:
 
             positions = engine.get_positions()
             prices = await self._get_current_prices()
+            vol_mgr = get_volatility_manager()
 
             for pos in positions:
                 symbol = pos['symbol']
@@ -199,26 +201,49 @@ class AutonomousTrader:
                 entry_price = pos['entry_price']
                 pnl_pct = (current_price - entry_price) / entry_price
 
+                # Get dynamic stops if available
+                from backend.analytics.historical_data import get_historical_service
+                hist_service = get_historical_service()
+                dynamic_stops = None
+
+                if hist_service:
+                    end = datetime.utcnow()
+                    start = end - timedelta(days=60)
+                    ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
+                    if ohlcv is not None and len(ohlcv) >= 14:
+                        dynamic_stops = vol_mgr.calculate_stops(entry_price, ohlcv)
+
+                # Use dynamic stops if available, otherwise fall back to fixed
+                if dynamic_stops:
+                    stop_loss_pct = dynamic_stops["stop_loss_pct"]
+                    take_profit_pct = dynamic_stops["take_profit_pct"]
+                    logger.debug(f"{symbol}: Dynamic stops - SL: {stop_loss_pct*100:.2f}%, TP: {take_profit_pct*100:.2f}%")
+                else:
+                    stop_loss_pct = self.config.exit_stop_loss
+                    take_profit_pct = self.config.exit_profit_target
+
                 # Check profit target
-                if pnl_pct >= self.config.exit_profit_target:
+                if pnl_pct >= take_profit_pct:
                     await self._execute_exit(
                         symbol,
                         current_price,
-                        f'Profit target hit ({pnl_pct*100:.1f}%)'
+                        f'Profit target hit ({pnl_pct*100:.1f}%)',
+                        pnl_pct,
                     )
                     continue
 
                 # Check stop loss
-                if pnl_pct <= -self.config.exit_stop_loss:
+                if pnl_pct <= -stop_loss_pct:
                     await self._execute_exit(
                         symbol,
                         current_price,
-                        f'Stop loss hit ({pnl_pct*100:.1f}%)'
+                        f'Stop loss hit ({pnl_pct*100:.1f}%)',
+                        pnl_pct,
                     )
                     continue
 
         except Exception as e:
-            logger.error(f"Error checking exits: {e}")
+            logger.error(f"Error checking exits: {e}", exc_info=True)
 
     async def _execute_entry(self, signal: TradeSignal) -> bool:
         """Execute a BUY order."""
@@ -241,25 +266,54 @@ class AutonomousTrader:
 
             logger.info(f"🎯 EXECUTING ENTRY FOR {signal.symbol} @ ${current_price:.2f}")
 
-            # Calculate position size with safety checks
+            # Calculate position size with volatility adjustments (Phase 314)
             account = engine.get_account_state()
             capital = account['total_equity']
-            position_value = capital * self.config.position_size_pct
+
+            # Get volatility manager for dynamic sizing and stops
+            vol_mgr = get_volatility_manager()
+
+            # Fetch historical data for volatility calculation
+            from backend.analytics.historical_data import get_historical_service
+            hist_service = get_historical_service()
+            if hist_service:
+                end = datetime.utcnow()
+                start = end - timedelta(days=90)
+                ohlcv_hist = hist_service.fetch_ohlcv(signal.symbol, start, end)
+            else:
+                ohlcv_hist = None
+
+            # Calculate volatility metrics
+            if ohlcv_hist is not None and len(ohlcv_hist) >= 20:
+                vol_metrics = vol_mgr.calculate_volatility(ohlcv_hist)
+                logger.info(f"   Volatility: {vol_metrics.get('vol_20d', 0):.1f}% ({vol_metrics.get('regime', '?')})")
+            else:
+                vol_metrics = {"current_vol": 0.30, "regime": "medium", "vol_20d": None}
+                logger.warning(f"   Insufficient data for volatility, using defaults")
 
             # Safety checks (GAP #1: extreme price handling)
             if current_price <= 0 or current_price > 1e10:
                 logger.error(f"{signal.symbol}: Invalid price {current_price}, rejecting order")
                 return False
 
-            quantity = position_value / current_price
+            # Dynamic position sizing based on volatility
+            sizing = vol_mgr.calculate_position_size(
+                account_equity=capital,
+                current_price=current_price,
+                vol_metrics=vol_metrics,
+                entry_signal_strength=signal.strength,
+            )
+            quantity = sizing["position_quantity"]
+            position_value = sizing["position_value_eur"]
 
-            # Sanity check: quantity should be reasonable (< 1M units for normal trading)
+            # Sanity check: quantity should be reasonable
             if quantity > 1_000_000:
                 logger.error(f"{signal.symbol}: Position size unreasonable ({quantity:.0f} units), rejecting")
                 return False
 
             logger.info(f"   Position: {quantity:.8f} {signal.symbol}")
-            logger.info(f"   Cost: €{quantity * current_price:.2f}")
+            logger.info(f"   Cost: €{position_value:.2f}")
+            logger.info(f"   Sizing: {sizing['reason']}")
 
             # Validate via Smart Gateway using ExecutionContext
             from backend.execution.smart_executor import ExecutionContext
@@ -324,7 +378,7 @@ class AutonomousTrader:
             logger.error(f"Error executing entry for {signal.symbol}: {e} (failure #{failures})")
             return False
 
-    async def _execute_exit(self, symbol: str, current_price: float, reason: str) -> bool:
+    async def _execute_exit(self, symbol: str, current_price: float, reason: str, pnl_pct: float = 0.0) -> bool:
         """Execute a SELL order."""
         try:
             engine = get_paper_trading()
@@ -351,7 +405,7 @@ class AutonomousTrader:
 
             if result.get('status') == 'FILLED':
                 pnl = result.get('pnl', 0)
-                logger.info(f"SELL {quantity:.6f} {symbol} @ {current_price} - {reason} (PnL: €{pnl:.2f})")
+                logger.info(f"SELL {quantity:.6f} {symbol} @ {current_price} - {reason} (PnL: €{pnl:.2f}, {pnl_pct*100:.1f}%)")
                 self.trade_history.append({
                     'timestamp': datetime.utcnow().isoformat(),
                     'symbol': symbol,
@@ -359,7 +413,8 @@ class AutonomousTrader:
                     'quantity': quantity,
                     'price': current_price,
                     'reason': reason,
-                    'pnl': pnl
+                    'pnl': pnl,
+                    'pnl_pct': pnl_pct,
                 })
                 return True
             else:
