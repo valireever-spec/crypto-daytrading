@@ -22,6 +22,7 @@ from backend.analytics.strategy_analytics import init_analytics, get_analytics
 from backend.analytics.backtest_engine import BacktestEngine
 from backend.analytics.historical_data import init_historical_service, get_historical_service
 from backend.analytics.regime_detector import init_regime_detector, get_regime_detector
+from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader, TradingConfig
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Global state
 websocket_task: asyncio.Task = None
 stream_task: asyncio.Task = None
+autonomous_trader_task: asyncio.Task = None
 _trading_paused: bool = False
 current_prices: dict = {}  # symbol -> latest price
 
@@ -141,6 +143,21 @@ async def lifespan(app: FastAPI):
     # Start WebSocket connection in background
     websocket_task = asyncio.create_task(ws.connect())
 
+    # Initialize and start autonomous trader
+    global autonomous_trader_task
+    trader_config = TradingConfig(
+        enabled=True,
+        entry_threshold=60.0,
+        exit_profit_target=0.03,
+        exit_stop_loss=0.02,
+        position_size_pct=0.10,
+        max_positions=5,
+        symbols=['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
+    )
+    autonomous_trader = init_autonomous_trader(trader_config)
+    autonomous_trader_task = asyncio.create_task(autonomous_trader.start())
+    logger.info("Autonomous trader initialized and started")
+
     logger.info("Application startup complete")
     yield
 
@@ -158,6 +175,14 @@ async def lifespan(app: FastAPI):
 
     if websocket_task and not websocket_task.done():
         websocket_task.cancel()
+
+    # Stop autonomous trader
+    if autonomous_trader_task and not autonomous_trader_task.done():
+        trader = get_autonomous_trader()
+        if trader:
+            await trader.stop()
+        autonomous_trader_task.cancel()
+
     if ws:
         await ws.disconnect()
     logger.info("Application shutdown complete")
@@ -1464,6 +1489,73 @@ async def get_smart_trading_status(symbol: str = "BTCUSDT") -> JSONResponse:
     except Exception as e:
         logger.error(f"Smart status error: {e}")
         raise HTTPException(status_code=500, detail=f"Smart status failed: {str(e)}")
+
+
+# === Autonomous Trading Endpoints ===
+
+
+@app.get("/api/autonomous/status")
+async def get_autonomous_status():
+    """Get autonomous trader status."""
+    trader = get_autonomous_trader()
+    if not trader:
+        raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
+    return JSONResponse(trader.get_status())
+
+
+@app.post("/api/autonomous/start")
+async def start_autonomous_trading():
+    """Start autonomous trading."""
+    trader = get_autonomous_trader()
+    if not trader:
+        raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
+    if trader.running:
+        return JSONResponse({"status": "already_running"})
+    trader.config.enabled = True
+    logger.info("Autonomous trading enabled")
+    return JSONResponse({"status": "started", "message": "Autonomous trading is now active"})
+
+
+@app.post("/api/autonomous/stop")
+async def stop_autonomous_trading():
+    """Stop autonomous trading."""
+    trader = get_autonomous_trader()
+    if not trader:
+        raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
+    trader.config.enabled = False
+    logger.info("Autonomous trading disabled")
+    return JSONResponse({"status": "stopped", "message": "Autonomous trading is now paused"})
+
+
+@app.get("/api/autonomous/config")
+async def get_trading_config():
+    """Get autonomous trading configuration."""
+    trader = get_autonomous_trader()
+    if not trader:
+        raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
+    return JSONResponse({
+        "entry_threshold": trader.config.entry_threshold,
+        "exit_profit_target": trader.config.exit_profit_target,
+        "exit_stop_loss": trader.config.exit_stop_loss,
+        "position_size_pct": trader.config.position_size_pct,
+        "max_positions": trader.config.max_positions,
+        "symbols": trader.config.symbols,
+        "enabled": trader.config.enabled
+    })
+
+
+@app.get("/api/autonomous/trades")
+async def get_trade_history(limit: int = 50):
+    """Get recent autonomous trades."""
+    trader = get_autonomous_trader()
+    if not trader:
+        raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
+    trades = trader.trade_history[-limit:] if trader.trade_history else []
+    return JSONResponse({
+        "total": len(trader.trade_history),
+        "recent": trades,
+        "timestamp": __import__('datetime').datetime.utcnow().isoformat()
+    })
 
 
 # === Root Endpoint ===
