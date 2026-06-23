@@ -1,0 +1,49 @@
+# Crypto Daytrading Platform — Dependencies
+# Pinned versions for reproducibility
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Crypto/Trading
+binance-connector==2.4.0
+websockets==12.0  # WebSocket client for real-time prices
+python-binance==1.0.17  # Binance API client
+pandas==2.1.3
+numpy==1.26.2
+ta-lib==0.4.28  # Technical analysis (RSI, MACD, Bollinger)
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Code Quality
+black==23.12.0
+ruff==0.1.8
+mypy==1.7.1
+types-requests==2.31.0.10
+
+# Data/Logging
+python-json-logger==2.0.7
+pytz==2023.3
+
+# Monitoring (optional)
+# prometheus-client==0.19.0
+# sentry-sdk==1.39.1
+
+# Development
+ipython==8.18.1
+ipdb==0.13.13
+
+# Notes:
+# - pandas: OHLCV candle data manipulation
+# - numpy: Numerical computing for indicators
+# - ta-lib: RSI, MACD, Bollinger Bands (requires C extension, may need: pip install TA-Lib --user)
+# - binance-connector: Official Binance API wrapper
+# - pytest: Testing framework
+# - black/ruff/mypy: Code quality

@@ -1,0 +1,328 @@
+# Crypto Daytrading Platform — Non-Functional Requirements
+
+**Project:** Crypto Daytrading HA System  
+**Target Launch:** 2026-07-15 (live with €1,000)
+
+---
+
+## Performance Requirements
+
+### NFR-001: Signal Latency
+- **Requirement:** Signal generation must complete in <500ms per symbol
+- **Why:** Crypto moves fast (1-2% per minute); slow signals = missed trades
+- **Measurement:** Time from price update to buy/sell signal output
+- **Test:** Process 1,000 historical candles, measure p95/p99 latency
+- **Acceptance:** ≥95% of signals <500ms
+
+---
+
+### NFR-002: Order Execution Speed
+- **Requirement:** Order must be placed to Binance within 2 seconds of signal
+- **Why:** Slippage increases with delay; market can gap
+- **Measurement:** Time from signal generation to Binance API response
+- **Test:** Place 10 market orders, measure p50/p95 latency
+- **Acceptance:** ≥95% of orders placed <2s
+
+---
+
+### NFR-003: Candle Fetch Latency
+- **Requirement:** Fetch latest candles from Binance in <2 seconds
+- **Why:** Real-time trading needs fresh data
+- **Measurement:** Time from request to receiving full OHLCV data
+- **Test:** Fetch 100 symbols × 4 timeframes = 400 candles in parallel
+- **Acceptance:** <2s for full batch, <100ms per symbol
+
+---
+
+### NFR-004: Throughput
+- **Requirement:** Support ≥100 trades/day (crypto volatility is high)
+- **Why:** Need capacity for multiple strategies or scaled trading
+- **Measurement:** Trades processed per day without CPU/memory degradation
+- **Test:** Run strategy for 30 days, measure avg trades/day
+- **Acceptance:** ≥100 trades/day with <5% CPU utilization
+
+---
+
+### NFR-005: Memory Usage
+- **Requirement:** Keep memory footprint <500MB during normal operation
+- **Why:** HA backup machine may have limited resources
+- **Measurement:** Peak memory during 24h trading window
+- **Test:** Monitor memory for 24h, capture peak usage
+- **Acceptance:** Peak <500MB, no memory leaks over 7 days
+
+---
+
+## Reliability Requirements
+
+### NFR-006: Availability (HA)
+- **Requirement:** 99.5% uptime (≤3.6h downtime/month)
+- **Why:** Crypto markets 24/7; downtime = missed trades = lost profit
+- **Measurement:** (Total time - downtime) / total time
+- **Test:** Run for 30 days, monitor both machines for crashes
+- **Acceptance:** ≥99.5% without manual intervention
+
+---
+
+### NFR-007: Data Consistency (No Duplicate Trades)
+- **Requirement:** No duplicate orders even during failover
+- **Why:** Dual machines could both execute same signal if not careful
+- **Measurement:** Audit trail shows no identical (symbol, time, qty, side) pairs
+- **Test:** Force failover during trade execution, verify only 1 order created
+- **Acceptance:** 0 duplicate trades in 30-day test run
+
+---
+
+### NFR-008: Recovery Time Objective (RTO)
+- **Requirement:** Backup machine must take over within 30 seconds
+- **Why:** Crypto can move 1-2% in 30s; longer = lost opportunity/loss
+- **Measurement:** Time from main machine failure to first backup trade
+- **Test:** Kill main machine process, measure time to backup executing signals
+- **Acceptance:** ≤30s RTO, measured 5 times, avg <25s
+
+---
+
+### NFR-009: Recovery Point Objective (RPO)
+- **Requirement:** Lose ≤1 trade on failover (≤€10 in lost opportunity)
+- **Why:** Perfect sync is impossible; accept small loss during handover
+- **Measurement:** Trades executed by main but not backup in final 2 seconds
+- **Test:** Analyze logs during forced failover
+- **Acceptance:** ≤1 trade lost, impact <€10
+
+---
+
+## Security Requirements
+
+### NFR-010: API Key Protection
+- **Requirement:** Binance API keys never stored in code, logs, or version control
+- **Why:** Stolen keys = complete account compromise
+- **Measurement:** Audit code + logs + git history for plaintext keys
+- **Test:** `grep -r "BINANCE.*KEY\|api.*key" --include="*.py" --include="*.txt"`
+- **Acceptance:** 0 keys found in codebase, all in environment variables
+
+---
+
+### NFR-011: Input Validation
+- **Requirement:** All user inputs validated (strategy parameters, order quantities)
+- **Why:** Bad inputs could cause loss or security issues
+- **Examples:**
+  - Strategy thresholds: must be 0-100
+  - Order quantity: must be >0, <account balance
+  - Symbols: must match Binance notation (BTCUSDT, ETHUSDT)
+- **Test:** Unit tests for 50+ invalid inputs
+- **Acceptance:** All inputs validated, clear error messages
+
+---
+
+### NFR-012: Audit Trail Immutability
+- **Requirement:** Trade audit trail is append-only, never deleted or modified
+- **Why:** Regulatory requirement for live trading, forensics on losses
+- **Measurement:** Audit trail file has no overwrites, only appends
+- **Test:** Verify file only grows, verify all trades logged
+- **Acceptance:** 100% of trades logged, audit trail integrity verified
+
+---
+
+## Observability Requirements
+
+### NFR-013: Structured Logging
+- **Requirement:** All events logged as JSON (timestamp, level, event, context)
+- **Why:** Easy parsing for monitoring, alerting, debugging
+- **Format:** `{"timestamp": "2026-07-15T09:30:00Z", "level": "INFO", "event": "ORDER_FILLED", "symbol": "BTCUSDT", "qty": 0.5, "price": 45000.50}`
+- **Test:** Parse logs into JSON, verify all events captured
+- **Acceptance:** 100% of events loggable as JSON, <5KB per trade
+
+---
+
+### NFR-014: Metrics & Dashboard
+- **Requirement:** Real-time dashboard shows P&L, win rate, Sharpe, system health
+- **Why:** User must know if strategy is working and system is healthy
+- **Metrics:**
+  - Daily P&L (USD and %)
+  - Win rate (profitable trades / total trades)
+  - Profit factor (avg winning trade / avg losing trade)
+  - Sharpe ratio (risk-adjusted return)
+  - Consecutive wins/losses
+  - Binance API status
+  - Backup machine status
+- **Test:** Dashboard displays all metrics after 10 trades
+- **Acceptance:** All 8 metrics visible, update every 10 seconds
+
+---
+
+### NFR-015: Alerts & Runbooks
+- **Requirement:** Critical events trigger alerts with runbooks for action
+- **Why:** 24/7 trading requires automation; user can't monitor constantly
+- **Alert Triggers:**
+  - Daily loss >5% account → **Runbook:** Stop all new positions, close if bounce
+  - Binance connectivity lost for >60s → **Runbook:** Wait 30s, retry, alert
+  - Backup failover detected → **Runbook:** Investigate main machine, verify backup health
+  - Order stuck >5min unfilled → **Runbook:** Cancel and retry, or manual intervention
+- **Test:** Simulate each alert condition, verify runbook output
+- **Acceptance:** All 4 alerts tested, runbooks documented
+
+---
+
+## Maintainability Requirements
+
+### NFR-016: Code Organization
+- **Requirement:** Single-responsibility modules, max 500 lines per file
+- **Why:** Crypto market moves fast; bugs must be found and fixed quickly
+- **Structure:**
+  - `exchange/` — Binance API wrapper only
+  - `strategies/` — Signal generation only
+  - `execution/` — Order placement only
+  - `portfolio/` — Position tracking only
+  - `api/` — HTTP endpoints only
+- **Test:** Measure file sizes, check module coupling
+- **Acceptance:** No file >500 lines, <3 dependencies per module
+
+---
+
+### NFR-017: Type Hints & Linting
+- **Requirement:** 100% type hints, mypy 0 errors, black formatted
+- **Why:** Catches bugs at dev time, not production
+- **Test:** `mypy . && black --check . && ruff check .`
+- **Acceptance:** All checks pass, 0 warnings
+
+---
+
+### NFR-018: Test Coverage
+- **Requirement:** ≥85% test coverage for critical paths
+- **Critical paths:**
+  - Signal generation (must be accurate)
+  - Order execution (must not lose money to bugs)
+  - Position tracking (must not over-leverage)
+  - HA failover (must not duplicate trades)
+- **Test:** `coverage run -m pytest && coverage report`
+- **Acceptance:** ≥85% coverage, <50 lines uncovered in critical modules
+
+---
+
+### NFR-019: Documentation
+- **Requirement:** Every strategy and API endpoint documented with examples
+- **Why:** Easy onboarding, understand why trades happened
+- **Contents:**
+  - Architecture diagram (high-level)
+  - Strategy guide (how each strategy works, parameters, use cases)
+  - API reference (endpoints, parameters, responses)
+  - Runbooks (5 most common issues and fixes)
+- **Test:** New user can run strategy without asking questions
+- **Acceptance:** Docs explain 5W (what, why, when, who, how) for each feature
+
+---
+
+## Cost Requirements
+
+### NFR-020: Operational Cost Coverage
+- **Requirement:** Strategy must be profitable enough to cover costs with 2x safety margin
+- **Why:** Otherwise, even if strategy works, losses to fees eat profit
+- **Costs:**
+  - Binance trading fees: 0.1% per trade (maker) to 0.1% (taker) = ~€1-2/day
+  - AWS/hosting (if live): ~€0 (running on local hardware)
+  - Monitoring/monitoring tools: €0 (open source)
+- **Target:** Daily profit ≥€3 (covers €2 fees + €1 buffer)
+- **Test:** 10-day paper test must show avg +€3/day profit
+- **Acceptance:** Paper trading shows +€30+ profit for 10 days
+
+---
+
+## Scalability Requirements
+
+### NFR-021: Asset Expansion
+- **Requirement:** Support adding new trading pairs without code changes
+- **Why:** Want to trade BTCUSDT, ETHUSDT, DOGEUSDT, etc.
+- **Implementation:** Config file or database for pairs + strategy mapping
+- **Test:** Add 5 new pairs, verify all trade correctly
+- **Acceptance:** Can add pair in <5 minutes, no code changes
+
+---
+
+### NFR-022: Strategy Expansion
+- **Requirement:** Support adding new strategies without modifying core system
+- **Why:** Want to test momentum, mean reversion, grid trading, etc.
+- **Implementation:** Strategy interface (entry/exit methods), registry
+- **Test:** Add 2 new strategies in <30 minutes
+- **Acceptance:** Can plug in new strategy, all existing tests pass
+
+---
+
+## Deployment Requirements
+
+### NFR-023: Zero-Downtime Deployment
+- **Requirement:** Deploy code updates without stopping trading
+- **Why:** Crypto markets 24/7; downtime = missed trades
+- **Approach:** Blue-green deployment or rolling restart with backup takeover
+- **Test:** Deploy during trading hours, verify no orders missed
+- **Acceptance:** Code updated, 0 trades lost, <5s pause in execution
+
+---
+
+### NFR-024: Configuration Management
+- **Requirement:** All settings via environment variables (no hardcoding)
+- **Why:** Same code runs on dev, testnet, mainnet with different configs
+- **Variables:**
+  - `TRADING_MODE`: paper | live
+  - `BINANCE_TESTNET`: true | false
+  - `INITIAL_CAPITAL`: €1000
+  - `STRATEGY`: momentum | meanreversion | grid
+  - `MAX_DAILY_LOSS_PCT`: 5.0
+- **Test:** Verify each var controls behavior correctly
+- **Acceptance:** Code works with 0 hardcoded values
+
+---
+
+## Acceptance Testing
+
+### NFR-025: Paper Trading Acceptance
+- **Requirement:** Pass 10-day paper trading run with >55% win rate and positive P&L
+- **Setup:** €10,000 virtual capital, best strategy from testing
+- **Acceptance Criteria:**
+  - ≥50 trades (diverse scenarios)
+  - Win rate ≥55%
+  - Profit factor ≥1.2 (avg win ≥ 1.2 × avg loss)
+  - Daily max drawdown ≤5%
+  - Sharpe ≥0.5 (acceptable risk-adjusted return)
+- **Timeline:** 10 trading days (or when criteria met)
+
+---
+
+### NFR-026: Live Trading Acceptance
+- **Requirement:** Pass 2-week live trading with €1,000 without losses >5%
+- **Setup:** Real Binance, best strategy, €1,000 starting capital
+- **Acceptance Criteria:**
+  - ≥100 trades (5-10/day typical for crypto)
+  - Win rate ≥55% (same as paper)
+  - Total P&L ≥€50 (covers fees and proves system works)
+  - No daily loss >5% (daily stop enforced)
+  - Slippage vs paper <2% (real market conditions acceptable)
+- **Timeline:** 10-14 trading days (or when criteria met)
+
+---
+
+## Success Metrics (Overall)
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| **Availability** | 99.5% | Uptime over 30 days |
+| **Win Rate** | ≥55% | Profitable trades / total trades |
+| **Sharpe Ratio** | ≥0.5 | Risk-adjusted return |
+| **Daily Profit** | +€3 to €10 | Avg daily P&L |
+| **Slippage** | <2% | Live vs paper difference |
+| **Latency (signals)** | <500ms | p95 signal generation |
+| **Latency (orders)** | <2s | p95 order placement |
+| **Uptime (HA)** | 99.5% | Failover working, RTO <30s |
+| **Test Coverage** | ≥85% | Coverage on critical paths |
+
+---
+
+## Trade-offs & Constraints
+
+| Constraint | Implication |
+|-----------|------------|
+| **Live trading starts with €1,000** | Max position size €20 (2%); limits daily P&L to €3-10 |
+| **Crypto volatility 5-10x stocks** | Strategy signals must be more selective (fewer false signals) |
+| **24/7 market (no market hours)** | System must be always-on; HA mandatory |
+| **Binance rate limit 1200 req/min** | Can't check every 1 second; 15s minimum candle interval |
+| **No real-time news data** | Can't trade on breaking news; limited to technical signals only |
+| **Paper testing only 2 weeks** | Must validate profitability quickly; sample size small |
+
