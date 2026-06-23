@@ -24,6 +24,8 @@ from backend.analytics.historical_data import init_historical_service, get_histo
 from backend.analytics.regime_detector import init_regime_detector, get_regime_detector
 from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader, TradingConfig
 from backend.execution.smart_executor import init_smart_executor
+from backend.analytics.tax_calculator import init_tax_calculator, Jurisdiction
+from backend.api.routers.tax import router as tax_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -91,6 +93,10 @@ async def lifespan(app: FastAPI):
     # Initialize smart executor for trade validation
     init_smart_executor()
     logger.info("Smart executor initialized")
+
+    # Initialize tax calculator (default to Germany)
+    init_tax_calculator(Jurisdiction.GERMANY)
+    logger.info("Tax calculator initialized (Germany)")
 
     # Initialize Binance stream client (real prices)
     stream_client = await init_stream_client()
@@ -239,6 +245,9 @@ app = FastAPI(
     version="1.0.0-phase1",
     lifespan=lifespan,
 )
+
+# Include routers
+app.include_router(tax_router)
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"
