@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Global state
 websocket_task: asyncio.Task = None
+stream_task: asyncio.Task = None
 _trading_paused: bool = False
 current_prices: dict = {}  # symbol -> latest price
 
@@ -93,6 +94,7 @@ async def lifespan(app: FastAPI):
         stream_client.subscribe(stream_name, on_price_update)
 
     # Start stream in background
+    global stream_task
     stream_task = asyncio.create_task(stream_client.connect())
 
     # Initialize old WebSocket (keeping for backward compatibility)
@@ -133,6 +135,10 @@ async def lifespan(app: FastAPI):
     stream_client = get_stream_client()
     if stream_client:
         await stream_client.disconnect()
+
+    # Cancel stream task
+    if stream_task and not stream_task.done():
+        stream_task.cancel()
 
     if websocket_task and not websocket_task.done():
         websocket_task.cancel()

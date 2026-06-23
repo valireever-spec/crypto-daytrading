@@ -1,0 +1,6 @@
+{
+  "momentum": 65.0,
+  "reversion": 20.0,
+  "grid": 15.0,
+  "preset": "custom"
+}
