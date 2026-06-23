@@ -9,12 +9,12 @@ pydantic-settings==2.1.0
 python-dotenv==1.0.0
 
 # Crypto/Trading
-binance-connector==2.4.0
+binance-connector==3.13.0
 websockets==12.0  # WebSocket client for real-time prices
 python-binance==1.0.17  # Binance API client
 pandas==2.1.3
 numpy==1.26.2
-ta-lib==0.4.28  # Technical analysis (RSI, MACD, Bollinger)
+# ta-lib==0.4.28  # Technical analysis — will implement in Week 2
 
 # Testing
 pytest==7.4.3
