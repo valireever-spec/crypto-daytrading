@@ -736,9 +736,9 @@
                                 </div>
                                 <div style="font-size: 16px; font-weight: bold; color: #2196F3;" id="config-size-display">5%</div>
                             </div>
-                            <input type="range" min="1" max="20" value="5" style="width: 100%;" onchange="updateTraderConfig({position_size_pct: this.value/100})" id="slider-position-size">
+                            <input type="range" min="1" max="20" value="5" style="width: 100%;" onchange="autoAdjustMaxPositions(this.value)" id="slider-position-size">
                             <div style="font-size: 12px; color: #666; margin-top: 8px;">
-                                💡 Higher % = bigger trades but more risk. At $10k equity: $500 per trade = 5%
+                                💡 Linked to Max Positions to keep total risk ≤25%. Adjust one → other auto-adjusts
                             </div>
                         </div>
 
@@ -766,9 +766,9 @@
                                 </div>
                                 <div style="font-size: 16px; font-weight: bold; color: #8BC34A;" id="config-profit-display">3.0%</div>
                             </div>
-                            <input type="range" min="1" max="10" step="0.5" value="3" style="width: 100%;" onchange="updateTraderConfig({exit_profit_target: this.value/100})" id="slider-profit-target">
+                            <input type="range" min="1" max="10" step="0.5" value="3" style="width: 100%;" onchange="autoAdjustStopLoss(this.value)" id="slider-profit-target">
                             <div style="font-size: 12px; color: #666; margin-top: 8px;">
-                                💡 Locks in gains. Risk/reward ratio = Stop Loss ÷ Profit (1:1.5 = good)
+                                💡 Linked to Stop Loss to maintain 1:1.5 risk/reward. Adjust one → other auto-adjusts
                             </div>
                         </div>
 
@@ -781,9 +781,9 @@
                                 </div>
                                 <div style="font-size: 16px; font-weight: bold; color: #FF9800;" id="config-stop-display">2.0%</div>
                             </div>
-                            <input type="range" min="0.5" max="5" step="0.5" value="2" style="width: 100%;" onchange="updateTraderConfig({exit_stop_loss: this.value/100})" id="slider-stop-loss">
+                            <input type="range" min="0.5" max="5" step="0.5" value="2" style="width: 100%;" onchange="autoAdjustProfitTarget(this.value)" id="slider-stop-loss">
                             <div style="font-size: 12px; color: #666; margin-top: 8px;">
-                                💡 Prevents big losses. At $500 trade: 2% = $10 max loss per position
+                                💡 Linked to Profit Target to maintain 1:1.5 risk/reward. Adjust one → other auto-adjusts
                             </div>
                         </div>
 
@@ -796,9 +796,9 @@
                                 </div>
                                 <div style="font-size: 16px; font-weight: bold; color: #9C27B0;" id="config-max-display">5</div>
                             </div>
-                            <input type="range" min="1" max="10" value="5" style="width: 100%;" onchange="updateTraderConfig({max_positions: this.value})" id="slider-max-positions">
+                            <input type="range" min="1" max="10" value="5" style="width: 100%;" onchange="autoAdjustPositionSize(this.value)" id="slider-max-positions">
                             <div style="font-size: 12px; color: #666; margin-top: 8px;">
-                                💡 Diversification vs. focus. Max risk = Position Size × Max Positions (5% × 5 = 25%)
+                                💡 Linked to Position Size to keep total risk ≤25%. Adjust one → other auto-adjusts
                             </div>
                         </div>
 
@@ -1539,6 +1539,68 @@ function validateResponse(response, requiredFields = []) {
                 // Update risk calculation
                 updateRiskCalculation();
             }
+        }
+
+        // Auto-adjust Max Positions when Position Size changes (keep total risk ≤25%)
+        function autoAdjustMaxPositions(posSize) {
+            const targetTotalRisk = 0.25; // 25% max
+            const maxPosSuggested = Math.max(1, Math.floor(targetTotalRisk / (posSize / 100)));
+            const maxPos = Math.min(10, maxPosSuggested);
+
+            const sliderMaxPos = document.getElementById('slider-max-positions');
+            if (sliderMaxPos) sliderMaxPos.value = maxPos;
+
+            updateTraderConfig({
+                position_size_pct: posSize / 100,
+                max_positions: maxPos
+            });
+        }
+
+        // Auto-adjust Position Size when Max Positions changes (keep total risk ≤25%)
+        function autoAdjustPositionSize(maxPos) {
+            const targetTotalRisk = 0.25; // 25% max
+            const posSizeSuggested = (targetTotalRisk / maxPos) * 100;
+            const posSize = Math.max(1, Math.min(20, Math.round(posSizeSuggested)));
+
+            const sliderPosSize = document.getElementById('slider-position-size');
+            if (sliderPosSize) sliderPosSize.value = posSize;
+
+            updateTraderConfig({
+                position_size_pct: posSize / 100,
+                max_positions: parseInt(maxPos)
+            });
+        }
+
+        // Auto-adjust Stop Loss when Profit Target changes (maintain 1:1.5 risk/reward)
+        function autoAdjustStopLoss(profitTarget) {
+            // Target ratio: 1:1.5 (stop loss = profit target / 1.5)
+            const targetRatio = 1.5;
+            const stopLossSuggested = (profitTarget / targetRatio).toFixed(1);
+            const stopLoss = Math.max(0.5, Math.min(5, parseFloat(stopLossSuggested)));
+
+            const sliderStopLoss = document.getElementById('slider-stop-loss');
+            if (sliderStopLoss) sliderStopLoss.value = stopLoss;
+
+            updateTraderConfig({
+                exit_profit_target: profitTarget / 100,
+                exit_stop_loss: stopLoss / 100
+            });
+        }
+
+        // Auto-adjust Profit Target when Stop Loss changes (maintain 1:1.5 risk/reward)
+        function autoAdjustProfitTarget(stopLoss) {
+            // Target ratio: 1:1.5 (profit target = stop loss * 1.5)
+            const targetRatio = 1.5;
+            const profitTargetSuggested = (stopLoss * targetRatio).toFixed(1);
+            const profitTarget = Math.max(1, Math.min(10, parseFloat(profitTargetSuggested)));
+
+            const sliderProfitTarget = document.getElementById('slider-profit-target');
+            if (sliderProfitTarget) sliderProfitTarget.value = profitTarget;
+
+            updateTraderConfig({
+                exit_profit_target: profitTarget / 100,
+                exit_stop_loss: stopLoss / 100
+            });
         }
 
         // Update risk calculations and interactions
