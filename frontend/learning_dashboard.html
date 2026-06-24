@@ -1,4 +1,7 @@
 <!-- Learning Metrics Dashboard Tab (Phase 331) -->
+<!-- INTEGRATION: Add this section to frontend/index.html in the tab buttons section -->
+<!-- BUTTON: <button onclick="switchTab('learning-tab', this)">📊 Learning</button> -->
+
 <div id="learning-tab" class="tab-content" style="display: none;">
   <h2>Learning Metrics Dashboard</h2>
 
@@ -204,7 +207,15 @@
 </style>
 
 <script>
+// Defensive dashboard refresh: only runs if elements exist
 async function refreshLearningDashboard() {
+  // Check if dashboard elements exist before proceeding
+  const dashboardTab = document.getElementById('learning-tab');
+  if (!dashboardTab) {
+    console.debug('Learning dashboard tab not yet integrated into main index.html');
+    return;
+  }
+
   try {
     // Fetch all dashboard data in parallel
     const [accuracyRes, heatmapRes, costRes] = await Promise.all([
@@ -222,23 +233,22 @@ async function refreshLearningDashboard() {
     const heatmap = await heatmapRes.json();
     const cost = await costRes.json();
 
-    // Update statistics
-    document.getElementById('overall-accuracy').textContent =
-      accuracy.overall_accuracy_pct.toFixed(1) + '%';
-    document.getElementById('accuracy-count').textContent =
-      accuracy.total_recommendations + ' recommendations';
-    document.getElementById('direction-correct').textContent =
-      accuracy.correct_direction + '/' + accuracy.total_recommendations;
-    document.getElementById('cost-error').textContent =
-      cost.avg_estimation_error.toFixed(1) + '%';
-    document.getElementById('cost-samples').textContent =
-      cost.symbols_learned + ' symbols learned';
-    document.getElementById('pipeline-status').textContent =
-      cost.readiness.charAt(0).toUpperCase() + cost.readiness.slice(1);
+    // Update statistics (with null checks)
+    const updateElement = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    updateElement('overall-accuracy', accuracy.overall_accuracy_pct.toFixed(1) + '%');
+    updateElement('accuracy-count', accuracy.total_recommendations + ' recommendations');
+    updateElement('direction-correct', accuracy.correct_direction + '/' + accuracy.total_recommendations);
+    updateElement('cost-error', cost.avg_estimation_error.toFixed(1) + '%');
+    updateElement('cost-samples', cost.symbols_learned + ' symbols learned');
+    updateElement('pipeline-status', cost.readiness.charAt(0).toUpperCase() + cost.readiness.slice(1));
 
     // Update scenario heatmap
     const heatmapBody = document.getElementById('scenario-heatmap-body');
-    if (heatmap.matrix && heatmap.matrix.length > 0) {
+    if (heatmapBody && heatmap.matrix && heatmap.matrix.length > 0) {
       heatmapBody.innerHTML = heatmap.matrix.map(row => `
         <tr>
           <td><strong>${row.scenario}</strong></td>
@@ -255,22 +265,24 @@ async function refreshLearningDashboard() {
 
     // Update cost errors
     const costBody = document.getElementById('cost-errors-body');
-    if (cost.top_errors && cost.top_errors.length > 0) {
-      costBody.innerHTML = cost.top_errors.map(row => `
-        <tr>
-          <td><strong>${row.symbol}</strong></td>
-          <td>${row.error_pct.toFixed(1)}%</td>
-          <td>${row.samples}</td>
-          <td>${row.error_pct > 50 ? '🔴 Learning' : row.error_pct > 30 ? '🟡 Improving' : '🟢 Confident'}</td>
-        </tr>
-      `).join('');
-    } else {
-      costBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999;">No execution data yet</td></tr>';
+    if (costBody) {
+      if (cost.top_errors && cost.top_errors.length > 0) {
+        costBody.innerHTML = cost.top_errors.map(row => `
+          <tr>
+            <td><strong>${row.symbol}</strong></td>
+            <td>${row.error_pct.toFixed(1)}%</td>
+            <td>${row.samples}</td>
+            <td>${row.error_pct > 50 ? '🔴 Learning' : row.error_pct > 30 ? '🟡 Improving' : '🟢 Confident'}</td>
+          </tr>
+        `).join('');
+      } else {
+        costBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999;">No execution data yet</td></tr>';
+      }
     }
 
     // Update symbol accuracy
     const symbolBody = document.getElementById('symbol-accuracy-body');
-    if (accuracy.symbol_accuracy && Object.keys(accuracy.symbol_accuracy).length > 0) {
+    if (symbolBody && accuracy.symbol_accuracy && Object.keys(accuracy.symbol_accuracy).length > 0) {
       symbolBody.innerHTML = Object.entries(accuracy.symbol_accuracy)
         .sort((a, b) => b[1] - a[1])
         .map(([symbol, pct]) => `
@@ -280,27 +292,44 @@ async function refreshLearningDashboard() {
             <td>${pct >= 75 ? '📈 Excellent' : pct >= 50 ? '→ Good' : '📉 Learning'}</td>
           </tr>
         `).join('');
-    } else {
+    } else if (symbolBody) {
       symbolBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #999;">No symbol data yet</td></tr>';
     }
 
     // Update refresh timestamp
-    const now = new Date();
-    document.getElementById('last-refresh').textContent =
-      'Last updated: ' + now.toLocaleTimeString();
+    const refreshEl = document.getElementById('last-refresh');
+    if (refreshEl) {
+      const now = new Date();
+      refreshEl.textContent = 'Last updated: ' + now.toLocaleTimeString();
+    }
 
   } catch (error) {
     console.error('Error refreshing learning dashboard:', error);
   }
 }
 
-// Auto-refresh every 30 seconds
-setInterval(refreshLearningDashboard, 30000);
-
-// Refresh on tab switch
-document.addEventListener('tabSwitched', (e) => {
-  if (e.detail?.tabId === 'learning-tab') {
-    refreshLearningDashboard();
-  }
-});
+// Only set up auto-refresh if dashboard tab exists
+if (document.getElementById('learning-tab')) {
+  // Auto-refresh every 30 seconds
+  setInterval(refreshLearningDashboard, 30000);
+  // Initial refresh on load
+  refreshLearningDashboard();
+}
 </script>
+
+<!-- INTEGRATION INSTRUCTIONS:
+To integrate this dashboard into frontend/index.html:
+
+1. Add tab button in the buttons row:
+   <button onclick="switchTab('learning-tab', this)">📊 Learning</button>
+
+2. Add this entire div before the closing body tag of index.html
+
+3. The dashboard will auto-initialize when index.html loads and the learning-tab element exists
+
+4. Features:
+   - Auto-refreshes every 30 seconds
+   - Defensive null-checks prevent errors if elements missing
+   - Works alongside existing tabs
+   - No dependencies beyond the three API endpoints
+-->
