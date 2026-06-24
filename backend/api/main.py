@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -54,6 +55,7 @@ from backend.api.routers.regime import router as regime_router
 from backend.api.routers.user import router as user_router
 from backend.api.routers.portfolio import router as portfolio_router
 from backend.api.routers.redundancy import router as redundancy_router
+from backend.api.routers.ha_postgres import router as ha_postgres_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -93,6 +95,14 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Starting crypto daytrading platform...")
+
+    # Validate HA configuration
+    primary_url = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
+    backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
+    if primary_url == backup_url:
+        logger.error(f"ERROR: PRIMARY and BACKUP URLs are identical: {primary_url}")
+        raise ValueError("PRIMARY_API_URL and BACKUP_API_URL must be different")
+    logger.info(f"HA Configuration validated: PRIMARY={primary_url}, BACKUP={backup_url}")
 
     # Initialize paper trading engine
     init_paper_trading(starting_capital=settings.initial_capital)
@@ -389,6 +399,7 @@ app.include_router(regime_router)  # Market regime analysis (Phase 336+)
 app.include_router(user_router)  # User profile & settings management
 app.include_router(portfolio_router)  # Portfolio summary & analysis
 app.include_router(redundancy_router)  # Redundancy & failover monitoring
+app.include_router(ha_postgres_router)  # PostgreSQL replication monitoring
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"

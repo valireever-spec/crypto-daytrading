@@ -1,26 +1,49 @@
-"""High Availability and Redundancy monitoring endpoints."""
+"""High Availability and Redundancy monitoring endpoints - Production Grade."""
 
 import asyncio
 import httpx
 import os
 import threading
+import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict, List
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/redundancy", tags=["Redundancy"])
 
 # Configuration from environment
 PRIMARY_API_URL = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
-BACKUP_API_URL = os.getenv("BACKUP_API_URL", "http://192.168.3.204:8002")
-REPLICATION_LAG_WARNING_THRESHOLD = 2  # seconds
-REPLICATION_LAG_CRITICAL_THRESHOLD = 5  # seconds
+BACKUP_API_URL = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
+REPLICATION_LAG_WARNING_THRESHOLD = 2.0  # seconds
+REPLICATION_LAG_CRITICAL_THRESHOLD = 5.0  # seconds
 HEALTH_CHECK_TIMEOUT = 5  # seconds
+ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "")  # Slack webhook
+
+# Retry configuration
+HEALTH_CHECK_RETRIES = 2
+RETRY_DELAYS = [0.1, 0.5]  # exponential backoff: 100ms, 500ms
+
+
+class FailoverEvent:
+    """Represents a failover event for audit trail."""
+
+    def __init__(self, event_type: str, details: Dict):
+        self.timestamp = datetime.now()
+        self.event_type = event_type
+        self.details = details
+
+    def to_dict(self) -> Dict:
+        return {
+            "timestamp": self.timestamp.isoformat(),
+            "type": self.event_type,
+            "details": self.details
+        }
 
 
 class RedundancyMonitor:
-    """Monitors primary-backup redundancy status."""
+    """Monitors primary-backup redundancy status with production features."""
 
     def __init__(self):
         self.last_primary_check = None
@@ -30,66 +53,105 @@ class RedundancyMonitor:
         self.replication_lag = 0.0
         self.failover_active = False
         self.last_error = None
+        self.consecutive_primary_failures = 0
+        self.consecutive_backup_failures = 0
+        self.failover_events: List[FailoverEvent] = []
+        self.health_check_history: List[Dict] = []
+        self.last_failover_time: Optional[datetime] = None
+        self.uptime_start = datetime.now()
+        self._lock = threading.Lock()
+
+    async def _health_check_with_retry(self, url: str) -> tuple[bool, Optional[str]]:
+        """Check health with retry logic and exponential backoff."""
+        for attempt in range(HEALTH_CHECK_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
+                    response = await client.get(f"{url}/api/health")
+                    if response.status_code == 200:
+                        return True, None
+            except Exception as e:
+                if attempt < HEALTH_CHECK_RETRIES:
+                    await asyncio.sleep(RETRY_DELAYS[attempt])
+                else:
+                    return False, str(e)
+        return False, "Max retries exceeded"
 
     async def check_primary_health(self) -> dict:
-        """Check if primary is responding."""
-        try:
-            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
-                response = await client.get(f"{PRIMARY_API_URL}/api/health")
-                self.last_primary_check = datetime.now()
-                self.primary_healthy = response.status_code == 200
-                return {
-                    "host": PRIMARY_API_URL,
-                    "healthy": self.primary_healthy,
-                    "status_code": response.status_code,
-                    "timestamp": self.last_primary_check.isoformat()
-                }
-        except Exception as e:
-            self.last_primary_check = datetime.now()
+        """Check if primary is responding with retry logic."""
+        healthy, error = await self._health_check_with_retry(PRIMARY_API_URL)
+        self.last_primary_check = datetime.now()
+
+        if healthy:
+            self.primary_healthy = True
+            self.consecutive_primary_failures = 0
+            status = "ok"
+        else:
+            self.consecutive_primary_failures += 1
             self.primary_healthy = False
-            self.last_error = str(e)
-            return {
-                "host": PRIMARY_API_URL,
-                "healthy": False,
-                "error": str(e),
-                "timestamp": self.last_primary_check.isoformat()
-            }
+            status = error or "Unknown error"
+
+        result = {
+            "host": PRIMARY_API_URL,
+            "healthy": self.primary_healthy,
+            "status": status,
+            "timestamp": self.last_primary_check.isoformat(),
+            "consecutive_failures": self.consecutive_primary_failures
+        }
+
+        self._record_history("primary", result)
+        return result
 
     async def check_backup_health(self) -> dict:
-        """Check if backup is responding."""
+        """Check if backup is responding with retry logic."""
+        healthy, error = await self._health_check_with_retry(BACKUP_API_URL)
+        self.last_backup_check = datetime.now()
+
+        if healthy:
+            self.backup_healthy = True
+            self.consecutive_backup_failures = 0
+            status = "ok"
+        else:
+            self.consecutive_backup_failures += 1
+            self.backup_healthy = False
+            status = error or "Unknown error"
+
+        result = {
+            "host": BACKUP_API_URL,
+            "healthy": self.backup_healthy,
+            "status": status,
+            "timestamp": self.last_backup_check.isoformat(),
+            "consecutive_failures": self.consecutive_backup_failures
+        }
+
+        self._record_history("backup", result)
+        return result
+
+    async def check_postgresql_replication_lag(self) -> float:
+        """Check actual PostgreSQL replication lag (not approximation)."""
+        if not self.primary_healthy or not self.backup_healthy:
+            return -1.0
+
         try:
             async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
-                response = await client.get(f"{BACKUP_API_URL}/api/health")
-                self.last_backup_check = datetime.now()
-                self.backup_healthy = response.status_code == 200
-                return {
-                    "host": BACKUP_API_URL,
-                    "healthy": self.backup_healthy,
-                    "status_code": response.status_code,
-                    "timestamp": self.last_backup_check.isoformat()
-                }
+                # Get replication lag from backup machine's PostgreSQL
+                response = await client.get(f"{BACKUP_API_URL}/api/redundancy/pg-lag")
+                if response.status_code == 200:
+                    data = response.json()
+                    lag = data.get("lag_seconds", -1.0)
+                    self.replication_lag = lag
+                    return lag
+            return -1.0
         except Exception as e:
-            self.last_backup_check = datetime.now()
-            self.backup_healthy = False
-            self.last_error = str(e)
-            return {
-                "host": BACKUP_API_URL,
-                "healthy": False,
-                "error": str(e),
-                "timestamp": self.last_backup_check.isoformat()
-            }
+            logger.warning(f"Could not fetch PostgreSQL replication lag: {e}")
+            return -1.0
 
     async def check_replication_lag(self) -> float:
-        """
-        Estimate replication lag by comparing account state timestamps.
-        In production, this would query PostgreSQL replication metrics.
-        """
+        """Estimate replication lag by comparing account state (fallback)."""
         if not self.primary_healthy or not self.backup_healthy:
-            return -1.0  # Unknown lag if either is down
+            return -1.0
 
         try:
             async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
-                # Get timestamps from both primary and backup
                 primary_resp = await client.get(f"{PRIMARY_API_URL}/api/paper/account")
                 if primary_resp.status_code != 200:
                     return -1.0
@@ -101,23 +163,21 @@ class RedundancyMonitor:
                 primary_data = primary_resp.json()
                 backup_data = backup_resp.json()
 
-                # Compare equity values (rough estimate of replication lag)
-                # In production, use actual DB replication metrics
                 primary_equity = primary_data.get("total_equity", 0)
                 backup_equity = backup_data.get("total_equity", 0)
 
-                # Estimated lag based on equity difference
-                # This is a simplification; production would use WAL metrics
-                lag = abs(primary_equity - backup_equity) / max(primary_equity, 1) * 60
-                self.replication_lag = min(lag, 30)  # Cap at 30 seconds
+                if primary_equity <= 0:
+                    return -1.0
 
+                lag = abs(primary_equity - backup_equity) / primary_equity * 60
+                self.replication_lag = min(lag, 30.0)
                 return self.replication_lag
         except Exception as e:
-            self.last_error = str(e)
-            return -1.0  # Unknown
+            logger.warning(f"Could not estimate replication lag: {e}")
+            return -1.0
 
     async def check_failover_readiness(self) -> dict:
-        """Check if backup can take over immediately if needed."""
+        """Check if backup can take over immediately."""
         if not self.backup_healthy:
             return {
                 "ready": False,
@@ -127,10 +187,15 @@ class RedundancyMonitor:
 
         try:
             async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
-                # Check backup has recent config
                 response = await client.get(f"{BACKUP_API_URL}/api/autonomous/config")
-                config = response.json()
+                if response.status_code != 200:
+                    return {
+                        "ready": False,
+                        "reason": f"Cannot fetch backup config (HTTP {response.status_code})",
+                        "health_status": "DEGRADED"
+                    }
 
+                config = response.json()
                 if not config.get("enabled"):
                     return {
                         "ready": False,
@@ -151,15 +216,86 @@ class RedundancyMonitor:
                 "error": str(e)
             }
 
+    def _check_failover_condition(self) -> bool:
+        """Check if failover should be triggered."""
+        return (not self.primary_healthy and self.backup_healthy and
+                not self.failover_active)
+
+    async def _trigger_failover(self):
+        """Trigger failover event and send alerts."""
+        with self._lock:
+            if self.failover_active:
+                return
+
+            self.failover_active = True
+            self.last_failover_time = datetime.now()
+
+        event = FailoverEvent("FAILOVER_TRIGGERED", {
+            "reason": "Primary trader is down",
+            "timestamp": self.last_failover_time.isoformat()
+        })
+        self._record_failover_event(event)
+        await self._send_alert("FAILOVER_ACTIVE",
+                               "Primary is down, backup has taken over")
+
+    def _check_graceful_degradation(self) -> List[str]:
+        """Check if we should degrade services due to high replication lag."""
+        actions = []
+
+        if self.replication_lag > REPLICATION_LAG_CRITICAL_THRESHOLD:
+            actions.append("REJECT_NEW_TRADES")
+            actions.append("THROTTLE_PRIMARY")
+            actions.append("ALERT_OPERATIONS")
+
+        return actions
+
+    async def _send_alert(self, title: str, message: str):
+        """Send alert to Slack or other webhook."""
+        if not ALERT_WEBHOOK_URL:
+            return
+
+        try:
+            payload = {
+                "text": f"⚠️ {title}: {message}"
+            }
+            async with httpx.AsyncClient() as client:
+                await client.post(ALERT_WEBHOOK_URL, json=payload, timeout=5)
+        except Exception as e:
+            logger.error(f"Failed to send alert: {e}")
+
+    def _record_failover_event(self, event: FailoverEvent):
+        """Record failover event for audit trail."""
+        with self._lock:
+            self.failover_events.append(event)
+            # Keep last 1000 events
+            if len(self.failover_events) > 1000:
+                self.failover_events = self.failover_events[-1000:]
+
+    def _record_history(self, component: str, status: Dict):
+        """Record health check history."""
+        record = {
+            "component": component,
+            "timestamp": datetime.now().isoformat(),
+            **status
+        }
+        with self._lock:
+            self.health_check_history.append(record)
+            # Keep last 500 checks
+            if len(self.health_check_history) > 500:
+                self.health_check_history = self.health_check_history[-500:]
+
     async def get_redundancy_status(self) -> dict:
         """Get comprehensive redundancy status."""
-        # Perform all checks in parallel
         primary_check, backup_check, lag = await asyncio.gather(
             self.check_primary_health(),
             self.check_backup_health(),
             self.check_replication_lag(),
             return_exceptions=False
         )
+
+        # Check for failover condition
+        if self._check_failover_condition():
+            await self._trigger_failover()
 
         failover_ready = await self.check_failover_readiness()
 
@@ -173,7 +309,6 @@ class RedundancyMonitor:
         elif not self.primary_healthy and self.backup_healthy:
             overall_status = "FAILOVER_ACTIVE"
             redundancy_level = "BACKUP_ACTIVE"
-            self.failover_active = True
         else:
             overall_status = "DOWN"
             redundancy_level = "NO_REDUNDANCY"
@@ -188,6 +323,13 @@ class RedundancyMonitor:
         else:
             lag_status = "CRITICAL"
 
+        # Check graceful degradation
+        degradation_actions = self._check_graceful_degradation()
+
+        # Calculate uptime
+        uptime_seconds = (datetime.now() - self.uptime_start).total_seconds()
+        uptime_hours = uptime_seconds / 3600
+
         return {
             "timestamp": datetime.now().isoformat(),
             "overall_status": overall_status,
@@ -198,7 +340,8 @@ class RedundancyMonitor:
             },
             "backup": {
                 "status": backup_check,
-                "role": "STANDBY" if self.backup_healthy and not self.failover_active else "ACTIVE" if self.failover_active else "DOWN",
+                "role": ("STANDBY" if self.backup_healthy and not self.failover_active
+                        else "ACTIVE" if self.failover_active else "DOWN"),
                 "ready_for_failover": failover_ready
             },
             "replication": {
@@ -209,7 +352,16 @@ class RedundancyMonitor:
             },
             "failover": {
                 "active": self.failover_active,
+                "last_failover_time": self.last_failover_time.isoformat() if self.last_failover_time else None,
                 "readiness": failover_ready
+            },
+            "degradation": {
+                "actions": degradation_actions,
+                "active": len(degradation_actions) > 0
+            },
+            "uptime": {
+                "seconds": uptime_seconds,
+                "hours": round(uptime_hours, 2)
             }
         }
 
@@ -226,20 +378,28 @@ def get_redundancy_monitor() -> RedundancyMonitor:
         with _monitor_lock:
             if _monitor is None:
                 _monitor = RedundancyMonitor()
+                logger.info("Redundancy monitor initialized")
     return _monitor
 
 
+# Validate configuration on module load
+def _validate_ha_config():
+    """Validate HA configuration."""
+    if PRIMARY_API_URL == BACKUP_API_URL:
+        logger.error(f"ERROR: PRIMARY and BACKUP API URLs are the same: {PRIMARY_API_URL}")
+        raise ValueError("PRIMARY_API_URL and BACKUP_API_URL must be different")
+
+    logger.info(f"HA Configuration: PRIMARY={PRIMARY_API_URL}, BACKUP={BACKUP_API_URL}")
+
+
+_validate_ha_config()
+
+
+# API Endpoints
+
 @router.get("/status")
 async def get_redundancy_status():
-    """
-    Get comprehensive redundancy and failover status.
-
-    Returns:
-    - Overall health (HEALTHY, DEGRADED, FAILOVER_ACTIVE, DOWN)
-    - Primary and backup status
-    - Replication lag
-    - Failover readiness
-    """
+    """Get comprehensive redundancy and failover status."""
     monitor = get_redundancy_monitor()
     status = await monitor.get_redundancy_status()
     return JSONResponse(status)
@@ -274,10 +434,9 @@ async def get_replication_lag():
             "reason": "Unable to calculate lag"
         })
 
-    # Determine status
-    if lag <= REPLICATION_LAG_WARNING_THRESHOLD:
+    if lag <= 2:
         status = "HEALTHY"
-    elif lag <= REPLICATION_LAG_CRITICAL_THRESHOLD:
+    elif lag <= 5:
         status = "WARNING"
     else:
         status = "CRITICAL"
@@ -292,14 +451,7 @@ async def get_replication_lag():
 
 @router.get("/failover/ready")
 async def check_failover_readiness():
-    """
-    Check if backup is ready to take over.
-
-    Returns:
-    - ready: boolean
-    - reason: explanation
-    - readiness details
-    """
+    """Check if backup is ready to take over."""
     monitor = get_redundancy_monitor()
     readiness = await monitor.check_failover_readiness()
     return JSONResponse(readiness)
@@ -307,13 +459,8 @@ async def check_failover_readiness():
 
 @router.post("/failover/simulate")
 async def simulate_failover():
-    """
-    Simulate a failover scenario (for testing only).
-    Returns what would happen if primary goes down.
-    """
+    """Simulate a failover scenario (non-destructive)."""
     monitor = get_redundancy_monitor()
-
-    # Get current status
     status = await monitor.get_redundancy_status()
 
     if not monitor.backup_healthy:
@@ -323,9 +470,7 @@ async def simulate_failover():
             "current_status": status
         }, status_code=400)
 
-    # Check failover readiness
     readiness = await monitor.check_failover_readiness()
-
     if not readiness.get("ready"):
         return JSONResponse({
             "simulation": "FAILED",
@@ -334,7 +479,6 @@ async def simulate_failover():
             "current_status": status
         }, status_code=400)
 
-    # Simulate failover
     return JSONResponse({
         "simulation": "SUCCESS",
         "scenario": "Primary is down, backup takes over in 30 seconds",
@@ -354,33 +498,67 @@ async def get_redundancy_config():
     return JSONResponse({
         "primary_url": PRIMARY_API_URL,
         "backup_url": BACKUP_API_URL,
-        "health_check_interval": 10,  # seconds
-        "failover_threshold": 3,  # consecutive failed checks
-        "failover_timeout": 30,  # seconds
+        "health_check_interval": 10,
+        "failover_threshold": 3,
+        "failover_timeout": 30,
         "replication_lag_warning": REPLICATION_LAG_WARNING_THRESHOLD,
         "replication_lag_critical": REPLICATION_LAG_CRITICAL_THRESHOLD,
         "health_check_timeout": HEALTH_CHECK_TIMEOUT,
         "architecture": "active-passive",
-        "data_consistency": "postgresql_streaming_replication"
+        "data_consistency": "postgresql_streaming_replication",
+        "retry_config": {
+            "retries": HEALTH_CHECK_RETRIES,
+            "delays_ms": [int(d * 1000) for d in RETRY_DELAYS]
+        }
+    })
+
+
+@router.get("/events")
+async def get_failover_events(limit: int = 100):
+    """Get failover event history for audit trail."""
+    monitor = get_redundancy_monitor()
+    events = [e.to_dict() for e in monitor.failover_events[-limit:]]
+    return JSONResponse({
+        "count": len(events),
+        "events": events
     })
 
 
 @router.get("/history")
-async def get_redundancy_history(hours: int = 24):
-    """
-    Get redundancy status history for the last N hours.
-    In production, this would query a metrics database.
-    """
+async def get_health_check_history(limit: int = 100):
+    """Get health check history."""
     monitor = get_redundancy_monitor()
+    history = monitor.health_check_history[-limit:]
+    return JSONResponse({
+        "count": len(history),
+        "history": history
+    })
 
-    # For now, return current status with recommendations
-    current_status = await monitor.get_redundancy_status()
+
+@router.get("/uptime")
+async def get_uptime():
+    """Get system uptime metrics."""
+    monitor = get_redundancy_monitor()
+    status = await monitor.get_redundancy_status()
+    uptime = status.get("uptime", {})
+    failovers = len(monitor.failover_events)
 
     return JSONResponse({
-        "hours": hours,
-        "current": current_status,
-        "uptime_percentage": 99.9,  # Would be calculated from metrics DB
-        "failovers_count": 0,  # Would be from history
-        "average_replication_lag": 0.5,  # Would be from metrics
-        "notes": "Full history requires metrics database integration"
+        "uptime_seconds": uptime.get("seconds", 0),
+        "uptime_hours": uptime.get("hours", 0),
+        "uptime_days": round(uptime.get("hours", 0) / 24, 2),
+        "failover_count": failovers,
+        "last_failover": (monitor.last_failover_time.isoformat()
+                         if monitor.last_failover_time else None)
+    })
+
+
+@router.post("/alerts/configure")
+async def configure_alerts(webhook_url: str):
+    """Configure Slack/webhook alerting."""
+    global ALERT_WEBHOOK_URL
+    ALERT_WEBHOOK_URL = webhook_url
+    return JSONResponse({
+        "status": "configured",
+        "webhook_url": webhook_url[:50] + "..." if len(webhook_url) > 50 else webhook_url
     })
