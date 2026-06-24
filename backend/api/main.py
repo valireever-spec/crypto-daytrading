@@ -39,6 +39,7 @@ from backend.api.routers.recommendation_advanced import router as recommendation
 from backend.api.routers.rebalancing import router as rebalancing_router
 from backend.api.routers.production_hardening import router as production_hardening_router
 from backend.api.routers.learning_feedback import router as learning_feedback_router
+from backend.api.routers.learning_automation import router as learning_automation_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -280,6 +281,7 @@ app.include_router(recommendation_advanced_router)  # Advanced recommendations (
 app.include_router(rebalancing_router)  # Constrained rebalancing (Phase 327)
 app.include_router(production_hardening_router)  # Production hardening (Phase 328)
 app.include_router(learning_feedback_router)  # Learning & feedback (Phase 329)
+app.include_router(learning_automation_router)  # Learning automation (Phase 330)
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"
