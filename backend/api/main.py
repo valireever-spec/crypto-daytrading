@@ -680,6 +680,99 @@ async def place_manual_order(
     return JSONResponse(result)
 
 
+# === Emergency Exit Endpoint (BUG FIX #2) ===
+
+
+@app.post("/api/emergency-exit")
+async def emergency_exit(symbol: str) -> JSONResponse:
+    """Force-exit a position immediately (emergency use only).
+
+    Used when autonomous trader crashes or becomes unresponsive.
+    Closes the entire position at current market price.
+
+    Args:
+        symbol: Trading symbol (e.g., BTCUSDT, ETHUSDT)
+
+    Returns:
+        Exit confirmation with realized P&L
+    """
+    engine = get_paper_trading()
+    if not engine:
+        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+
+    # Find the position
+    positions = engine.get_positions()
+    position = next((p for p in positions if p['symbol'] == symbol), None)
+
+    if not position:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No open position for {symbol}. Open positions: {[p['symbol'] for p in positions]}"
+        )
+
+    # Use current market price from position
+    current_price = position['current_price']
+
+    # Execute SELL to close position
+    result = await engine.place_order(
+        symbol=symbol.upper(),
+        side="SELL",
+        quantity=position['quantity'],
+        current_price=current_price,
+        order_type="MARKET",
+        strategy_name="emergency_exit",
+    )
+
+    if result.get("status") == "FILLED":
+        logger.critical(
+            f"🚨 EMERGENCY EXIT: {symbol} closed at ${current_price:.2f} - "
+            f"Realized P&L: {result.get('realized_pnl', 0):.2f}"
+        )
+        return JSONResponse({
+            "status": "EXIT_SUCCESSFUL",
+            "symbol": symbol,
+            "quantity": position['quantity'],
+            "exit_price": current_price,
+            "realized_pnl": result.get('realized_pnl', 0),
+            "order_id": result.get('order_id'),
+            "message": f"Position {symbol} closed successfully"
+        })
+    else:
+        logger.error(f"🚨 EMERGENCY EXIT FAILED: {symbol} - {result}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to close position: {result.get('reason', 'Unknown error')}"
+        )
+
+
+@app.get("/api/emergency-exit/positions")
+async def emergency_exit_positions() -> JSONResponse:
+    """List all open positions available for emergency exit.
+
+    Use this to see which positions can be force-exited.
+    """
+    engine = get_paper_trading()
+    if not engine:
+        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+
+    positions = engine.get_positions()
+    return JSONResponse({
+        "count": len(positions),
+        "positions": [
+            {
+                "symbol": p['symbol'],
+                "quantity": p['quantity'],
+                "entry_price": p['entry_price'],
+                "current_price": p['current_price'],
+                "unrealized_pnl": p['unrealized_pnl'],
+                "unrealized_pnl_pct": p['unrealized_pnl_pct'],
+                "emergency_exit_url": f"/api/emergency-exit?symbol={p['symbol']}"
+            }
+            for p in positions
+        ]
+    })
+
+
 # === Trading Control Endpoints (FR-007) ===
 
 
@@ -1497,9 +1590,10 @@ async def compare_strategies(
 # === Market Regime Detection Endpoints (Phase 2 Week 7) ===
 
 
+@app.get("/api/regime/detect")
 @app.post("/api/regime/detect")
 async def detect_market_regime(symbol: str) -> JSONResponse:
-    """Detect current market regime for a symbol.
+    """Detect current market regime for a symbol (BUG FIX #3).
 
     Args:
         symbol: Trading symbol (e.g., 'BTCUSDT')

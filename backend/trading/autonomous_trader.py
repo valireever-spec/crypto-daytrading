@@ -108,6 +108,13 @@ class AutonomousTrader:
                     await asyncio.sleep(1)
                     continue
 
+                # Check daily loss limit (BUG FIX #1: Enforce max_daily_loss_pct)
+                daily_loss_exceeded = await self._check_daily_loss_limit()
+                if daily_loss_exceeded:
+                    logger.critical("🛑 Daily loss limit exceeded - stopping all trading!")
+                    self.running = False
+                    break
+
                 # Check portfolio-level decisions (Phase 318) every 60 seconds
                 if loop_count % portfolio_check_interval == 0:
                     await self._check_portfolio_decisions()
@@ -288,6 +295,49 @@ class AutonomousTrader:
 
         except Exception as e:
             logger.error(f"Error checking exits: {e}", exc_info=True)
+
+    async def _check_daily_loss_limit(self) -> bool:
+        """Check if daily loss limit has been exceeded (BUG FIX #1).
+
+        Returns:
+            True if daily loss limit exceeded (should stop trading), False otherwise
+        """
+        try:
+            engine = get_paper_trading()
+            if not engine:
+                return False
+
+            account = engine.get_account_state()
+            daily_pnl = account.get('daily_pnl', 0.0)
+            total_equity = account.get('total_equity', 10000.0)
+
+            if total_equity <= 0:
+                return False
+
+            daily_loss_pct = abs(daily_pnl) / total_equity * 100
+
+            # Check if daily loss exceeds limit
+            if daily_pnl < 0 and daily_loss_pct >= self.config.max_daily_loss_pct:
+                logger.critical(
+                    f"🛑 DAILY LOSS LIMIT EXCEEDED: "
+                    f"${abs(daily_pnl):.2f} ({daily_loss_pct:.2f}%) >= "
+                    f"{self.config.max_daily_loss_pct:.1f}% limit"
+                )
+                return True
+
+            # Log if approaching limit (80% of limit)
+            if daily_pnl < 0 and daily_loss_pct >= (self.config.max_daily_loss_pct * 0.8):
+                logger.warning(
+                    f"⚠️  Approaching daily loss limit: "
+                    f"${abs(daily_pnl):.2f} ({daily_loss_pct:.2f}%) "
+                    f"(limit: {self.config.max_daily_loss_pct:.1f}%)"
+                )
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Error checking daily loss limit: {e}", exc_info=True)
+            return False
 
     async def _check_portfolio_decisions(self):
         """Check and execute portfolio-level regime decisions (Phase 318)."""
