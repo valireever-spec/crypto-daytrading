@@ -286,7 +286,7 @@ async def lifespan(app: FastAPI):
     global sync_task
     sync_task = asyncio.create_task(ensure_backup_in_sync())
 
-    logger.info("Application startup complete")
+    logger.info("✅ Crypto daytrading platform startup complete: paper_trading, signal_generator, smart_executor, autonomous_trader, regime_detector, historical_data, portfolio_analyzer, tax_calculator, stock_optimizer, binance_streams, failover_monitor all initialized")
     yield
 
     # Shutdown

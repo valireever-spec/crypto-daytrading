@@ -44,6 +44,8 @@ class TradingConfig:
     max_positions: int = 5
     max_daily_loss_pct: float = 5.0  # Max daily loss before stopping (from .env)
     symbols: List[str] = None  # Symbols to trade
+    loop_sleep_seconds: float = 10.0  # Sleep between trading loop iterations
+    retry_sleep_seconds: float = 5.0  # Sleep on error before retry
 
     def __post_init__(self):
         if self.symbols is None:
@@ -128,11 +130,11 @@ class AutonomousTrader:
                 # Check exits for existing positions
                 await self._check_exits()
 
-                # Sleep briefly before next iteration (check every 10 seconds to reduce CPU load)
-                await asyncio.sleep(10)
+                # Sleep briefly before next iteration
+                await asyncio.sleep(self.config.loop_sleep_seconds)
             except Exception as e:
                 logger.error(f"Error in trading loop: {e}", exc_info=True)
-                await asyncio.sleep(5)
+                await asyncio.sleep(self.config.retry_sleep_seconds)
 
     async def _check_symbol(self, symbol: str) -> Optional[TradeSignal]:
         """Check if a symbol should be bought."""

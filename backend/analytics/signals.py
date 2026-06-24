@@ -171,6 +171,15 @@ class SignalGenerator:
                 # Fallback: default weights (RSI 40%, MACD 35%, BB 25%)
                 composite_score = (rsi_score * 0.4) + (macd_score * 0.35) + (bb_score * 0.25)
 
+            # Validate signal score is not NaN (GAP-5 fix)
+            if pd.isna(composite_score) or np.isnan(composite_score):
+                logger.warning(f"{symbol}: Signal score is NaN, defaulting to NEUTRAL")
+                composite_score = 50.0
+            if pd.isna(rsi):
+                rsi = 50.0
+            if pd.isna(bb_position):
+                bb_position = 0.5
+
             # Determine grade
             if composite_score >= 70:
                 grade = "STRONG BUY"
