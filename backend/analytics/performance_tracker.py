@@ -7,7 +7,7 @@ Track recommendation quality and calibration over time.
 import logging
 from typing import Dict, List, Optional
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
 
@@ -81,7 +81,7 @@ class PerformanceTracker:
             Optimization target ("return" or "volatility")
         """
         record = RecommendationRecord(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             allocation=allocation.copy(),
             expected_return_pct=expected_return_pct,
             expected_volatility_pct=expected_volatility_pct,
@@ -114,10 +114,10 @@ class PerformanceTracker:
             if self.recommendations:
                 recommendation_timestamp = self.recommendations[-1].timestamp
             else:
-                recommendation_timestamp = datetime.utcnow()
+                recommendation_timestamp = datetime.now(timezone.utc)
 
         record = OutcomeRecord(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             actual_return_pct=actual_return_pct,
             actual_volatility_pct=actual_volatility_pct,
             recommendation_timestamp=recommendation_timestamp,
@@ -137,7 +137,7 @@ class PerformanceTracker:
             return None
 
         # Filter to recommendations within lookback window
-        cutoff_date = datetime.utcnow() - pd.Timedelta(days=self.lookback_days)
+        cutoff_date = datetime.now(timezone.utc) - pd.Timedelta(days=self.lookback_days)
 
         recent_recs = [
             r for r in self.recommendations

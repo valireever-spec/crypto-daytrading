@@ -6,7 +6,7 @@ REST API for scenario analysis and allocation recommendations.
 
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Body, Query
 import pandas as pd
 import numpy as np
@@ -48,7 +48,7 @@ def _get_historical_returns(symbols: List[str], lookback_days: int = 252) -> Dic
         return returns
 
     # Determine date range
-    end_date = datetime.utcnow()
+    end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=lookback_days + 50)
 
     for symbol in symbols:
@@ -159,7 +159,7 @@ async def scenario_analysis(
         )
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "symbols": symbols,
             "allocation": allocation,
             "time_horizon_days": time_horizon_days,
@@ -278,7 +278,7 @@ async def solve_allocation(
             )
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "target_type": result.target_type,
             "target_value": round(result.target_value, 2),
             "allocation": {k: round(v, 2) for k, v in result.allocation.items()},

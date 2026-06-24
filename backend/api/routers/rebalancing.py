@@ -6,14 +6,21 @@ REST endpoints for constrained portfolio rebalancing.
 
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Body, Query
+import numpy as np
 
 from backend.analytics.rebalancing_engine import (
     get_rebalancing_engine,
 )
 from backend.analytics.rebalancing_stress_tester import (
     get_rebalancing_stress_tester,
+)
+from backend.analytics.constraint_manager import (
+    get_constraint_manager,
+)
+from backend.analytics.scenario_customizer import (
+    get_scenario_customizer,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,7 +65,7 @@ async def analyze_drift(
         drift = engine.analyze_drift(current_allocation, target_allocation)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_drift_pct": round(drift.total_drift_pct, 2),
             "requires_rebalancing": drift.requires_rebalancing,
             "drift_per_symbol": {k: round(v, 2) for k, v in drift.drift_per_symbol.items()},
@@ -129,7 +136,7 @@ async def generate_rebalancing_plan(
         cost_breakdown = engine.estimate_cost_breakdown(plan)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "trades": [
                 {
                     "symbol": symbol,
@@ -220,7 +227,7 @@ async def break_into_tranches(
         total_time = sum(t.estimated_execution_time_min for t in tranches)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_tranches": len(tranches),
             "max_tranche_pct": max_tranche_pct,
             "tranches": [
@@ -250,7 +257,7 @@ async def break_into_tranches(
 @router.post("/stress-test")
 async def stress_test_rebalancing(
     target_allocation: Dict[str, float] = Body(..., description="Target allocation"),
-    scenario_name: str = Query("Custom", description="Scenario name"),
+    scenario_name: str = Query("bull_market", description="Scenario name (bull_market, bear_market, etc.)"),
 ) -> Dict[str, Any]:
     """
     Stress test rebalancing plan under market scenario.
@@ -260,7 +267,7 @@ async def stress_test_rebalancing(
     target_allocation : dict
         Target allocation {symbol: weight %}
     scenario_name : str
-        Name of scenario to test
+        Predefined scenario (bull_market, bear_market, high_volatility, stagflation, deflation, recovery)
 
     Returns:
     --------
@@ -277,23 +284,33 @@ async def stress_test_rebalancing(
         if not target_allocation:
             raise HTTPException(status_code=400, detail="No allocation provided")
 
-        # Create synthetic scenario returns
-        symbols = list(target_allocation.keys())
-        scenario_returns = {symbol: 8.0 for symbol in symbols}
-        scenario_volatilities = {symbol: 15.0 for symbol in symbols}
-        scenario_correlations = np.eye(len(symbols)) * 0.7 + np.ones((len(symbols), len(symbols))) * 0.3
-
         tester = get_rebalancing_stress_tester()
-        result = tester.stress_test_allocation(
-            target_allocation=target_allocation,
-            scenario_returns=scenario_returns,
-            scenario_volatilities=scenario_volatilities,
-            scenario_correlations=scenario_correlations,
-            scenario_name=scenario_name,
-        )
+        customizer = get_scenario_customizer()
+
+        # Check if scenario is predefined
+        predefined = customizer.get_predefined_scenario(scenario_name)
+        if predefined:
+            result = tester.stress_test_with_predefined_scenario(
+                target_allocation=target_allocation,
+                scenario_name=scenario_name,
+            )
+        else:
+            # Fallback to synthetic scenario
+            symbols = list(target_allocation.keys())
+            scenario_returns = {symbol: 8.0 for symbol in symbols}
+            scenario_volatilities = {symbol: 15.0 for symbol in symbols}
+            scenario_correlations = np.eye(len(symbols)) * 0.7 + np.ones((len(symbols), len(symbols))) * 0.3
+
+            result = tester.stress_test_allocation(
+                target_allocation=target_allocation,
+                scenario_returns=scenario_returns,
+                scenario_volatilities=scenario_volatilities,
+                scenario_correlations=scenario_correlations,
+                scenario_name=scenario_name,
+            )
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "scenario": result.scenario_name,
             "portfolio_volatility_pct": round(result.portfolio_volatility_pct, 2),
             "worst_case_drawdown_pct": round(result.worst_case_drawdown_pct, 2),
@@ -339,7 +356,7 @@ async def get_rebalancing_history(limit: int = Query(10, description="Number of 
         history = engine.get_rebalancing_history(limit)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_rebalancings": len(engine.rebalancing_history),
             "recent_rebalancings": [
                 {
@@ -357,7 +374,3 @@ async def get_rebalancing_history(limit: int = Query(10, description="Number of 
     except Exception as e:
         logger.error(f"Error getting history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# Add numpy import
-import numpy as np

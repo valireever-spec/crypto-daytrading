@@ -6,7 +6,7 @@ Constraint management, scenario customization, and performance tracking.
 
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Body, Query
 import numpy as np
 
@@ -52,7 +52,7 @@ async def add_sector_limit(
         manager.add_sector_limit(sector, max_weight_pct)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": "added",
             "constraint": "sector",
             "sector": sector,
@@ -94,7 +94,7 @@ async def add_concentration_limit(
         manager.add_concentration_limit(max_single_position_pct)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": "added",
             "constraint": "concentration",
             "max_single_position_pct": round(max_single_position_pct, 2),
@@ -135,7 +135,7 @@ async def validate_allocation(
         is_valid, violations = manager.validate_allocation(allocation)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "valid": is_valid,
             "violations": violations,
             "total_constraints": len(manager.constraints),
@@ -209,7 +209,7 @@ async def analyze_predefined_scenario(
         result = customizer.analyze_scenario(scenario, historical_returns, allocation, base_metrics)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "scenario": result.scenario_name,
             "expected_return_pct": round(result.expected_return_pct, 2),
             "volatility_pct": round(result.volatility_pct, 2),
@@ -249,7 +249,7 @@ async def list_scenarios() -> Dict[str, Any]:
         scenarios = customizer.list_predefined_scenarios()
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "scenarios": [
                 {"name": name, "description": desc}
                 for name, desc in scenarios.items()
@@ -298,7 +298,7 @@ async def record_recommendation(
 
         return {
             "status": "recorded",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "scenario_type": scenario_type,
         }
 
@@ -335,7 +335,7 @@ async def record_outcome(
 
         return {
             "status": "recorded",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "actual_return_pct": round(actual_return_pct, 2),
             "actual_volatility_pct": round(actual_volatility_pct, 2),
         }
@@ -368,7 +368,7 @@ async def get_performance_metrics() -> Dict[str, Any]:
             raise HTTPException(status_code=400, detail="No performance data available")
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_recommendations": metrics.total_recommendations,
             "avg_forecast_return_pct": round(metrics.avg_forecast_return_pct, 2),
             "avg_actual_return_pct": round(metrics.avg_actual_return_pct, 2),
@@ -405,7 +405,7 @@ async def get_performance_summary() -> Dict[str, Any]:
         summary = tracker.get_summary()
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             **summary,
         }
 

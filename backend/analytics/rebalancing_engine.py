@@ -10,6 +10,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from backend.analytics.constraint_manager import get_constraint_manager
+
 logger = logging.getLogger(__name__)
 
 
@@ -167,13 +169,11 @@ class RebalancingEngine:
         # Estimate execution time (1% per 2 minutes)
         estimated_execution_time = (total_trades_pct / 1.0) * 2.0
 
-        # Check constraints (simplified)
-        final_allocation = current_allocation.copy()
-        for symbol, side, pct in trades:
-            if side == "BUY":
-                final_allocation[symbol] = final_allocation.get(symbol, 0.0) + pct
-            else:
-                final_allocation[symbol] = final_allocation.get(symbol, 0.0) - pct
+        # Check constraints (FIXED: now actually validates)
+        final_allocation = target_allocation.copy()
+        manager = get_constraint_manager()
+        is_valid, violations = manager.validate_allocation(final_allocation)
+        constraint_violations = violations
 
         feasible = len(constraint_violations) == 0
 

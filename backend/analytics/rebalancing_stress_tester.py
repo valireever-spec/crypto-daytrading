@@ -10,6 +10,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from backend.analytics.scenario_customizer import get_scenario_customizer
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,6 +34,64 @@ class RebalancingStressTester:
     def __init__(self):
         """Initialize stress tester."""
         self.test_history: List[StressTestResult] = []
+        self.customizer = get_scenario_customizer()
+
+    def stress_test_with_predefined_scenario(
+        self,
+        target_allocation: Dict[str, float],
+        scenario_name: str,  # "bull_market", "bear_market", etc.
+        historical_returns: Optional[Dict[str, pd.Series]] = None,
+    ) -> StressTestResult:
+        """
+        Stress test using Phase 326 predefined scenarios.
+
+        Parameters:
+        -----------
+        target_allocation : dict
+            {symbol: weight %}
+        scenario_name : str
+            Predefined scenario name
+        historical_returns : dict
+            Optional historical returns for correlation calculation
+
+        Returns:
+        --------
+        StressTestResult
+        """
+        scenario = self.customizer.get_predefined_scenario(scenario_name)
+        if not scenario:
+            logger.error(f"Unknown scenario: {scenario_name}")
+            return StressTestResult(
+                scenario_name=scenario_name,
+                allocation_under_stress=target_allocation.copy(),
+                constraint_violations=[f"Unknown scenario: {scenario_name}"],
+                portfolio_volatility_pct=0,
+                worst_case_drawdown_pct=0,
+                recovery_time_days=0,
+                feasible_under_stress=False,
+                recommendation="INVALID",
+            )
+
+        # Use scenario multipliers to adjust base returns
+        symbols = list(target_allocation.keys())
+        scenario_returns = {s: 8.0 * scenario.return_multiplier for s in symbols}
+        scenario_volatilities = {s: 15.0 * scenario.volatility_multiplier for s in symbols}
+
+        # Identity correlation matrix adjusted by scenario
+        n = len(symbols)
+        correlations = np.eye(n) * 0.7 + np.ones((n, n)) * 0.3
+        correlations = self.customizer.adjust_correlation_matrix(
+            correlations,
+            scenario
+        )
+
+        return self.stress_test_allocation(
+            target_allocation=target_allocation,
+            scenario_returns=scenario_returns,
+            scenario_volatilities=scenario_volatilities,
+            scenario_correlations=correlations,
+            scenario_name=scenario.name,
+        )
 
     def stress_test_allocation(
         self,
