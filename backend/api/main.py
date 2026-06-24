@@ -1350,15 +1350,23 @@ async def get_regime_trading_rules(regime: str) -> JSONResponse:
         if not detector:
             raise HTTPException(status_code=500, detail="Regime detector not initialized")
 
-        rules = detector.get_regime_trading_rules(regime.upper())
+        # Create a sample regime_info dict for the requested regime
+        regime_info = {
+            "regime": regime.lower(),  # Method expects lowercase
+            "volatility_level": "medium",
+            "rsi_value": 50.0,
+        }
+
+        thresholds = detector.get_adaptive_thresholds(regime_info)
 
         return JSONResponse(
             {
                 "regime": regime.upper(),
-                "position_size_multiplier": rules["position_size_multiplier"],
-                "stop_loss_pct": rules["stop_loss_pct"],
-                "take_profit_pct": rules["take_profit_pct"],
-                "recommended_strategies": rules["recommended_strategies"],
+                "position_size_multiplier": thresholds.get("position_size_adjustment", 1.0),
+                "stop_loss_pct": thresholds.get("stop_loss", 0.02),
+                "take_profit_pct": thresholds.get("profit_target", 0.05),
+                "entry_threshold": thresholds.get("entry_threshold", 55.0),
+                "recommended_strategies": ["adaptive"],  # Placeholder
             }
         )
 
