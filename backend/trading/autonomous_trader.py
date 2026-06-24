@@ -94,7 +94,7 @@ class AutonomousTrader:
     async def _trading_loop(self):
         """Main trading loop - runs continuously."""
         loop_count = 0
-        portfolio_check_interval = 12  # Check portfolio decisions every 60 seconds (12 * 5s)
+        portfolio_check_interval = 6  # Check portfolio decisions every 60 seconds (6 * 10s)
         while self.running:
             try:
                 loop_count += 1
@@ -120,8 +120,8 @@ class AutonomousTrader:
                 # Check exits for existing positions
                 await self._check_exits()
 
-                # Sleep briefly before next iteration (check every 5 seconds)
-                await asyncio.sleep(5)
+                # Sleep briefly before next iteration (check every 10 seconds to reduce CPU load)
+                await asyncio.sleep(10)
             except Exception as e:
                 logger.error(f"Error in trading loop: {e}", exc_info=True)
                 await asyncio.sleep(5)

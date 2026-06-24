@@ -6,6 +6,7 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Union
 
@@ -411,8 +412,29 @@ if frontend_path.exists():
 
 
 @app.get("/api/health")
-async def health_check() -> JSONResponse:
-    """System health check."""
+def health_check() -> JSONResponse:
+    """
+    Lightweight health check - responds immediately without blocking.
+
+    Used by redundancy monitor to detect if service is alive.
+    Does NOT await anything to prevent event loop blocking.
+    """
+    return JSONResponse(
+        {
+            "status": "ok",
+            "mode": settings.trading_mode,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    )
+
+
+@app.get("/api/health/detailed")
+async def health_check_detailed() -> JSONResponse:
+    """
+    Detailed health check with full system status.
+
+    Used for diagnostics only - may take longer due to async operations.
+    """
     ws = get_websocket()
     ws_status = await ws.get_connection_status() if ws else {"connected": False}
 
@@ -425,6 +447,7 @@ async def health_check() -> JSONResponse:
             "mode": settings.trading_mode,
             "websocket": ws_status,
             "paper_trading": account,
+            "timestamp": datetime.utcnow().isoformat(),
         }
     )
 
