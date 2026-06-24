@@ -36,6 +36,7 @@ from backend.api.routers.backtest_allocation import router as backtest_allocatio
 from backend.api.routers.attribution import router as attribution_router
 from backend.api.routers.recommendation import router as recommendation_router
 from backend.api.routers.recommendation_advanced import router as recommendation_advanced_router
+from backend.api.routers.rebalancing import router as rebalancing_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -274,6 +275,7 @@ app.include_router(backtest_allocation_router)  # Portfolio backtesting (Phase 3
 app.include_router(attribution_router)  # Performance attribution (Phase 324)
 app.include_router(recommendation_router)  # Portfolio recommendation engine (Phase 325)
 app.include_router(recommendation_advanced_router)  # Advanced recommendations (Phase 326)
+app.include_router(rebalancing_router)  # Constrained rebalancing (Phase 327)
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"
