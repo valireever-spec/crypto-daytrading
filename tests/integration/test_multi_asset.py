@@ -317,8 +317,12 @@ class TestMultiAssetAPI:
         yield
 
     def test_list_all_assets(self, client):
-        """Test listing all assets."""
-        response = client.get("/api/multi-asset/assets")
+        """Test listing all assets (requires analyst token)."""
+        # Use analyst token for access
+        response = client.get(
+            "/api/multi-asset/assets",
+            headers={"Authorization": "Bearer analyst-token-456"}
+        )
         assert response.status_code == 200
         data = response.json()
 

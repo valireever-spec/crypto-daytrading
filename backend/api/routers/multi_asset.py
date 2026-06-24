@@ -1,7 +1,7 @@
-"""API endpoints for multi-asset support."""
+"""API endpoints for multi-asset support (Phase 337: with auth & observability)."""
 
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.responses import JSONResponse
 from typing import Optional
 
@@ -14,16 +14,45 @@ from backend.analytics.asset_classes import (
 )
 from backend.analytics.currency_risk import CurrencyRiskCalculator, CurrencyExposure
 from backend.analytics.global_optimization import GlobalPortfolioOptimizer
+from backend.core.auth import User, UserRole, verify_token, get_auth_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/multi-asset", tags=["Multi-Asset"])
 
 
+# Helper to get auth token from header
+def get_auth_header(authorization: Optional[str] = Header(None)) -> Optional[str]:
+    """Extract bearer token from Authorization header.
+
+    Args:
+        authorization: Authorization header value
+
+    Returns:
+        Bearer token or None
+    """
+    return authorization
+
+
 @router.get("/assets")
-async def list_all_assets():
-    """List all supported assets."""
+async def list_all_assets(authorization: Optional[str] = Header(None)):
+    """List all supported assets (requires analyst role or higher).
+
+    Args:
+        authorization: Bearer token
+
+    Returns:
+        JSON with list of assets
+    """
+    # Authenticate user
+    user = verify_token(authorization)
+
+    # Check role (analyst can view, trader+ can view)
+    auth = get_auth_manager()
+    auth.require_any_role(user, {UserRole.ANALYST, UserRole.TRADER, UserRole.ADMIN})
+
     registry = AssetRegistry()
     assets = registry.get_all()
+    logger.info(f"User {user.username} listed {len(assets)} assets")
     return JSONResponse({
         "total": len(assets),
         "assets": [a.to_dict() for a in assets]

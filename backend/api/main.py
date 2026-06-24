@@ -2,17 +2,23 @@
 
 import asyncio
 import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Union
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.core.config import settings
 from backend.core.logging import setup_logging
+from backend.core.structured_logging import setup_structured_logging
+from backend.core.metrics import get_metrics
+from backend.core.auth import get_auth_manager
 from backend.exchange.binance_websocket import init_websocket, get_websocket
 from backend.exchange.binance_stream import init_stream_client, get_stream_client
 from backend.exchange.paper_trading import init_paper_trading, get_paper_trading
@@ -267,6 +273,95 @@ app = FastAPI(
     version="1.0.0-phase1",
     lifespan=lifespan,
 )
+
+# === Phase 337: Middleware Setup (Auth, Metrics, Logging) ===
+
+# Initialize structured logging (JSON format)
+setup_structured_logging(level=logging.INFO, json_format=True)
+
+# Initialize auth manager
+auth_manager = get_auth_manager()
+
+# Add CORS middleware (restrict to known origins in production)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+
+# Request logging and metrics middleware
+@app.middleware("http")
+async def log_and_metrics_middleware(request: Request, call_next):
+    """Middleware to log requests and collect metrics.
+
+    - Adds request ID to all logs
+    - Collects response latency for metrics
+    - Increments request counters
+    - Tracks error rates
+    """
+    # Generate request ID
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+
+    # Start timing
+    start_time = time.time()
+
+    # Get metrics collector
+    metrics = get_metrics()
+    metrics.request_count += 1
+
+    try:
+        # Process request
+        response = await call_next(request)
+
+        # Calculate latency
+        latency_ms = (time.time() - start_time) * 1000
+        metrics.record_latency("request_latency_ms", latency_ms)
+
+        # Track error rate
+        if response.status_code >= 400:
+            metrics.error_count += 1
+
+        # Add request ID to response headers
+        response.headers["X-Request-ID"] = request_id
+
+        logger.info(
+            f"{request.method} {request.url.path} - {response.status_code} - {latency_ms:.2f}ms",
+            extra={"request_id": request_id, "latency_ms": latency_ms},
+        )
+
+        return response
+
+    except Exception as e:
+        # Track error
+        latency_ms = (time.time() - start_time) * 1000
+        metrics.record_latency("request_latency_ms", latency_ms)
+        metrics.error_count += 1
+
+        logger.error(
+            f"{request.method} {request.url.path} - ERROR - {str(e)}",
+            extra={"request_id": request_id},
+            exc_info=True,
+        )
+        raise
+
+
+# === Metrics Endpoint (for Prometheus scraping) ===
+
+
+@app.get("/metrics")
+async def get_current_metrics():
+    """Get current metrics snapshot (for Prometheus or monitoring dashboard).
+
+    Returns:
+        JSON with request count, error rate, latency percentiles
+    """
+    metrics = get_metrics()
+    return JSONResponse(metrics.get_summary())
+
 
 # Include routers
 app.include_router(tax_router)
