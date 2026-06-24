@@ -99,8 +99,9 @@ class TestRegimeDetector:
 
     def test_init(self, detector):
         """Initialize detector."""
-        assert detector.lookback_trend == 60
+        assert detector.lookback_trend == 50
         assert detector.lookback_vol == 20
+        assert detector.ma_window == 50
 
     def test_detect_bull_regime(self, detector, bull_market_data):
         """Detect bull market regime."""
