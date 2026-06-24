@@ -208,6 +208,13 @@ class RegimeDetector:
 _regime_detector: RegimeDetector = None
 
 
+def init_regime_detector() -> None:
+    """Initialize regime detector (no-op, detector is lazily initialized)."""
+    global _regime_detector
+    if _regime_detector is None:
+        _regime_detector = RegimeDetector()
+
+
 def get_regime_detector() -> RegimeDetector:
     """Get or create regime detector instance."""
     global _regime_detector
