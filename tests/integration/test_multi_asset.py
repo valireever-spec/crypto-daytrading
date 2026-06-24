@@ -5,15 +5,15 @@ from fastapi.testclient import TestClient
 
 from backend.api.main import app
 from backend.analytics.asset_classes import (
-    init_asset_registry,
+    AssetRegistry,
     AssetClass,
     Region,
     AssetProfile,
     AssetClassWeights,
     SignalWeights
 )
-from backend.analytics.currency_risk import init_currency_risk, CurrencyExposure
-from backend.analytics.global_optimization import init_global_optimizer
+from backend.analytics.currency_risk import CurrencyRiskCalculator, CurrencyExposure
+from backend.analytics.global_optimization import GlobalPortfolioOptimizer
 
 
 class TestAssetRegistry:
@@ -21,7 +21,7 @@ class TestAssetRegistry:
 
     def test_asset_registry_initialization(self):
         """Test registry initializes with default assets."""
-        registry = init_asset_registry()
+        registry = AssetRegistry()
 
         assert registry is not None
         all_assets = registry.get_all()
@@ -29,7 +29,7 @@ class TestAssetRegistry:
 
     def test_list_symbols(self):
         """Test listing all symbols."""
-        registry = init_asset_registry()
+        registry = AssetRegistry()
 
         symbols = registry.list_symbols()
         assert "BTC" in symbols
@@ -38,7 +38,7 @@ class TestAssetRegistry:
 
     def test_get_asset(self):
         """Test getting asset by symbol."""
-        registry = init_asset_registry()
+        registry = AssetRegistry()
 
         btc = registry.get("BTC")
         assert btc is not None
@@ -47,7 +47,7 @@ class TestAssetRegistry:
 
     def test_get_assets_by_class(self):
         """Test filtering assets by class."""
-        registry = init_asset_registry()
+        registry = AssetRegistry()
 
         crypto = registry.get_by_class(AssetClass.CRYPTO)
         assert len(crypto) > 0
@@ -58,7 +58,7 @@ class TestAssetRegistry:
 
     def test_get_assets_by_region(self):
         """Test filtering assets by region."""
-        registry = init_asset_registry()
+        registry = AssetRegistry()
 
         na_assets = registry.get_by_region(Region.NORTH_AMERICA)
         assert len(na_assets) > 0
@@ -68,7 +68,7 @@ class TestAssetRegistry:
 
     def test_register_new_asset(self):
         """Test registering a new asset."""
-        registry = init_asset_registry()
+        registry = AssetRegistry()
         initial_count = len(registry.get_all())
 
         new_asset = AssetProfile(
@@ -152,7 +152,7 @@ class TestCurrencyRisk:
 
     def test_currency_conversion(self):
         """Test currency conversions."""
-        calc = init_currency_risk()
+        calc = CurrencyRiskCalculator()
 
         usd_amount = calc.convert_to_usd(100, "EUR")
         assert usd_amount > 100  # EUR to USD should increase amount
@@ -162,7 +162,7 @@ class TestCurrencyRisk:
 
     def test_currency_exposure(self):
         """Test calculating currency exposure."""
-        calc = init_currency_risk()
+        calc = CurrencyRiskCalculator()
 
         positions = {
             "AAPL": {"currency": "USD", "value": 50000},
@@ -175,14 +175,14 @@ class TestCurrencyRisk:
 
     def test_currency_var(self):
         """Test currency VaR calculation."""
-        calc = init_currency_risk()
+        calc = CurrencyRiskCalculator()
 
         var = calc.calculate_currency_var(100000, "EUR", confidence=0.95)
         assert var > 0
 
     def test_hedge_suggestions(self):
         """Test hedge recommendations."""
-        calc = init_currency_risk()
+        calc = CurrencyRiskCalculator()
 
         exposures = {
             "EUR": CurrencyExposure("EUR", 100000, 50),
@@ -194,7 +194,7 @@ class TestCurrencyRisk:
 
     def test_correlation_matrix(self):
         """Test FX correlation matrix."""
-        calc = init_currency_risk()
+        calc = CurrencyRiskCalculator()
 
         currencies = ["EUR", "GBP", "JPY"]
         corr = calc.calculate_correlation_matrix(currencies)
@@ -209,13 +209,13 @@ class TestGlobalOptimization:
 
     def test_optimizer_initialization(self):
         """Test optimizer initializes."""
-        optimizer = init_global_optimizer()
+        optimizer = GlobalPortfolioOptimizer()
 
         assert optimizer is not None
 
     def test_set_expected_returns(self):
         """Test setting expected returns."""
-        optimizer = init_global_optimizer()
+        optimizer = GlobalPortfolioOptimizer()
 
         returns = {
             "crypto": 0.25,
@@ -228,7 +228,7 @@ class TestGlobalOptimization:
 
     def test_set_volatilities(self):
         """Test setting volatilities."""
-        optimizer = init_global_optimizer()
+        optimizer = GlobalPortfolioOptimizer()
 
         vols = {
             "crypto": 0.70,
@@ -243,7 +243,7 @@ class TestGlobalOptimization:
         """Test adding constraints."""
         from backend.analytics.global_optimization import OptimizationConstraint
 
-        optimizer = init_global_optimizer()
+        optimizer = GlobalPortfolioOptimizer()
 
         constraint = OptimizationConstraint("crypto", min_weight=0.0, max_weight=0.1)
         optimizer.add_constraint(constraint)
@@ -252,7 +252,7 @@ class TestGlobalOptimization:
 
     def test_efficient_frontier(self):
         """Test efficient frontier calculation."""
-        optimizer = init_global_optimizer()
+        optimizer = GlobalPortfolioOptimizer()
 
         optimizer.set_expected_returns({
             "crypto": 0.25,
@@ -270,7 +270,7 @@ class TestGlobalOptimization:
 
     def test_optimal_portfolio(self):
         """Test finding optimal portfolio."""
-        optimizer = init_global_optimizer()
+        optimizer = GlobalPortfolioOptimizer()
 
         optimizer.set_expected_returns({
             "crypto": 0.25,
@@ -291,7 +291,7 @@ class TestGlobalOptimization:
 
     def test_rebalancing_plan(self):
         """Test rebalancing plan calculation."""
-        optimizer = init_global_optimizer()
+        optimizer = GlobalPortfolioOptimizer()
 
         current = {"crypto": 0.20, "equity": 0.50, "bonds": 0.30}
         target = {"crypto": 0.10, "equity": 0.60, "bonds": 0.30}
@@ -311,9 +311,9 @@ class TestMultiAssetAPI:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Setup multi-asset services."""
-        init_asset_registry()
-        init_currency_risk()
-        init_global_optimizer()
+        AssetRegistry()
+        CurrencyRiskCalculator()
+        GlobalPortfolioOptimizer()
         yield
 
     def test_list_all_assets(self, client):

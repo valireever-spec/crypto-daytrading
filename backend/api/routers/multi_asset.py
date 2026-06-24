@@ -6,15 +6,14 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 
 from backend.analytics.asset_classes import (
-    init_asset_registry,
-    get_asset_registry,
+    AssetRegistry,
     AssetClass,
     Region,
     AssetClassWeights,
     SignalWeights
 )
-from backend.analytics.currency_risk import init_currency_risk, get_currency_risk
-from backend.analytics.global_optimization import init_global_optimizer, get_global_optimizer
+from backend.analytics.currency_risk import CurrencyRiskCalculator, CurrencyExposure
+from backend.analytics.global_optimization import GlobalPortfolioOptimizer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/multi-asset", tags=["Multi-Asset"])
@@ -23,10 +22,7 @@ router = APIRouter(prefix="/api/multi-asset", tags=["Multi-Asset"])
 @router.get("/assets")
 async def list_all_assets():
     """List all supported assets."""
-    registry = get_asset_registry()
-    if not registry:
-        registry = init_asset_registry()
-
+    registry = AssetRegistry()
     assets = registry.get_all()
     return JSONResponse({
         "total": len(assets),
@@ -37,9 +33,7 @@ async def list_all_assets():
 @router.get("/assets/by-class/{asset_class}")
 async def list_assets_by_class(asset_class: str):
     """List assets by class."""
-    registry = get_asset_registry()
-    if not registry:
-        registry = init_asset_registry()
+    registry = AssetRegistry()
 
     try:
         ac = AssetClass(asset_class)
@@ -56,9 +50,7 @@ async def list_assets_by_class(asset_class: str):
 @router.get("/assets/by-region/{region}")
 async def list_assets_by_region(region: str):
     """List assets by region."""
-    registry = get_asset_registry()
-    if not registry:
-        registry = init_asset_registry()
+    registry = AssetRegistry()
 
     try:
         reg = Region(region)
@@ -75,10 +67,7 @@ async def list_assets_by_region(region: str):
 @router.get("/assets/{symbol}")
 async def get_asset(symbol: str):
     """Get asset details."""
-    registry = get_asset_registry()
-    if not registry:
-        registry = init_asset_registry()
-
+    registry = AssetRegistry()
     asset = registry.get(symbol.upper())
     if not asset:
         raise HTTPException(status_code=404, detail=f"Asset not found: {symbol}")
@@ -121,9 +110,7 @@ async def get_signal_weights(asset_class: str):
 @router.get("/currency/exposure")
 async def get_currency_exposure(positions: Optional[str] = None):
     """Calculate currency exposure."""
-    calc = get_currency_risk()
-    if not calc:
-        calc = init_currency_risk()
+    calc = CurrencyRiskCalculator()
 
     # Mock positions for demo
     test_positions = {
@@ -150,9 +137,7 @@ async def get_currency_exposure(positions: Optional[str] = None):
 @router.get("/currency/var")
 async def get_currency_var(currency: str = "EUR", confidence: float = 0.95):
     """Calculate currency Value at Risk."""
-    calc = get_currency_risk()
-    if not calc:
-        calc = init_currency_risk()
+    calc = CurrencyRiskCalculator()
 
     # Mock total exposure
     total_exposure = 100000.0
@@ -171,13 +156,9 @@ async def get_currency_var(currency: str = "EUR", confidence: float = 0.95):
 @router.get("/currency/hedge-suggestions")
 async def get_hedge_suggestions():
     """Get currency hedge recommendations."""
-    calc = get_currency_risk()
-    if not calc:
-        calc = init_currency_risk()
+    calc = CurrencyRiskCalculator()
 
     # Mock exposures
-    from backend.analytics.currency_risk import CurrencyExposure
-
     exposures = {
         "EUR": CurrencyExposure("EUR", 50000, 25, 0, 0),
         "GBP": CurrencyExposure("GBP", 30000, 15, 0, 0),
@@ -195,9 +176,7 @@ async def get_hedge_suggestions():
 @router.get("/optimization/efficient-frontier")
 async def get_efficient_frontier(num_points: int = 30):
     """Calculate efficient frontier."""
-    optimizer = get_global_optimizer()
-    if not optimizer:
-        optimizer = init_global_optimizer()
+    optimizer = GlobalPortfolioOptimizer()
 
     # Set up mock returns and risks for asset classes
     optimizer.set_expected_returns({
@@ -227,9 +206,7 @@ async def get_efficient_frontier(num_points: int = 30):
 @router.get("/optimization/optimal-portfolio")
 async def get_optimal_portfolio(target_return: Optional[float] = None, risk_aversion: float = 1.0):
     """Get optimal portfolio allocation."""
-    optimizer = get_global_optimizer()
-    if not optimizer:
-        optimizer = init_global_optimizer()
+    optimizer = GlobalPortfolioOptimizer()
 
     # Set up mock data
     optimizer.set_expected_returns({
@@ -265,9 +242,7 @@ async def calculate_rebalancing_plan(
     portfolio_value: float
 ):
     """Calculate rebalancing plan."""
-    optimizer = get_global_optimizer()
-    if not optimizer:
-        optimizer = init_global_optimizer()
+    optimizer = GlobalPortfolioOptimizer()
 
     plan = optimizer.calculate_rebalancing_plan(
         current_weights,
@@ -281,10 +256,7 @@ async def calculate_rebalancing_plan(
 @router.get("/portfolio-summary")
 async def get_portfolio_summary():
     """Get multi-asset portfolio summary."""
-    registry = get_asset_registry()
-    if not registry:
-        registry = init_asset_registry()
-
+    registry = AssetRegistry()
     all_assets = registry.get_all()
 
     summary_by_class = {}

@@ -1,24 +1,31 @@
-"""Asset class definitions and multi-asset support."""
+"""Asset class definitions and multi-asset support (refactored for quality)."""
 
 from enum import Enum
-from typing import Dict, List, Optional
-from dataclasses import dataclass
+from typing import Dict, List, Optional, Any
+from dataclasses import asdict, dataclass
 import logging
+
+from backend.config.asset_config import (
+    AssetConfig,
+    DEFAULT_ASSETS,
+    CurrencyConfig,
+    PortfolioOptimizationConfig,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class AssetClass(str, Enum):
     """Asset classes supported by the platform."""
-    CRYPTO = "crypto"           # Bitcoin, Ethereum, altcoins
-    US_EQUITY = "us_equity"     # US stocks (large-cap, mid-cap, small-cap)
-    EU_EQUITY = "eu_equity"     # European stocks
-    ASIA_EQUITY = "asia_equity" # Asian stocks
-    BOND_GOV = "bond_gov"       # Government bonds (treasury)
-    BOND_CORP = "bond_corp"     # Corporate bonds
-    COMMODITY = "commodity"     # Metals, energy, agriculture
-    FX = "fx"                   # Currency pairs
-    INDEX = "index"             # Stock indices (SPX, DAX, etc.)
+    CRYPTO = "crypto"
+    US_EQUITY = "us_equity"
+    EU_EQUITY = "eu_equity"
+    ASIA_EQUITY = "asia_equity"
+    BOND_GOV = "bond_gov"
+    BOND_CORP = "bond_corp"
+    COMMODITY = "commodity"
+    FX = "fx"
+    INDEX = "index"
 
 
 class Region(str, Enum):
@@ -46,9 +53,34 @@ class Sector(str, Enum):
     CRYPTO = "crypto"
 
 
+class InvalidAssetProfileError(ValueError):
+    """Raised when AssetProfile is invalid."""
+    pass
+
+
+class DuplicateAssetError(ValueError):
+    """Raised when attempting to register duplicate asset."""
+    pass
+
+
 @dataclass
 class AssetProfile:
-    """Asset metadata and characteristics."""
+    """Asset metadata and characteristics (with validation).
+
+    Attributes:
+        symbol: Unique asset identifier (e.g., 'AAPL', 'BTC')
+        name: Human-readable asset name
+        asset_class: Asset classification
+        region: Geographic region
+        sector: Equity sector (None for bonds, commodities, etc.)
+        currency: Quote currency (default: USD)
+        exchange: Trading exchange or market
+        liquidity_tier: Liquidity classification (liquid, semi-liquid, illiquid)
+        volatility_rank: Annualized volatility (0.0-1.0)
+        correlation_to_market: Correlation to broad market index (0.0-1.0)
+        min_position_size: Minimum position value in USD
+        max_position_size: Maximum position value in USD
+    """
     symbol: str
     name: str
     asset_class: AssetClass
@@ -56,13 +88,55 @@ class AssetProfile:
     sector: Optional[Sector] = None
     currency: str = "USD"
     exchange: Optional[str] = None
-    liquidity_tier: str = "liquid"  # liquid, semi-liquid, illiquid
-    volatility_rank: float = 0.5    # 0-1 scale, 0 = very stable, 1 = very volatile
-    correlation_to_market: float = 0.5  # 0-1, correlation to broad market
+    liquidity_tier: str = "liquid"
+    volatility_rank: float = 0.5
+    correlation_to_market: float = 0.5
     min_position_size: float = 100.0
     max_position_size: float = 1000000.0
 
-    def to_dict(self) -> Dict:
+    def __post_init__(self) -> None:
+        """Validate all fields after initialization.
+
+        Raises:
+            InvalidAssetProfileError: If any field is invalid
+        """
+        self.validate()
+
+    def validate(self) -> None:
+        """Validate asset profile constraints.
+
+        Raises:
+            InvalidAssetProfileError: If any field violates constraints
+        """
+        if not self.symbol or not isinstance(self.symbol, str):
+            raise InvalidAssetProfileError(f"Invalid symbol: {self.symbol}")
+        if not self.name or not isinstance(self.name, str):
+            raise InvalidAssetProfileError(f"Invalid name: {self.name}")
+        if not isinstance(self.asset_class, AssetClass):
+            raise InvalidAssetProfileError(f"Invalid asset class: {self.asset_class}")
+        if not isinstance(self.region, Region):
+            raise InvalidAssetProfileError(f"Invalid region: {self.region}")
+        if self.sector is not None and not isinstance(self.sector, Sector):
+            raise InvalidAssetProfileError(f"Invalid sector: {self.sector}")
+        if not 0 <= self.volatility_rank <= 1:
+            raise InvalidAssetProfileError(f"Volatility rank must be 0-1, got {self.volatility_rank}")
+        if not 0 <= self.correlation_to_market <= 1:
+            raise InvalidAssetProfileError(f"Correlation must be 0-1, got {self.correlation_to_market}")
+        if self.min_position_size < 0:
+            raise InvalidAssetProfileError(f"Min position size cannot be negative: {self.min_position_size}")
+        if self.max_position_size < self.min_position_size:
+            raise InvalidAssetProfileError(
+                f"Max position {self.max_position_size} < min {self.min_position_size}"
+            )
+        if self.liquidity_tier not in ["liquid", "semi-liquid", "illiquid"]:
+            raise InvalidAssetProfileError(f"Invalid liquidity tier: {self.liquidity_tier}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert asset profile to dictionary.
+
+        Returns:
+            Dictionary representation with serialized enums
+        """
         return {
             "symbol": self.symbol,
             "name": self.name,
@@ -73,197 +147,283 @@ class AssetProfile:
             "exchange": self.exchange,
             "liquidity_tier": self.liquidity_tier,
             "volatility_rank": self.volatility_rank,
-            "correlation_to_market": self.correlation_to_market
+            "correlation_to_market": self.correlation_to_market,
+            "min_position_size": self.min_position_size,
+            "max_position_size": self.max_position_size,
         }
 
 
 class AssetRegistry:
-    """Registry of supported assets and their characteristics."""
+    """Registry of supported assets with validation and no global state.
 
-    def __init__(self):
+    This class provides a safe, validated registry for asset profiles.
+    It is instantiated explicitly - no global singleton pattern.
+
+    Example:
+        >>> registry = AssetRegistry()
+        >>> btc = registry.get("BTC")
+        >>> all_crypto = registry.get_by_class(AssetClass.CRYPTO)
+    """
+
+    def __init__(self, assets: Optional[List[AssetConfig]] = None) -> None:
+        """Initialize asset registry.
+
+        Args:
+            assets: List of AssetConfigs. If None, uses DEFAULT_ASSETS.
+                   Allows dependency injection for testing.
+
+        Raises:
+            InvalidAssetProfileError: If any default asset is invalid
+        """
         self.assets: Dict[str, AssetProfile] = {}
-        self._init_default_assets()
+        configs = assets if assets is not None else DEFAULT_ASSETS
+        self._load_assets(configs)
 
-    def _init_default_assets(self):
-        """Initialize default asset profiles."""
-        # Crypto assets
-        crypto_assets = [
-            AssetProfile("BTC", "Bitcoin", AssetClass.CRYPTO, Region.GLOBAL, Sector.CRYPTO, "USD", "Binance", "liquid", 0.75, 0.7),
-            AssetProfile("ETH", "Ethereum", AssetClass.CRYPTO, Region.GLOBAL, Sector.CRYPTO, "USD", "Binance", "liquid", 0.8, 0.75),
-            AssetProfile("BNB", "Binance Coin", AssetClass.CRYPTO, Region.GLOBAL, Sector.CRYPTO, "USD", "Binance", "semi-liquid", 0.65, 0.65),
-        ]
+    def _load_assets(self, configs: List[AssetConfig]) -> None:
+        """Load and validate assets from configuration.
 
-        # US Equities (large-cap)
-        us_equities = [
-            AssetProfile("AAPL", "Apple Inc.", AssetClass.US_EQUITY, Region.NORTH_AMERICA, Sector.TECHNOLOGY, "USD", "NASDAQ", "liquid", 0.3, 0.85),
-            AssetProfile("MSFT", "Microsoft Corporation", AssetClass.US_EQUITY, Region.NORTH_AMERICA, Sector.TECHNOLOGY, "USD", "NASDAQ", "liquid", 0.3, 0.85),
-            AssetProfile("GOOGL", "Alphabet Inc.", AssetClass.US_EQUITY, Region.NORTH_AMERICA, Sector.TECHNOLOGY, "USD", "NASDAQ", "liquid", 0.35, 0.85),
-            AssetProfile("JPM", "JPMorgan Chase", AssetClass.US_EQUITY, Region.NORTH_AMERICA, Sector.FINANCIALS, "USD", "NYSE", "liquid", 0.25, 0.8),
-            AssetProfile("JNJ", "Johnson & Johnson", AssetClass.US_EQUITY, Region.NORTH_AMERICA, Sector.HEALTHCARE, "USD", "NYSE", "liquid", 0.2, 0.75),
-        ]
+        Args:
+            configs: List of asset configurations
 
-        # Indices
-        indices = [
-            AssetProfile("SPY", "S&P 500 ETF", AssetClass.INDEX, Region.NORTH_AMERICA, None, "USD", "NYSE", "liquid", 0.2, 1.0),
-            AssetProfile("QQQ", "Nasdaq-100 ETF", AssetClass.INDEX, Region.NORTH_AMERICA, None, "USD", "NASDAQ", "liquid", 0.35, 1.2),
-            AssetProfile("EWG", "iShares Germany ETF", AssetClass.EU_EQUITY, Region.EUROPE, None, "USD", "NYSE", "liquid", 0.3, 0.9),
-        ]
+        Raises:
+            InvalidAssetProfileError: If any config is invalid
+        """
+        for config in configs:
+            config.validate()
+            profile = AssetProfile(
+                symbol=config.symbol,
+                name=config.name,
+                asset_class=AssetClass(config.asset_class),
+                region=Region(config.region),
+                sector=Sector(config.sector) if config.sector else None,
+                currency=config.currency,
+                exchange=config.exchange,
+                liquidity_tier=config.liquidity_tier,
+                volatility_rank=config.volatility_rank,
+                correlation_to_market=config.correlation_to_market,
+                min_position_size=config.min_position_size_usd,
+                max_position_size=config.max_position_size_usd,
+            )
+            self.register(profile)
 
-        # Bonds
-        bonds = [
-            AssetProfile("TLT", "20+ Year Treasury ETF", AssetClass.BOND_GOV, Region.NORTH_AMERICA, None, "USD", "NASDAQ", "liquid", 0.15, 0.4),
-            AssetProfile("BND", "Total Bond Market ETF", AssetClass.BOND_CORP, Region.NORTH_AMERICA, None, "USD", "NASDAQ", "liquid", 0.1, 0.3),
-            AssetProfile("LQD", "Investment Grade Corporate", AssetClass.BOND_CORP, Region.NORTH_AMERICA, None, "USD", "NASDAQ", "liquid", 0.12, 0.35),
-        ]
+    def register(self, profile: AssetProfile) -> None:
+        """Register an asset profile.
 
-        # Commodities
-        commodities = [
-            AssetProfile("GLD", "SPDR Gold Shares", AssetClass.COMMODITY, Region.GLOBAL, None, "USD", "NYSE", "liquid", 0.25, 0.2),
-            AssetProfile("USO", "U.S. Oil Fund", AssetClass.COMMODITY, Region.GLOBAL, None, "USD", "NYSE", "semi-liquid", 0.8, 0.5),
-            AssetProfile("DBC", "Commodities Index", AssetClass.COMMODITY, Region.GLOBAL, None, "USD", "NYSE", "semi-liquid", 0.4, 0.4),
-        ]
+        Args:
+            profile: Asset profile to register
 
-        all_assets = crypto_assets + us_equities + indices + bonds + commodities
+        Raises:
+            DuplicateAssetError: If symbol already registered
+            InvalidAssetProfileError: If profile is invalid
+        """
+        if not isinstance(profile, AssetProfile):
+            raise InvalidAssetProfileError(f"Expected AssetProfile, got {type(profile)}")
+        if profile.symbol in self.assets:
+            raise DuplicateAssetError(f"Asset {profile.symbol} already registered")
 
-        for asset in all_assets:
-            self.register(asset)
-
-    def register(self, profile: AssetProfile):
-        """Register an asset profile."""
+        profile.validate()
         self.assets[profile.symbol] = profile
         logger.debug(f"Registered asset: {profile.symbol} ({profile.asset_class.value})")
 
     def get(self, symbol: str) -> Optional[AssetProfile]:
-        """Get asset profile by symbol."""
-        return self.assets.get(symbol)
+        """Get asset profile by symbol.
+
+        Args:
+            symbol: Asset symbol to look up
+
+        Returns:
+            AssetProfile if found, None otherwise
+        """
+        if not isinstance(symbol, str):
+            logger.warning(f"Symbol must be string, got {type(symbol)}")
+            return None
+        return self.assets.get(symbol.upper())
 
     def get_by_class(self, asset_class: AssetClass) -> List[AssetProfile]:
-        """Get all assets of a specific class."""
+        """Get all assets of a specific class.
+
+        Args:
+            asset_class: Asset class to filter by
+
+        Returns:
+            List of matching AssetProfiles
+
+        Raises:
+            TypeError: If asset_class is not AssetClass enum
+        """
+        if not isinstance(asset_class, AssetClass):
+            raise TypeError(f"Expected AssetClass, got {type(asset_class)}")
         return [a for a in self.assets.values() if a.asset_class == asset_class]
 
     def get_by_region(self, region: Region) -> List[AssetProfile]:
-        """Get all assets in a region."""
+        """Get all assets in a region.
+
+        Args:
+            region: Region to filter by
+
+        Returns:
+            List of matching AssetProfiles
+
+        Raises:
+            TypeError: If region is not Region enum
+        """
+        if not isinstance(region, Region):
+            raise TypeError(f"Expected Region, got {type(region)}")
         return [a for a in self.assets.values() if a.region == region]
 
     def get_by_sector(self, sector: Sector) -> List[AssetProfile]:
-        """Get all assets in a sector."""
+        """Get all assets in a sector.
+
+        Args:
+            sector: Sector to filter by
+
+        Returns:
+            List of matching AssetProfiles
+
+        Raises:
+            TypeError: If sector is not Sector enum
+        """
+        if not isinstance(sector, Sector):
+            raise TypeError(f"Expected Sector, got {type(sector)}")
         return [a for a in self.assets.values() if a.sector == sector]
 
     def get_all(self) -> List[AssetProfile]:
-        """Get all registered assets."""
+        """Get all registered assets.
+
+        Returns:
+            List of all AssetProfiles
+        """
         return list(self.assets.values())
 
     def list_symbols(self) -> List[str]:
-        """Get all registered symbols."""
+        """Get all registered symbols.
+
+        Returns:
+            List of asset symbols
+        """
         return list(self.assets.keys())
+
+    def __len__(self) -> int:
+        """Get count of registered assets."""
+        return len(self.assets)
 
 
 class AssetClassWeights:
-    """Asset allocation weights by class and region."""
+    """Asset allocation weights by class (config-driven, no global state).
 
-    def __init__(self):
-        self.weights: Dict[AssetClass, float] = {
-            AssetClass.CRYPTO: 0.05,              # 5% crypto
-            AssetClass.US_EQUITY: 0.50,           # 50% US stocks
-            AssetClass.EU_EQUITY: 0.10,           # 10% European stocks
-            AssetClass.ASIA_EQUITY: 0.10,         # 10% Asian stocks
-            AssetClass.BOND_GOV: 0.15,            # 15% government bonds
-            AssetClass.BOND_CORP: 0.05,           # 5% corporate bonds
-            AssetClass.COMMODITY: 0.05,           # 5% commodities
-            AssetClass.FX: 0.00,                  # 0% FX (hedges only)
-            AssetClass.INDEX: 0.00,               # 0% indices (replaced by direct holdings)
-        }
+    This class manages allocation targets across asset classes.
+    Values loaded from configuration, not hardcoded.
+    """
+
+    def __init__(self, weights: Optional[Dict[AssetClass, float]] = None) -> None:
+        """Initialize allocation weights.
+
+        Args:
+            weights: Custom weights dict. If None, uses DEFAULT_ALLOCATION_WEIGHTS.
+                    Allows dependency injection for testing.
+        """
+        if weights is not None:
+            self.weights = weights
+        else:
+            # Copy to avoid modifying shared config
+            self.weights = {
+                AssetClass(k): v
+                for k, v in PortfolioOptimizationConfig.DEFAULT_ALLOCATION_WEIGHTS.items()
+            }
 
     def get_weight(self, asset_class: AssetClass) -> float:
-        """Get target weight for asset class."""
+        """Get target weight for asset class.
+
+        Args:
+            asset_class: Asset class to look up
+
+        Returns:
+            Target weight (0.0-1.0)
+        """
+        if not isinstance(asset_class, AssetClass):
+            raise TypeError(f"Expected AssetClass, got {type(asset_class)}")
         return self.weights.get(asset_class, 0.0)
 
-    def set_weight(self, asset_class: AssetClass, weight: float):
-        """Set target weight for asset class."""
-        if weight < 0 or weight > 1:
-            raise ValueError(f"Weight must be between 0 and 1, got {weight}")
+    def set_weight(self, asset_class: AssetClass, weight: float) -> None:
+        """Set target weight for asset class.
+
+        Args:
+            asset_class: Asset class to update
+            weight: Target weight (0.0-1.0)
+
+        Raises:
+            TypeError: If asset_class is not AssetClass
+            ValueError: If weight is outside valid range
+        """
+        if not isinstance(asset_class, AssetClass):
+            raise TypeError(f"Expected AssetClass, got {type(asset_class)}")
+        if not 0 <= weight <= 1:
+            raise ValueError(f"Weight must be 0-1, got {weight}")
         self.weights[asset_class] = weight
 
     def validate(self) -> bool:
-        """Validate that weights sum to approximately 1.0."""
+        """Validate that weights sum to approximately 1.0.
+
+        Returns:
+            True if valid, False otherwise
+        """
         total = sum(self.weights.values())
         return abs(total - 1.0) < 0.01
 
     def get_all_weights(self) -> Dict[str, float]:
-        """Get all weights as dict."""
+        """Get all weights as serializable dictionary.
+
+        Returns:
+            Dict with string keys (asset class names) and float values
+        """
         return {k.value: v for k, v in self.weights.items()}
 
 
 class SignalWeights:
-    """Signal calculation weights by asset class."""
+    """Signal calculation weights by asset class (config-driven)."""
 
-    # Default weights for different asset classes
-    DEFAULT_WEIGHTS = {
-        AssetClass.CRYPTO: {
-            "momentum": 0.35,
-            "mean_reversion": 0.20,
-            "volatility": 0.15,
-            "sentiment": 0.15,
-            "technical": 0.15,
-        },
-        AssetClass.US_EQUITY: {
-            "momentum": 0.25,
-            "mean_reversion": 0.25,
-            "volatility": 0.10,
-            "sentiment": 0.10,
-            "technical": 0.30,
-            "fundamentals": 0.00,
-        },
-        AssetClass.BOND_GOV: {
-            "momentum": 0.20,
-            "mean_reversion": 0.30,
-            "volatility": 0.20,
-            "sentiment": 0.00,
-            "technical": 0.20,
-            "fundamentals": 0.10,
-        },
-        AssetClass.COMMODITY: {
-            "momentum": 0.30,
-            "mean_reversion": 0.15,
-            "volatility": 0.25,
-            "sentiment": 0.15,
-            "technical": 0.15,
-            "fundamentals": 0.00,
-        },
-    }
+    def __init__(self, weights: Optional[Dict[str, Dict[str, float]]] = None) -> None:
+        """Initialize signal weights.
 
-    def __init__(self):
-        self.weights: Dict[AssetClass, Dict[str, float]] = {}
-        self._init_defaults()
-
-    def _init_defaults(self):
-        """Initialize default weights."""
-        self.weights = self.DEFAULT_WEIGHTS.copy()
+        Args:
+            weights: Custom signal weights. If None, uses DEFAULT_SIGNAL_WEIGHTS.
+                    Allows dependency injection for testing.
+        """
+        if weights is not None:
+            self.weights: Dict[str, Dict[str, float]] = weights
+        else:
+            # Deep copy to avoid modifying shared config
+            self.weights = {k: dict(v) for k, v in PortfolioOptimizationConfig.DEFAULT_SIGNAL_WEIGHTS.items()}
 
     def get_weights(self, asset_class: AssetClass) -> Dict[str, float]:
-        """Get signal component weights for asset class."""
-        return self.weights.get(asset_class, self.DEFAULT_WEIGHTS.get(AssetClass.US_EQUITY, {}))
+        """Get signal component weights for asset class.
 
-    def set_weights(self, asset_class: AssetClass, weights: Dict[str, float]):
-        """Set custom weights for asset class."""
-        if abs(sum(weights.values()) - 1.0) > 0.01:
-            raise ValueError(f"Weights must sum to 1.0, got {sum(weights.values())}")
-        self.weights[asset_class] = weights
+        Args:
+            asset_class: Asset class to look up
 
+        Returns:
+            Dict of signal component weights
 
-# Global asset registry instance
-_asset_registry: Optional[AssetRegistry] = None
+        Raises:
+            KeyError: If asset class not configured
+        """
+        if not isinstance(asset_class, AssetClass):
+            raise TypeError(f"Expected AssetClass, got {type(asset_class)}")
+        if asset_class.value not in self.weights:
+            raise KeyError(f"No signal weights configured for {asset_class.value}")
+        return self.weights[asset_class.value]
 
+    def set_weights(self, asset_class: AssetClass, weights: Dict[str, float]) -> None:
+        """Set custom weights for asset class.
 
-def init_asset_registry() -> AssetRegistry:
-    """Initialize global asset registry."""
-    global _asset_registry
-    if _asset_registry is None:
-        _asset_registry = AssetRegistry()
-        logger.info(f"Asset registry initialized with {len(_asset_registry.list_symbols())} assets")
-    return _asset_registry
+        Args:
+            asset_class: Asset class to update
+            weights: Signal component weights (must sum to ~1.0)
 
-
-def get_asset_registry() -> Optional[AssetRegistry]:
-    """Get global asset registry."""
-    return _asset_registry
+        Raises:
+            ValueError: If weights don't sum to 1.0
+        """
+        total = sum(weights.values())
+        if abs(total - 1.0) > 0.01:
+            raise ValueError(f"Weights must sum to 1.0, got {total}")
+        self.weights[asset_class.value] = weights
