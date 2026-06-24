@@ -34,6 +34,7 @@ from backend.api.routers.risk_metrics import router as risk_metrics_router
 from backend.api.routers.portfolio_allocation import router as portfolio_allocation_router
 from backend.api.routers.backtest_allocation import router as backtest_allocation_router
 from backend.api.routers.attribution import router as attribution_router
+from backend.api.routers.recommendation import router as recommendation_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -270,6 +271,7 @@ app.include_router(risk_metrics_router)  # Risk metrics API (Phase 321)
 app.include_router(portfolio_allocation_router)  # Portfolio allocation optimizer (Phase 322)
 app.include_router(backtest_allocation_router)  # Portfolio backtesting (Phase 323)
 app.include_router(attribution_router)  # Performance attribution (Phase 324)
+app.include_router(recommendation_router)  # Portfolio recommendation engine (Phase 325)
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"
