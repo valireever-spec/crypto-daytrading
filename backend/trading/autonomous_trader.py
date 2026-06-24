@@ -36,7 +36,7 @@ class TradingConfig:
     entry_threshold: float = 55.0  # Signal score to trigger BUY (adjusted for GARP blending)
     exit_profit_target: float = 0.03  # 3% profit target
     exit_stop_loss: float = 0.02  # 2% stop loss
-    position_size_pct: float = 0.10  # 10% of capital per position
+    position_size_pct: float = 0.05  # 5% of capital per position
     max_positions: int = 5
     symbols: List[str] = None  # Symbols to trade
 
