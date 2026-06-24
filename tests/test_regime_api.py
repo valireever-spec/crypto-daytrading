@@ -19,7 +19,6 @@ def client():
 def setup_services():
     """Initialize required services for tests."""
     init_historical_service()
-    init_regime_detector()
     yield
 
 

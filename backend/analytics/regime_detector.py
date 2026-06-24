@@ -83,16 +83,16 @@ class RegimeDetector:
 
         # Determine regime
         if volatility_level == "extreme":
-            regime = "volatile"
+            regime = "VOLATILE"
             recommendation = "⚠️ Extreme volatility: reduce position size, tighten stops"
         elif trend_strength > 0.3 and volatility_level in ["low", "medium"]:
-            regime = "bull"
+            regime = "BULL"
             recommendation = "✅ Bull market: aggressive entry, wider stops"
         elif trend_strength < -0.3 and volatility_level in ["low", "medium"]:
-            regime = "bear"
+            regime = "BEAR"
             recommendation = "⛔ Bear market: conservative entry, tight stops"
         else:
-            regime = "sideways"
+            regime = "SIDEWAYS"
             recommendation = "↔️ Sideways market: mean-reversion strategy"
 
         return {

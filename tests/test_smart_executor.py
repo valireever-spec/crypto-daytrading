@@ -16,9 +16,8 @@ def executor():
 
 @pytest.fixture(autouse=True)
 def setup_trading():
-    """Initialize paper trading and regime detector for tests."""
+    """Initialize paper trading for tests."""
     init_paper_trading(starting_capital=100000)
-    init_regime_detector()
     yield
 
 

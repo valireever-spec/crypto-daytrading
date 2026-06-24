@@ -12,7 +12,6 @@ from backend.exchange.paper_trading import init_paper_trading
 def orchestrator():
     """Create portfolio orchestrator for tests."""
     init_paper_trading(starting_capital=100000)
-    init_regime_detector()
     return PortfolioOrchestrator(
         max_positions=5,
         max_position_pct=0.20,

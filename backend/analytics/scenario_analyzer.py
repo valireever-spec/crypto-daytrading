@@ -6,7 +6,7 @@ Used by Phase 330 for scenario probability updates.
 """
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -15,17 +15,30 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MonteCarloResult:
     """Monte Carlo simulation result."""
-    scenario: str
-    simulations: int
-    mean_return_pct: float
-    std_return_pct: float
-    percentile_5: float
-    percentile_25: float
-    percentile_50: float
-    percentile_75: float
-    percentile_95: float
+    scenario: str = "base"
+    simulations: int = 10000
+    mean_return_pct: float = 0.0
+    std_return_pct: float = 0.0
+    percentile_5: float = 0.0
+    percentile_25: float = 0.0
+    percentile_50: float = 0.0
+    percentile_75: float = 0.0
+    percentile_95: float = 0.0
     sharpe_ratio: float = 0.0
     max_drawdown_pct: float = 0.0
+    expected_return_pct: float = 0.0
+    volatility_pct: float = 0.0
+    probability_positive_pct: float = 50.0
+
+
+@dataclass
+class ScenarioResult:
+    """Scenario analysis result."""
+    scenario_name: str
+    expected_return_pct: float
+    volatility_pct: float
+    probability_pct: float
+    sharpe_ratio: float = 0.0
 
 
 class ScenarioAnalyzer:

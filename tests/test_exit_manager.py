@@ -12,7 +12,6 @@ from backend.execution.exit_manager import (
 @pytest.fixture
 def manager():
     """Create exit manager for tests."""
-    init_regime_detector()
     return ExitManager()
 
 

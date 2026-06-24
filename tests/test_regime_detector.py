@@ -14,7 +14,7 @@ from backend.analytics.regime_detector import (
 @pytest.fixture
 def detector():
     """Create regime detector for tests."""
-    return RegimeDetector(lookback_periods=60)
+    return RegimeDetector(lookback_trend=50, lookback_vol=20, ma_window=50)
 
 
 @pytest.fixture
@@ -99,29 +99,30 @@ class TestRegimeDetector:
 
     def test_init(self, detector):
         """Initialize detector."""
-        assert detector.lookback_periods == 60
+        assert detector.lookback_trend == 60
+        assert detector.lookback_vol == 20
 
     def test_detect_bull_regime(self, detector, bull_market_data):
         """Detect bull market regime."""
         metrics = detector.detect_regime(bull_market_data)
 
-        assert metrics.regime == "BULL"
+        assert metrics["regime"] == "BULL"
         assert metrics.confidence > 0.5
-        assert metrics.trend_strength > 0  # Uptrend
+        assert metrics["trend_strength"] > 0  # Uptrend
 
     def test_detect_bear_regime(self, detector, bear_market_data):
         """Detect bear market regime."""
         metrics = detector.detect_regime(bear_market_data)
 
-        assert metrics.regime == "BEAR"
+        assert metrics["regime"] == "BEAR"
         assert metrics.confidence > 0.5
-        assert metrics.trend_strength < 0  # Downtrend
+        assert metrics["trend_strength"] < 0  # Downtrend
 
     def test_detect_sideways_regime(self, detector, sideways_market_data):
         """Detect sideways market regime."""
         metrics = detector.detect_regime(sideways_market_data)
 
-        assert metrics.regime in ["SIDEWAYS", "VOLATILE"]
+        assert metrics["regime"] in ["SIDEWAYS", "VOLATILE"]
         assert metrics.confidence > 0
 
     def test_rsi_calculation(self, detector, bull_market_data):
@@ -152,7 +153,7 @@ class TestRegimeDetector:
         empty_df = pd.DataFrame()
         metrics = detector.detect_regime(empty_df)
 
-        assert metrics.regime == "SIDEWAYS"
+        assert metrics["regime"] == "SIDEWAYS"
         assert metrics.confidence == 0.0
 
     def test_insufficient_data(self, detector):
@@ -167,7 +168,7 @@ class TestRegimeDetector:
 
         metrics = detector.detect_regime(small_df)
 
-        assert metrics.regime == "SIDEWAYS"
+        assert metrics["regime"] == "SIDEWAYS"
         assert metrics.confidence == 0.0
 
     def test_metrics_structure(self, detector, bull_market_data):
@@ -175,10 +176,10 @@ class TestRegimeDetector:
         metrics = detector.detect_regime(bull_market_data)
 
         assert isinstance(metrics, RegimeMetrics)
-        assert isinstance(metrics.regime, str)
+        assert isinstance(metrics["regime"], str)
         assert 0 <= metrics.confidence <= 1
         assert metrics.volatility_pct >= 0
-        assert -1 <= metrics.trend_strength <= 1
+        assert -1 <= metrics["trend_strength"] <= 1
         assert metrics.support_level > 0
         assert metrics.resistance_level > 0
         assert 0 <= metrics.rsi <= 100
@@ -260,12 +261,12 @@ class TestGlobalInstance:
 
     def test_init_detector(self):
         """Initialize global detector."""
-        detector = init_regime_detector()
+        detector = get_regime_detector()
         assert detector is not None
 
     def test_get_detector(self):
         """Get initialized global detector."""
-        init_regime_detector()
+        get_regime_detector()
         detector = get_regime_detector()
         assert detector is not None
 
