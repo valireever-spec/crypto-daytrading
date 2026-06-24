@@ -16,9 +16,9 @@ router = APIRouter(prefix="/api/redundancy", tags=["Redundancy"])
 # Configuration from environment
 PRIMARY_API_URL = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
 
-# Backup URLs: try local first (LAN), fallback to remote (internet via reverse SSH)
+# Backup URLs: try local first (LAN), fallback to remote (internet via firewall port forwarding)
 BACKUP_API_URL_LOCAL = os.getenv("BACKUP_API_URL_LOCAL", "http://192.168.3.25:8002")
-BACKUP_API_URL_REMOTE = os.getenv("BACKUP_API_URL_REMOTE", "https://r33v3r.ddns.net:8443")
+BACKUP_API_URL_REMOTE = os.getenv("BACKUP_API_URL_REMOTE", "http://r33v3r.ddns.net:8443")
 # For backwards compatibility
 BACKUP_API_URL = os.getenv("BACKUP_API_URL", BACKUP_API_URL_LOCAL)
 
@@ -72,9 +72,7 @@ class RedundancyMonitor:
         """Check health with retry logic and exponential backoff."""
         for attempt in range(HEALTH_CHECK_RETRIES + 1):
             try:
-                # Disable SSL verification for self-signed certs on remote path
-                verify_ssl = not url.startswith("https://r33v3r")
-                async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=verify_ssl) as client:
+                async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=True) as client:
                     response = await client.get(f"{url}/api/health")
                     if response.status_code == 200:
                         return True, None
@@ -169,9 +167,7 @@ class RedundancyMonitor:
             return -1.0
 
         try:
-            # Disable SSL verification for remote path if needed
-            verify_ssl = not self.backup_api_url.startswith("https://r33v3r")
-            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=verify_ssl) as client:
+            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=True) as client:
                 # Get replication lag from backup machine's PostgreSQL
                 response = await client.get(f"{self.backup_api_url}/api/redundancy/pg-lag")
                 if response.status_code == 200:
@@ -190,8 +186,7 @@ class RedundancyMonitor:
             return -1.0
 
         try:
-            verify_ssl = not self.backup_api_url.startswith("https://r33v3r")
-            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=verify_ssl) as client:
+            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=True) as client:
                 primary_resp = await client.get(f"{PRIMARY_API_URL}/api/paper/account")
                 if primary_resp.status_code != 200:
                     return -1.0
@@ -226,8 +221,7 @@ class RedundancyMonitor:
             }
 
         try:
-            verify_ssl = not self.backup_api_url.startswith("https://r33v3r")
-            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=verify_ssl) as client:
+            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=True) as client:
                 response = await client.get(f"{self.backup_api_url}/api/autonomous/config")
                 if response.status_code != 200:
                     return {
