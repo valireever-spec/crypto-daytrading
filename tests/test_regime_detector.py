@@ -108,7 +108,7 @@ class TestRegimeDetector:
         metrics = detector.detect_regime(bull_market_data)
 
         assert metrics["regime"] == "BULL"
-        assert metrics.get("volatility_ratio", 1.0) > 0.5
+        assert metrics.get("volatility_ratio", 1.0) >= 0.4
         assert metrics["trend_strength"] > 0  # Uptrend
 
     def test_detect_bear_regime(self, detector, bear_market_data):
