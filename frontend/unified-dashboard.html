@@ -722,26 +722,120 @@
                 </div>
             </div>
 
-            <div class="grid half">
+            <div class="grid full">
                 <div class="card">
-                    <h2>⚙️ Trading Configuration</h2>
-                    <div style="display: grid; gap: 10px; font-size: 13px;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div><strong>Entry Threshold:</strong></div>
-                            <div id="config-entry" style="text-align: right;">60.0</div>
-                            <div><strong>Exit Profit Target:</strong></div>
-                            <div id="config-profit" style="text-align: right;">3.0%</div>
-                            <div><strong>Exit Stop Loss:</strong></div>
-                            <div id="config-stop" style="text-align: right;">2.0%</div>
-                            <div><strong>Position Size:</strong></div>
-                            <div id="config-size" style="text-align: right;">10.0%</div>
-                            <div><strong>Max Positions:</strong></div>
-                            <div id="config-max" style="text-align: right;">5</div>
+                    <h2>⚙️ Trading Configuration (Adjustable)</h2>
+                    <div style="display: grid; gap: 20px;">
+
+                        <!-- Position Size -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #2196F3; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>📊 Position Size per Trade</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">How much of your equity to risk per position</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #2196F3;" id="config-size-display">5%</div>
+                            </div>
+                            <input type="range" min="1" max="20" value="5" style="width: 100%;" onchange="updateTraderConfig({position_size_pct: this.value/100})" id="slider-position-size">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Higher % = bigger trades but more risk. At $10k equity: $500 per trade = 5%
+                            </div>
                         </div>
-                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
-                            <strong style="font-size: 12px;">Monitored Symbols:</strong>
-                            <div id="config-symbols" style="margin-top: 5px; font-size: 12px;">BTCUSDT, ETHUSDT, BNBUSDT</div>
+
+                        <!-- Entry Threshold -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #4CAF50; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>📈 Entry Signal Threshold</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">Minimum signal strength (0-100) to trigger BUY</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #4CAF50;" id="config-entry-display">60</div>
+                            </div>
+                            <input type="range" min="30" max="90" value="60" style="width: 100%;" onchange="updateTraderConfig({entry_threshold: this.value})" id="slider-entry-threshold">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Lower = more trades (risky). Higher = fewer trades (selective). 60 = balanced
+                            </div>
                         </div>
+
+                        <!-- Profit Target -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #8BC34A; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>🎯 Exit Profit Target</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">Sell automatically when profit reaches this %</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #8BC34A;" id="config-profit-display">3.0%</div>
+                            </div>
+                            <input type="range" min="1" max="10" step="0.5" value="3" style="width: 100%;" onchange="updateTraderConfig({exit_profit_target: this.value/100})" id="slider-profit-target">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Locks in gains. Risk/reward ratio = Stop Loss ÷ Profit (1:1.5 = good)
+                            </div>
+                        </div>
+
+                        <!-- Stop Loss -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #FF9800; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>🛑 Stop Loss</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">Sell automatically when loss reaches this %</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #FF9800;" id="config-stop-display">2.0%</div>
+                            </div>
+                            <input type="range" min="0.5" max="5" step="0.5" value="2" style="width: 100%;" onchange="updateTraderConfig({exit_stop_loss: this.value/100})" id="slider-stop-loss">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Prevents big losses. At $500 trade: 2% = $10 max loss per position
+                            </div>
+                        </div>
+
+                        <!-- Max Positions -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #9C27B0; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>🔢 Max Concurrent Positions</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">Maximum number of open trades at once</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #9C27B0;" id="config-max-display">5</div>
+                            </div>
+                            <input type="range" min="1" max="10" value="5" style="width: 100%;" onchange="updateTraderConfig({max_positions: this.value})" id="slider-max-positions">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Diversification vs. focus. Max risk = Position Size × Max Positions (5% × 5 = 25%)
+                            </div>
+                        </div>
+
+                        <!-- Parameter Interactions -->
+                        <div style="padding: 15px; background: #e3f2fd; border-radius: 4px; border: 1px solid #2196F3;">
+                            <strong style="color: #1976D2;">⚡ Parameter Interactions:</strong>
+                            <div style="margin-top: 10px; font-size: 12px; line-height: 1.8;">
+                                <div>
+                                    <strong style="color: #d32f2f;">Total Portfolio Risk:</strong> Position Size (%) × Max Positions
+                                    <div style="color: #666;">
+                                        <span id="risk-calc">5% × 5 = 25%</span> of total equity at risk when fully deployed
+                                    </div>
+                                </div>
+                                <div style="margin-top: 10px;">
+                                    <strong style="color: #d32f2f;">Risk/Reward Ratio:</strong> Stop Loss ÷ Profit Target
+                                    <div style="color: #666;">
+                                        <span id="ratio-calc">2.0% ÷ 3.0% = 0.67:1</span> (How much you risk per $ gained)
+                                    </div>
+                                </div>
+                                <div style="margin-top: 10px;">
+                                    <strong style="color: #d32f2f;">Trade Frequency:</strong> Entry Threshold
+                                    <div style="color: #666;">
+                                        Higher threshold = fewer but higher-quality trades
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Current Values Display -->
+                        <div style="padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 12px;">
+                            <strong>Current Values:</strong>
+                            <div id="config-symbols" style="margin-top: 5px;">Monitored: BTCUSDT, ETHUSDT, BNBUSDT</div>
+                        </div>
+
+                        <button onclick="saveTraderConfig()" style="padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">
+                            💾 Save Configuration
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1298,6 +1392,9 @@ function validateResponse(response, requiredFields = []) {
                 // Use fetchWithRetry for resilience
                 const status = await fetchWithRetry(`${API}/autonomous/status`);
 
+                // Also fetch config to populate sliders
+                const config = await fetchWithRetry(`${API}/autonomous/config`);
+
                 const statusEl = document.getElementById('autonomous-status');
                 if (statusEl) {
                     statusEl.textContent = status.running ? 'RUNNING' : 'STOPPED';
@@ -1316,29 +1413,48 @@ function validateResponse(response, requiredFields = []) {
                 const tradesEl = document.getElementById('autonomous-trades');
                 if (tradesEl) tradesEl.textContent = status.total_trades || 0;
 
-                const config = status.config || {};
-                // FIX: Added null checks and default values
-                const entryEl = document.getElementById('config-entry');
-                if (entryEl) entryEl.textContent = (config.entry_threshold || 0).toFixed(1);
-
-                const profitEl = document.getElementById('config-profit');
-                if (profitEl) profitEl.textContent = ((config.exit_profit_target || 0) * 100).toFixed(1) + '%';
-
-                const stopEl = document.getElementById('config-stop');
-                if (stopEl) stopEl.textContent = ((config.exit_stop_loss || 0) * 100).toFixed(1) + '%';
-
-                const sizeEl = document.getElementById('config-size');
-                if (sizeEl) {
-                  // FIX: position_size_pct doesn't exist, use default or hide
-                  const positionSize = config.position_size_pct || config.position_size || 0.02;
-                  sizeEl.textContent = (positionSize * 100).toFixed(1) + '%';
+                const fetchedConfig = config || status.config || {};
+                // Update sliders with fetched config values
+                if (fetchedConfig.position_size_pct) {
+                    const sliderPos = document.getElementById('slider-position-size');
+                    if (sliderPos) sliderPos.value = Math.round(fetchedConfig.position_size_pct * 100);
+                    const displayPos = document.getElementById('config-size-display');
+                    if (displayPos) displayPos.textContent = (fetchedConfig.position_size_pct * 100).toFixed(1) + '%';
                 }
 
-                const maxEl = document.getElementById('config-max');
-                if (maxEl) maxEl.textContent = config.max_positions || 5;
+                if (fetchedConfig.entry_threshold) {
+                    const sliderEntry = document.getElementById('slider-entry-threshold');
+                    if (sliderEntry) sliderEntry.value = fetchedConfig.entry_threshold;
+                    const displayEntry = document.getElementById('config-entry-display');
+                    if (displayEntry) displayEntry.textContent = fetchedConfig.entry_threshold.toFixed(0);
+                }
+
+                if (fetchedConfig.exit_profit_target) {
+                    const sliderProfit = document.getElementById('slider-profit-target');
+                    if (sliderProfit) sliderProfit.value = (fetchedConfig.exit_profit_target * 100).toFixed(1);
+                    const displayProfit = document.getElementById('config-profit-display');
+                    if (displayProfit) displayProfit.textContent = (fetchedConfig.exit_profit_target * 100).toFixed(1) + '%';
+                }
+
+                if (fetchedConfig.exit_stop_loss) {
+                    const sliderStop = document.getElementById('slider-stop-loss');
+                    if (sliderStop) sliderStop.value = (fetchedConfig.exit_stop_loss * 100).toFixed(1);
+                    const displayStop = document.getElementById('config-stop-display');
+                    if (displayStop) displayStop.textContent = (fetchedConfig.exit_stop_loss * 100).toFixed(1) + '%';
+                }
+
+                if (fetchedConfig.max_positions) {
+                    const sliderMax = document.getElementById('slider-max-positions');
+                    if (sliderMax) sliderMax.value = fetchedConfig.max_positions;
+                    const displayMax = document.getElementById('config-max-display');
+                    if (displayMax) displayMax.textContent = fetchedConfig.max_positions;
+                }
 
                 const symbolsEl = document.getElementById('config-symbols');
-                if (symbolsEl) symbolsEl.textContent = (config.symbols || []).join(', ') || 'None';
+                if (symbolsEl) symbolsEl.textContent = 'Monitored: ' + ((fetchedConfig.symbols || []).join(', ') || 'None');
+
+                // Update risk calculations
+                updateRiskCalculation();
 
                 const tradesTable = document.getElementById('autonomous-trades-table');
                 if (status.recent_trades && status.recent_trades.length > 0) {
@@ -1386,6 +1502,98 @@ function validateResponse(response, requiredFields = []) {
             } catch (e) {
                 console.error('Stop error:', e);
                 alert('Failed to stop autonomous trader: ' + e.message);
+            }
+        }
+
+        // Update configuration sliders and display values
+        async function updateTraderConfig(updates) {
+            // Update display values
+            if (updates.position_size_pct !== undefined) {
+                const pctVal = (updates.position_size_pct * 100).toFixed(1);
+                const el = document.getElementById('config-size-display');
+                if (el) el.textContent = pctVal + '%';
+                // Update risk calculation
+                updateRiskCalculation();
+            }
+            if (updates.entry_threshold !== undefined) {
+                const el = document.getElementById('config-entry-display');
+                if (el) el.textContent = updates.entry_threshold;
+            }
+            if (updates.exit_profit_target !== undefined) {
+                const pctVal = (updates.exit_profit_target * 100).toFixed(1);
+                const el = document.getElementById('config-profit-display');
+                if (el) el.textContent = pctVal + '%';
+                // Update risk/reward ratio
+                updateRiskCalculation();
+            }
+            if (updates.exit_stop_loss !== undefined) {
+                const pctVal = (updates.exit_stop_loss * 100).toFixed(1);
+                const el = document.getElementById('config-stop-display');
+                if (el) el.textContent = pctVal + '%';
+                // Update risk/reward ratio
+                updateRiskCalculation();
+            }
+            if (updates.max_positions !== undefined) {
+                const el = document.getElementById('config-max-display');
+                if (el) el.textContent = updates.max_positions;
+                // Update risk calculation
+                updateRiskCalculation();
+            }
+        }
+
+        // Update risk calculations and interactions
+        function updateRiskCalculation() {
+            // Get current slider values
+            const posSize = parseFloat(document.getElementById('slider-position-size')?.value || 5) / 100;
+            const maxPos = parseInt(document.getElementById('slider-max-positions')?.value || 5);
+            const profitTarget = parseFloat(document.getElementById('slider-profit-target')?.value || 3) / 100;
+            const stopLoss = parseFloat(document.getElementById('slider-stop-loss')?.value || 2) / 100;
+
+            // Calculate total risk
+            const totalRisk = ((posSize * maxPos) * 100).toFixed(1);
+            const riskCalcEl = document.getElementById('risk-calc');
+            if (riskCalcEl) {
+                riskCalcEl.textContent = (posSize * 100).toFixed(0) + '% × ' + maxPos + ' = ' + totalRisk + '%';
+            }
+
+            // Calculate risk/reward ratio
+            const ratio = (stopLoss / profitTarget).toFixed(2);
+            const ratioEl = document.getElementById('ratio-calc');
+            if (ratioEl) {
+                ratioEl.textContent = (stopLoss * 100).toFixed(1) + '% ÷ ' + (profitTarget * 100).toFixed(1) + '% = ' + ratio + ':1';
+            }
+        }
+
+        // Save configuration to API
+        async function saveTraderConfig() {
+            try {
+                const posSize = parseFloat(document.getElementById('slider-position-size')?.value || 5) / 100;
+                const entryThresh = parseFloat(document.getElementById('slider-entry-threshold')?.value || 60);
+                const profitTarget = parseFloat(document.getElementById('slider-profit-target')?.value || 3) / 100;
+                const stopLoss = parseFloat(document.getElementById('slider-stop-loss')?.value || 2) / 100;
+                const maxPos = parseInt(document.getElementById('slider-max-positions')?.value || 5);
+
+                const response = await fetchWithRetry(`${API}/autonomous/config/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        position_size_pct: posSize,
+                        entry_threshold: entryThresh,
+                        exit_profit_target: profitTarget,
+                        exit_stop_loss: stopLoss,
+                        max_positions: maxPos
+                    })
+                });
+
+                if (response && response.status === 'updated') {
+                    alert('✅ Configuration saved successfully!\n\nNew settings are live immediately.');
+                    refreshAutonomous();
+                } else {
+                    alert('⚠️ Update status unclear. Check trader is running.');
+                }
+            } catch (e) {
+                console.error('Config save error:', e);
+                alert('❌ Failed to save configuration: ' + e.message);
             }
         }
 
