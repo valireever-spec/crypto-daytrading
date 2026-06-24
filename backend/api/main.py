@@ -1359,6 +1359,14 @@ async def get_regime_trading_rules(regime: str) -> JSONResponse:
 
         thresholds = detector.get_adaptive_thresholds(regime_info)
 
+        # Recommended strategies by regime
+        strategies_by_regime = {
+            "BULL": ["momentum", "trend_following"],
+            "BEAR": ["reversion", "short_selling"],
+            "SIDEWAYS": ["grid", "reversion", "mean_reversion"],
+            "VOLATILE": [],
+        }
+
         return JSONResponse(
             {
                 "regime": regime.upper(),
@@ -1366,7 +1374,7 @@ async def get_regime_trading_rules(regime: str) -> JSONResponse:
                 "stop_loss_pct": thresholds.get("stop_loss", 0.02),
                 "take_profit_pct": thresholds.get("profit_target", 0.05),
                 "entry_threshold": thresholds.get("entry_threshold", 55.0),
-                "recommended_strategies": ["adaptive"],  # Placeholder
+                "recommended_strategies": strategies_by_regime.get(regime.upper(), []),
             }
         )
 
