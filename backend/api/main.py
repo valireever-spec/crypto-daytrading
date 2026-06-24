@@ -108,10 +108,6 @@ async def lifespan(app: FastAPI):
     init_historical_service()
     logger.info("Historical data service initialized")
 
-    # Initialize regime detector
-    init_regime_detector()
-    logger.info("Regime detector initialized")
-
     # Initialize smart executor for trade validation
     init_smart_executor()
     logger.info("Smart executor initialized")
