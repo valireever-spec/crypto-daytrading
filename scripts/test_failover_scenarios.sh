@@ -115,10 +115,10 @@ log_info "Simulating what would happen if primary goes down..."
 FAILOVER_SIMULATION=$(curl -s -X POST "$PRIMARY/api/redundancy/failover/simulate")
 echo "$FAILOVER_SIMULATION" | python3 -m json.tool
 
-# Parse simulation result
-SIMULATION_SUCCESS=$(echo "$FAILOVER_SIMULATION" | grep -c '"simulation": "SUCCESS"' || echo 0)
+# Parse simulation result using jq for reliable JSON parsing
+SIMULATION_SUCCESS=$(echo "$FAILOVER_SIMULATION" | jq -r '.simulation' 2>/dev/null)
 
-if [ "$SIMULATION_SUCCESS" -eq 1 ]; then
+if [ "$SIMULATION_SUCCESS" = "SUCCESS" ]; then
     log_success "Failover simulation successful - backup can take over"
 else
     log_warning "Failover simulation failed - backup not ready"
@@ -134,8 +134,8 @@ for i in 1 2 3; do
     log_info "Snapshot $i at $(date '+%H:%M:%S')"
 
     STATUS=$(curl -s "$PRIMARY/api/redundancy/status")
-    OVERALL=$(echo "$STATUS" | grep -o '"overall_status": "[^"]*"' | cut -d'"' -f4)
-    LAG=$(echo "$STATUS" | grep -o '"lag_seconds": [^,}]*' | head -1 | cut -d' ' -f2)
+    OVERALL=$(echo "$STATUS" | jq -r '.overall_status' 2>/dev/null || echo "UNKNOWN")
+    LAG=$(echo "$STATUS" | jq -r '.replication.lag_seconds' 2>/dev/null || echo "N/A")
 
     log_info "  Overall Status: $OVERALL"
     log_info "  Replication Lag: $LAG seconds"
@@ -157,7 +157,7 @@ section "TEST SUMMARY"
 
 log_info "HA System Status:"
 FINAL_STATUS=$(curl -s "$PRIMARY/api/redundancy/status")
-OVERALL=$(echo "$FINAL_STATUS" | grep -o '"overall_status": "[^"]*"' | cut -d'"' -f4)
+OVERALL=$(echo "$FINAL_STATUS" | jq -r '.overall_status' 2>/dev/null || echo "UNKNOWN")
 
 case "$OVERALL" in
     "HEALTHY")

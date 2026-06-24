@@ -3,6 +3,7 @@
 import asyncio
 import httpx
 import os
+import threading
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException
@@ -90,7 +91,12 @@ class RedundancyMonitor:
             async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT) as client:
                 # Get timestamps from both primary and backup
                 primary_resp = await client.get(f"{PRIMARY_API_URL}/api/paper/account")
+                if primary_resp.status_code != 200:
+                    return -1.0
+
                 backup_resp = await client.get(f"{BACKUP_API_URL}/api/paper/account")
+                if backup_resp.status_code != 200:
+                    return -1.0
 
                 primary_data = primary_resp.json()
                 backup_data = backup_resp.json()
@@ -208,15 +214,18 @@ class RedundancyMonitor:
         }
 
 
-# Global monitor instance
+# Global monitor instance with thread-safety
 _monitor: Optional[RedundancyMonitor] = None
+_monitor_lock = threading.Lock()
 
 
 def get_redundancy_monitor() -> RedundancyMonitor:
-    """Get or create redundancy monitor."""
+    """Get or create redundancy monitor (thread-safe)."""
     global _monitor
     if _monitor is None:
-        _monitor = RedundancyMonitor()
+        with _monitor_lock:
+            if _monitor is None:
+                _monitor = RedundancyMonitor()
     return _monitor
 
 
