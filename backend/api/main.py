@@ -1338,7 +1338,7 @@ async def get_regime_trading_rules(regime: str) -> JSONResponse:
     Returns:
         Position sizing, stop loss, take profit, and recommended strategies
     """
-    valid_regimes = ["BULL", "BEAR", "SIDEWAYS", "VOLATILE"]
+    valid_regimes = ["BULL", "BEAR", "SIDEWAYS", "VOLATILE", "UNKNOWN"]
     if regime.upper() not in valid_regimes:
         raise HTTPException(
             status_code=400,
@@ -1566,22 +1566,38 @@ async def get_smart_trading_status(symbol: str = "BTCUSDT") -> JSONResponse:
         if not detector:
             raise HTTPException(status_code=500, detail="Regime detector not initialized")
 
-        metrics = detector.detect_regime(ohlcv, symbol=symbol)
-        rules = detector.get_regime_trading_rules(metrics.regime)
+        metrics = detector.detect_regime(ohlcv)
+
+        # Get adaptive thresholds for the detected regime
+        regime_info = {
+            "regime": metrics.get("regime", "unknown").lower(),
+            "volatility_level": metrics.get("volatility_level", "medium"),
+            "rsi_value": metrics.get("rsi_value", 50.0),
+        }
+        thresholds = detector.get_adaptive_thresholds(regime_info)
+
+        # Recommended strategies by regime
+        strategies_by_regime = {
+            "BULL": ["momentum", "trend_following"],
+            "BEAR": ["reversion", "short_selling"],
+            "SIDEWAYS": ["grid", "reversion"],
+            "VOLATILE": [],
+            "unknown": [],
+        }
 
         return JSONResponse(
             {
                 "symbol": symbol,
-                "current_regime": metrics.regime,
-                "confidence": round(metrics.confidence, 2),
-                "volatility_pct": round(metrics.volatility_pct, 2),
-                "trend_strength": round(metrics.trend_strength, 2),
-                "rsi": round(metrics.rsi, 1),
-                "recommended_strategies": rules["recommended_strategies"],
-                "position_multiplier": rules["position_size_multiplier"],
+                "current_regime": metrics.get("regime", "unknown"),
+                "confidence": 0.8,  # Placeholder
+                "volatility_pct": metrics.get("volatility_ratio", 1.0),
+                "trend_strength": metrics.get("trend_strength", 0.0),
+                "rsi": metrics.get("rsi_value", 50.0),
+                "recommended_strategies": strategies_by_regime.get(metrics.get("regime", "unknown"), []),
+                "position_multiplier": thresholds.get("position_size_adjustment", 1.0),
                 "risk_settings": {
-                    "stop_loss_pct": rules["stop_loss_pct"],
-                    "take_profit_pct": rules["take_profit_pct"],
+                    "stop_loss_pct": thresholds.get("stop_loss", 0.02) * 100,
+                    "take_profit_pct": thresholds.get("profit_target", 0.05) * 100,
                 },
             }
         )
