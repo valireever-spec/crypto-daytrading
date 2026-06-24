@@ -51,6 +51,8 @@ from backend.api.routers.production_hardening import router as production_harden
 from backend.api.routers.learning_feedback import router as learning_feedback_router
 from backend.api.routers.learning_automation import router as learning_automation_router
 from backend.api.routers.regime import router as regime_router
+from backend.api.routers.user import router as user_router
+from backend.api.routers.portfolio import router as portfolio_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -383,6 +385,8 @@ app.include_router(production_hardening_router)  # Production hardening (Phase 3
 app.include_router(learning_feedback_router)  # Learning & feedback (Phase 329)
 app.include_router(learning_automation_router)  # Learning automation (Phase 330)
 app.include_router(regime_router)  # Market regime analysis (Phase 336+)
+app.include_router(user_router)  # User profile & settings management
+app.include_router(portfolio_router)  # Portfolio summary & analysis
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"

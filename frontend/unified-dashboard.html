@@ -1054,6 +1054,10 @@ function validateResponse(response, requiredFields = []) {
 
         async function refreshDashboard() {
             try {
+                // Show loading state
+                const dashEl = document.getElementById('dashboard-content');
+                if (dashEl) dashEl.style.opacity = '0.6';
+
                 // Use fetchWithRetry for resilience + Promise.allSettled for partial failures
                 const results = await Promise.allSettled([
                     fetchWithRetry(`${API}/dashboard`),
@@ -1089,14 +1093,22 @@ function validateResponse(response, requiredFields = []) {
                 updatePositions(dash.positions);
                 updateTrades(trades.trades || []);
                 document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+                // Clear loading state
+                if (dashEl) dashEl.style.opacity = '1';
             } catch (e) {
                 console.error('Dashboard error:', e);
                 updateBotStatus(false);
+                if (dashEl) dashEl.style.opacity = '1';
             }
         }
 
         async function refreshMarket() {
             try {
+                // Show loading state
+                const marketEl = document.getElementById('market-content');
+                if (marketEl) marketEl.style.opacity = '0.6';
+
                 // Use fetchWithRetry for resilience + Promise.allSettled for partial failures
                 const results = await Promise.allSettled([
                     fetchWithRetry(`${API}/regime/detect?symbol=BTCUSDT`, { method: 'POST' }),
@@ -1176,13 +1188,21 @@ function validateResponse(response, requiredFields = []) {
 
                 // Update prices from WebSocket data
                 updatePrices(pricesResp.prices || {});
+
+                // Clear loading state
+                if (marketEl) marketEl.style.opacity = '1';
             } catch (e) {
                 console.error('Market error:', e);
+                if (marketEl) marketEl.style.opacity = '1';
             }
         }
 
         async function refreshStrategies() {
             try {
+                // Show loading state
+                const stratEl = document.getElementById('strategies-content');
+                if (stratEl) stratEl.style.opacity = '0.6';
+
                 // Use fetchWithRetry for resilience + Promise.allSettled for partial failures
                 const results = await Promise.allSettled([
                     fetchWithRetry(`${API}/strategies/all-stats`),
@@ -1221,13 +1241,21 @@ function validateResponse(response, requiredFields = []) {
                     </tr>
                 `);
                 allocBody.innerHTML = allocRows.join('');
+
+                // Clear loading state
+                if (stratEl) stratEl.style.opacity = '1';
             } catch (e) {
                 console.error('Strategies error:', e);
+                if (stratEl) stratEl.style.opacity = '1';
             }
         }
 
         async function refreshHealth() {
             try {
+                // Show loading state
+                const healthContentEl = document.getElementById('health-content');
+                if (healthContentEl) healthContentEl.style.opacity = '0.6';
+
                 // Use fetchWithRetry for resilience
                 const health = await fetchWithRetry(`${API}/health`);
                 const healthEl = document.getElementById('health-status');
@@ -1241,14 +1269,22 @@ function validateResponse(response, requiredFields = []) {
 
                 const detailsEl = document.getElementById('health-details');
                 if (detailsEl) detailsEl.textContent = JSON.stringify(health || {}, null, 2);
+
+                // Clear loading state
+                if (healthContentEl) healthContentEl.style.opacity = '1';
             } catch (e) {
                 console.error('Health error:', e);
                 updateBotStatus(false);
+                if (healthContentEl) healthContentEl.style.opacity = '1';
             }
         }
 
         async function refreshAutonomous() {
             try {
+                // Show loading state
+                const autoEl = document.getElementById('autonomous-content');
+                if (autoEl) autoEl.style.opacity = '0.6';
+
                 // Use fetchWithRetry for resilience
                 const status = await fetchWithRetry(`${API}/autonomous/status`);
 
@@ -1310,10 +1346,14 @@ function validateResponse(response, requiredFields = []) {
                 } else {
                     tradesTable.innerHTML = '<tr><td colspan="7" class="empty">No trades yet</td></tr>';
                 }
+
+                // Clear loading state
+                if (autoEl) autoEl.style.opacity = '1';
             } catch (e) {
                 console.error('Autonomous trader error:', e);
                 document.getElementById('autonomous-status').textContent = 'ERROR';
                 document.getElementById('autonomous-status').style.color = '#f44336';
+                if (autoEl) autoEl.style.opacity = '1';
             }
         }
 
