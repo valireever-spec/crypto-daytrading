@@ -53,6 +53,7 @@ from backend.api.routers.learning_automation import router as learning_automatio
 from backend.api.routers.regime import router as regime_router
 from backend.api.routers.user import router as user_router
 from backend.api.routers.portfolio import router as portfolio_router
+from backend.api.routers.redundancy import router as redundancy_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -387,6 +388,7 @@ app.include_router(learning_automation_router)  # Learning automation (Phase 330
 app.include_router(regime_router)  # Market regime analysis (Phase 336+)
 app.include_router(user_router)  # User profile & settings management
 app.include_router(portfolio_router)  # Portfolio summary & analysis
+app.include_router(redundancy_router)  # Redundancy & failover monitoring
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"
