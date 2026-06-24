@@ -15,7 +15,7 @@ PRIMARY_HOST="${3:-192.168.30.137}"         # Primary machine IP
 PRIMARY_PORT="${4:-8001}"                   # Primary API port
 
 # Paths
-REPO_URL="https://github.com/yourusername/crypto-daytrading.git"  # Update this
+REPO_URL="https://github.com/valireever-spec/crypto-daytrading.git"
 BACKUP_DIR="/home/${DEBIAN_USER}/crypto-daytrading"
 BACKUP_PORT="8002"
 
