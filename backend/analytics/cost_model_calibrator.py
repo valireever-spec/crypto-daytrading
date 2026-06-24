@@ -119,7 +119,11 @@ class CostModelCalibrator:
 
         if len(volumes) > 1 and volumes.std() > 0 and actuals.std() > 0:
             volume_sensitivity = np.corrcoef(volumes, actuals)[0, 1]
-            volume_sensitivity = max(-1.0, min(1.0, volume_sensitivity))
+            # Guard against NaN from edge cases
+            if np.isnan(volume_sensitivity) or np.isinf(volume_sensitivity):
+                volume_sensitivity = 0.0
+            else:
+                volume_sensitivity = max(-1.0, min(1.0, volume_sensitivity))
         else:
             volume_sensitivity = 0.0
 
@@ -246,3 +250,37 @@ def get_cost_model_calibrator() -> CostModelCalibrator:
     if _calibrator is None:
         _calibrator = CostModelCalibrator()
     return _calibrator
+
+
+def get_learned_costs_for_trade(symbol: str, volume_pct: float) -> Optional[Dict[str, float]]:
+    """
+    Get learned cost estimate for a trade.
+
+    For use in Phase 325-327 when making allocation decisions.
+
+    Parameters:
+    -----------
+    symbol : str
+        Trading symbol
+    volume_pct : float
+        Volume as % of portfolio
+
+    Returns:
+    --------
+    {execution_cost, slippage_cost, total_cost} or None if not enough data
+    """
+    calibrator = get_cost_model_calibrator()
+    profile = calibrator.get_symbol_profile(symbol)
+
+    if profile:
+        # Use historical average as estimate
+        return {
+            "execution_cost_pct": profile.avg_actual_cost_pct * 0.6,
+            "slippage_cost_pct": profile.avg_actual_cost_pct * 0.4,
+            "total_cost_pct": profile.avg_actual_cost_pct,
+            "confidence": "learned",
+            "samples": profile.execution_count,
+        }
+    else:
+        # Return None to trigger fallback to static tier
+        return None

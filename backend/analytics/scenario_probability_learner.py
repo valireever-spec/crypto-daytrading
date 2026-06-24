@@ -200,10 +200,24 @@ class ScenarioProbabilityLearner:
                 uniform_weight * (1 - decay_factor)
             )
 
-        # Normalize
+        # Normalize and apply minimum floor (prevent degenerate weights)
         total = sum(decayed.values())
         if total > 0:
             decayed = {s: w / total for s, w in decayed.items()}
+
+        # Enforce minimum weight floor (0.05 = 5%)
+        min_weight = 0.05
+        floor_applied = False
+        for scenario in decayed:
+            if decayed[scenario] < min_weight:
+                decayed[scenario] = min_weight
+                floor_applied = True
+
+        # Renormalize if floor was applied
+        if floor_applied:
+            total = sum(decayed.values())
+            if total > 0:
+                decayed = {s: w / total for s, w in decayed.items()}
 
         return decayed
 

@@ -54,7 +54,7 @@ class AccuracyMetrics:
 class RecommendationTracker:
     """Track recommendations and outcomes for continuous learning."""
 
-    def __init__(self, tracking_dir: Path = TRACKER_DIR):
+    def __init__(self, tracking_dir: Path = TRACKER_DIR, retention_days: int = 90):
         """
         Initialize tracker.
 
@@ -62,14 +62,18 @@ class RecommendationTracker:
         -----------
         tracking_dir : Path
             Directory for storing tracking records
+        retention_days : int
+            Keep records for this many days (default 90)
         """
         self.tracking_dir = Path(tracking_dir)
         self.tracking_dir.mkdir(parents=True, exist_ok=True)
 
         self.recommendations: List[RecommendationRecord] = []
         self.outcomes: List[OutcomeRecord] = []
+        self.retention_days = retention_days
 
         self._load_from_disk()
+        self._cleanup_old_records()
 
     def _load_from_disk(self):
         """Load tracking history from disk."""
@@ -97,6 +101,35 @@ class RecommendationTracker:
                             self.outcomes.append(OutcomeRecord(**data))
             except Exception as e:
                 logger.warning(f"Failed to load outcomes: {e}")
+
+    def _cleanup_old_records(self):
+        """Remove records older than retention_days."""
+        if not self.retention_days:
+            return
+
+        cutoff = datetime.now(timezone.utc).timestamp() - (self.retention_days * 86400)
+
+        # Filter old recommendations
+        before = len(self.recommendations)
+        self.recommendations = [
+            r for r in self.recommendations
+            if datetime.fromisoformat(r.timestamp).timestamp() > cutoff
+        ]
+        removed_recs = before - len(self.recommendations)
+
+        # Filter old outcomes
+        before = len(self.outcomes)
+        self.outcomes = [
+            o for o in self.outcomes
+            if datetime.fromisoformat(o.outcome_timestamp).timestamp() > cutoff
+        ]
+        removed_outcomes = before - len(self.outcomes)
+
+        if removed_recs or removed_outcomes:
+            logger.info(
+                f"Cleaned up {removed_recs} recommendations, {removed_outcomes} outcomes"
+            )
+            self._rewrite_files()
 
     def record_recommendation(
         self,
@@ -201,6 +234,25 @@ class RecommendationTracker:
         except Exception as e:
             logger.error(f"Failed to write {filename}: {e}")
 
+    def _rewrite_files(self):
+        """Rewrite JSONL files after cleanup."""
+        try:
+            # Rewrite recommendations
+            rec_file = self.tracking_dir / "recommendations.jsonl"
+            with open(rec_file, "w") as f:
+                for rec in self.recommendations:
+                    f.write(json.dumps(asdict(rec)) + "\n")
+
+            # Rewrite outcomes
+            outcome_file = self.tracking_dir / "outcomes.jsonl"
+            with open(outcome_file, "w") as f:
+                for outcome in self.outcomes:
+                    f.write(json.dumps(asdict(outcome)) + "\n")
+
+            logger.info("Rewrite tracking files after cleanup")
+        except Exception as e:
+            logger.error(f"Failed to rewrite files: {e}")
+
     def analyze_accuracy(
         self,
         magnitude_tolerance: float = 2.0,
@@ -227,6 +279,9 @@ class RecommendationTracker:
                 symbol_accuracy={},
             )
 
+        # Build hash map for O(1) lookup instead of O(n)
+        rec_map = {r.recommendation_id: r for r in self.recommendations}
+
         # Match recommendations to outcomes
         scenario_correct = {}
         symbol_correct = {}
@@ -238,12 +293,8 @@ class RecommendationTracker:
         matches = 0
 
         for outcome in self.outcomes:
-            # Find matching recommendation
-            rec = next(
-                (r for r in self.recommendations
-                 if r.recommendation_id == outcome.recommendation_id),
-                None
-            )
+            # Find matching recommendation via hash lookup
+            rec = rec_map.get(outcome.recommendation_id)
 
             if not rec:
                 continue
@@ -263,6 +314,11 @@ class RecommendationTracker:
                         outcome.actual_return_pct / rec.expected_return_pct
                     )
                     if 1.0 / magnitude_tolerance <= ratio <= magnitude_tolerance:
+                        within_magnitude += 1
+                else:
+                    # For zero expected return: actual should be close to zero
+                    # Threshold: actual return within 1% tolerance
+                    if abs(outcome.actual_return_pct) < 1.0:
                         within_magnitude += 1
 
             # Track by scenario
@@ -358,3 +414,47 @@ def get_recommendation_tracker() -> RecommendationTracker:
     if _tracker is None:
         _tracker = RecommendationTracker()
     return _tracker
+
+
+def trigger_scenario_reweighting() -> Dict[str, float]:
+    """
+    Analyze recommendation accuracy and reweight scenarios if sufficient data.
+
+    Call this as a scheduled job (daily/weekly) to auto-update scenario weights.
+
+    Returns:
+    --------
+    Updated scenario weights if reweighting triggered, else current weights.
+    """
+    from backend.analytics.scenario_probability_learner import get_scenario_probability_learner
+
+    tracker = get_recommendation_tracker()
+    learner = get_scenario_probability_learner()
+
+    metrics = tracker.analyze_accuracy()
+
+    # Only update if we have at least 5 matched pairs per scenario
+    min_samples = 5
+    all_scenarios = ["base", "upside", "downside"]
+
+    sufficient_data = all(
+        metrics.scenario_accuracy.get(s, 0) >= min_samples
+        for s in all_scenarios
+    )
+
+    if sufficient_data and metrics.total_recommendations >= 15:
+        updated_weights = learner.update_from_accuracy(
+            metrics.scenario_accuracy,
+            min_samples_per_scenario=min_samples,
+        )
+        logger.info(
+            f"Auto-reweighted scenarios: {updated_weights}, "
+            f"overall accuracy {metrics.accuracy_pct:.1f}%"
+        )
+        return updated_weights
+    else:
+        logger.debug(
+            f"Insufficient data for reweighting: {metrics.total_recommendations} recs, "
+            f"min 15 needed"
+        )
+        return learner.get_weights()
