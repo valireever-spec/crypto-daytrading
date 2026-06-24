@@ -1,8 +1,10 @@
 """API endpoints for autonomous trading control."""
 
 import logging
+from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from backend.trading.autonomous_trader import (
     get_autonomous_trader,
@@ -11,6 +13,16 @@ from backend.trading.autonomous_trader import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Autonomous Trading"])
+
+
+class ConfigUpdateRequest(BaseModel):
+    """Request model for config updates."""
+    entry_threshold: Optional[float] = None
+    exit_profit_target: Optional[float] = None
+    exit_stop_loss: Optional[float] = None
+    position_size_pct: Optional[float] = None
+    max_positions: Optional[int] = None
+    symbols: Optional[List[str]] = None
 
 
 @router.get("/api/autonomous/status")
@@ -75,31 +87,24 @@ async def get_trading_config():
 
 
 @router.post("/api/autonomous/config/update")
-async def update_trading_config(
-    entry_threshold: float = None,
-    exit_profit_target: float = None,
-    exit_stop_loss: float = None,
-    position_size_pct: float = None,
-    max_positions: int = None,
-    symbols: list = None
-):
+async def update_trading_config(request: ConfigUpdateRequest):
     """Update autonomous trading configuration."""
     trader = get_autonomous_trader()
     if not trader:
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
 
-    if entry_threshold is not None:
-        trader.config.entry_threshold = entry_threshold
-    if exit_profit_target is not None:
-        trader.config.exit_profit_target = exit_profit_target
-    if exit_stop_loss is not None:
-        trader.config.exit_stop_loss = exit_stop_loss
-    if position_size_pct is not None:
-        trader.config.position_size_pct = position_size_pct
-    if max_positions is not None:
-        trader.config.max_positions = max_positions
-    if symbols is not None:
-        trader.config.symbols = symbols
+    if request.entry_threshold is not None:
+        trader.config.entry_threshold = request.entry_threshold
+    if request.exit_profit_target is not None:
+        trader.config.exit_profit_target = request.exit_profit_target
+    if request.exit_stop_loss is not None:
+        trader.config.exit_stop_loss = request.exit_stop_loss
+    if request.position_size_pct is not None:
+        trader.config.position_size_pct = request.position_size_pct
+    if request.max_positions is not None:
+        trader.config.max_positions = request.max_positions
+    if request.symbols is not None:
+        trader.config.symbols = request.symbols
 
     logger.info(f"Updated trading config: {trader.config}")
     return JSONResponse({
