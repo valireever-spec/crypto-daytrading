@@ -127,7 +127,13 @@ class ExitManager:
                 trailing_stop_pct=1.0,
             )
 
-        rules = detector.get_regime_trading_rules(regime)
+        # Use get_adaptive_thresholds with regime info
+        regime_info = {
+            "regime": regime.lower(),
+            "volatility_level": "medium",
+            "rsi_value": 50.0,
+        }
+        thresholds = detector.get_adaptive_thresholds(regime_info)
 
         # Determine trailing stop based on regime
         trailing_stops = {
@@ -142,8 +148,8 @@ class ExitManager:
         return ExitRule(
             symbol=symbol,
             regime=regime,
-            stop_loss_pct=rules["stop_loss_pct"],
-            take_profit_pct=rules["take_profit_pct"],
+            stop_loss_pct=thresholds.get("stop_loss", 0.02) * 100,  # Convert to percentage
+            take_profit_pct=thresholds.get("profit_target", 0.05) * 100,  # Convert to percentage
             trailing_stop_pct=trailing_stop,
             max_holding_hours=12.0 if regime == "VOLATILE" else 24.0,
         )
