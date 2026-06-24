@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Any
 from datetime import datetime
@@ -17,6 +18,9 @@ from backend.trading.portfolio_decision_coordinator import get_portfolio_decisio
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for CPU-intensive calculations (prevents blocking event loop)
+_signal_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="signal_calc")
 
 
 @dataclass
@@ -143,8 +147,12 @@ class AutonomousTrader:
                 logger.debug(f"{symbol}: At max positions ({len(positions)}/{self.config.max_positions}), skipping")
                 return None  # At position limit
 
-            # Calculate composite signal using real technical analysis (0-100)
-            signal_score, component_scores = await self._calculate_signal(symbol)
+            # Calculate composite signal using thread pool (prevents blocking event loop)
+            signal_score, component_scores = await asyncio.get_event_loop().run_in_executor(
+                _signal_thread_pool,
+                self._calculate_signal_blocking,
+                symbol
+            )
 
             # Get market regime and adaptive entry threshold (Phase 316)
             regime_detector = get_regime_detector()
@@ -649,9 +657,12 @@ class AutonomousTrader:
             logger.error(f"Error executing exit for {symbol}: {e}")
             return False
 
-    async def _calculate_signal(self, symbol: str) -> tuple:
+    def _calculate_signal_blocking(self, symbol: str) -> tuple:
         """
         Calculate composite signal (0-100) for a symbol using real technical analysis.
+
+        **BLOCKING**: This method performs CPU-intensive pandas calculations.
+        Run in thread pool via asyncio.get_event_loop().run_in_executor() to avoid blocking event loop.
 
         Returns:
         --------
@@ -816,7 +827,12 @@ class AutonomousTrader:
                 ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
 
                 if ohlcv is not None and len(ohlcv) >= 200:  # Need 200+ candles for regime detection
-                    regime_info = regime_detector.detect_regime(ohlcv)
+                    # Run regime detection in thread pool to avoid blocking
+                    regime_info = await asyncio.get_event_loop().run_in_executor(
+                        _signal_thread_pool,
+                        regime_detector.detect_regime,
+                        ohlcv
+                    )
                     thresholds = regime_detector.get_adaptive_thresholds(regime_info)
                     adaptive_threshold = thresholds.get("entry_threshold", self.config.entry_threshold)
 
