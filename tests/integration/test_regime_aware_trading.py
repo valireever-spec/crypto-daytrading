@@ -362,6 +362,9 @@ class TestRegimeAwareTrading:
     async def test_regime_aware_check_symbol(self, trading_config):
         """Test _check_symbol integrates regime detection."""
         trader = AutonomousTrader(trading_config)
+        # Reset state to prevent flakiness from other tests
+        trader.last_signal_time = {}
+        trader.order_failures = {}
 
         mock_engine = AsyncMock()
         mock_engine.get_positions = MagicMock(return_value=[])
