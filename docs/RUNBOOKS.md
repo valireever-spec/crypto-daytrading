@@ -1,8 +1,241 @@
 # Operational Runbooks
 
-**Purpose**: Step-by-step diagnosis and resolution guides for common alerts and failures.
-
+**Purpose**: Step-by-step diagnosis and resolution guides for common alerts and failures.  
 **Updated**: Phase 337 (2026-06-24)
+
+---
+
+## Incident Response Process (IRP)
+
+**Goal**: Detect, respond, and learn from incidents in <30 minutes
+
+### Phase 1: DETECTION (0–2 min)
+
+**Who notices**?
+- Alert fires (error rate spike, latency p99 >2s)
+- User reports issue ("I can't place trades")
+- Team member observes anomaly
+
+**Initial actions**:
+1. ✅ Check `/metrics` endpoint: confirm issue is real
+2. ✅ Check `journalctl` logs: find error pattern
+3. ✅ Page on-call engineer (if critical)
+4. ✅ Slack #incidents channel: broadcast alert
+
+**Example**:
+```bash
+# User: "API is slow"
+curl http://localhost:8000/metrics | jq '.p99_latency_ms'  # 2500ms! Alert!
+```
+
+### Phase 2: TRIAGE (2–5 min)
+
+**Severity Assignment**:
+- **CRITICAL** (RED): Service down, data loss risk, user impact
+- **HIGH** (ORANGE): Degraded performance, users affected
+- **MEDIUM** (YELLOW): Minor issue, workaround exists
+- **LOW** (BLUE): Informational, no user impact
+
+**On-call Response**:
+- **CRITICAL**: Page someone immediately
+- **HIGH**: Investigate within 15 min
+- **MEDIUM**: Investigate within 1 hour
+- **LOW**: Investigate within next business day
+
+**Triage checklist**:
+- [ ] Is it a real issue or false alarm?
+- [ ] Is it affecting customers/users?
+- [ ] Do we have a runbook for this?
+- [ ] Do we need to escalate?
+
+### Phase 3: MITIGATION (5–15 min)
+
+**Quick wins** (before understanding root cause):
+- Restart service if unresponsive: `sudo systemctl restart investing-platform`
+- Clear cache if stale: `rm logs/_composite_signals_cache.json`
+- Revert recent change if applicable: `git revert <commit>`
+
+**Use runbooks**:
+- Error rate spike? → RB-001
+- Latency spike? → RB-002
+- Auth failures? → RB-003
+- API down? → RB-004
+- Metrics broken? → RB-005
+
+**Communication**:
+- Update Slack #incidents with status
+- Estimate time to recovery
+- Inform affected users
+
+### Phase 4: RESOLUTION (15–30 min)
+
+**Deep diagnosis**:
+- Run full troubleshooting from applicable runbook
+- Fix root cause (not just symptoms)
+- Verify fix works (test endpoint, check metrics)
+- Monitor for 5 minutes (no regression)
+
+**Confirmation**:
+- [ ] Issue is resolved (metric returned to normal)
+- [ ] All systems operational
+- [ ] No secondary issues appeared
+
+### Phase 5: POST-MORTEM (within 48 hours)
+
+**Root-cause analysis** (see template below)
+
+**Follow-ups**:
+- [ ] Document in TECHNICAL_DEBT.md if debt was underlying cause
+- [ ] Create tickets for prevention (monitoring, tests, etc.)
+- [ ] Share learnings with team
+- [ ] Update runbooks if process was unclear
+
+---
+
+## Root-Cause Analysis Template
+
+**Use this template for all incidents** (copy and fill in):
+
+```
+## Incident: [Brief Title]
+
+**Date**: YYYY-MM-DD HH:MM UTC  
+**Duration**: X minutes (detection to resolution)  
+**Severity**: CRITICAL / HIGH / MEDIUM / LOW  
+**Status**: Resolved ✅
+
+### Timeline
+
+| Time | Event |
+|------|-------|
+| 14:30 | Error rate spike detected (alerts) |
+| 14:32 | Checked /metrics: 25% error rate |
+| 14:35 | Identified: Database connection pool exhausted |
+| 14:38 | Restarted service |
+| 14:40 | Error rate back to <1% |
+
+### Root Cause
+
+**5-Why Analysis**:
+1. Why did error rate spike?
+   - Database connection pool exhausted
+
+2. Why was pool exhausted?
+   - Query timeout = connections held too long
+
+3. Why was query slow?
+   - Missing index on `users.email` column
+
+4. Why wasn't it caught earlier?
+   - No test for slow queries (chaos test missing)
+
+5. Why not in requirements?
+   - Database performance SLO wasn't defined
+
+**Root Cause**: Missing index on high-traffic column + no performance SLO
+
+### Impact
+
+- **Duration**: 10 minutes
+- **Users Affected**: ~50 (can't place trades)
+- **Data Loss**: None
+- **Financial Loss**: ~$2,000 in missed trades
+
+### Resolution
+
+**Immediate** (14:38):
+- Restarted service (cleared connection pool)
+
+**Short-term** (14:50):
+- Created index: `CREATE INDEX idx_users_email ON users(email);`
+- Verified query latency dropped 100x
+
+**Long-term** (action items):
+- Add monitoring for connection pool usage
+- Define database query SLOs (p99 <100ms)
+- Add chaos tests for slow queries
+- Document in TECHNICAL_DEBT.md
+
+### Follow-Ups
+
+- [ ] DEBT-010 created: "No database performance SLOs"
+- [ ] Ticket T-1234: Add connection pool monitoring
+- [ ] Ticket T-1235: Implement query latency SLO alerts
+- [ ] Runbook RB-006 created: Database Connection Pool Exhausted
+
+### Lessons Learned
+
+1. **What went well**:
+   - Detected quickly (2 min)
+   - Had a clear runbook to follow
+   - Restart fixed immediately
+
+2. **What went poorly**:
+   - Missing index (should be in schema validation)
+   - No performance SLO defined
+   - No chaos test for slow queries
+
+3. **What we'll do next time**:
+   - Always define SLOs upfront
+   - Test performance regressions in CI
+   - Monitor connection pool as critical metric
+
+### Owner & Approver
+
+- **Incident Commander**: [Name]
+- **Root-Cause Analyst**: [Name]
+- **Approved by**: [Tech Lead/Manager]
+```
+
+---
+
+## 5-Why Framework
+
+**Goal**: Get to root cause (not symptoms)
+
+**Example**:
+```
+Issue: API latency p99 = 5s
+
+1. Why is latency high?
+   → Optimizer is computing efficient frontier (slow)
+
+2. Why is optimizer slow?
+   → No timeout; calculates 1000 points on frontier
+
+3. Why 1000 points?
+   → Default parameter never changed from original value
+
+4. Why was default never reviewed?
+   → No SLO defined for optimizer runtime
+
+5. Why no SLO?
+   → Not prioritized in requirements
+
+ROOT CAUSE: Missing non-functional requirement (SLO)
+FIX: Define SLO (max 2s), add timeout, reduce points to 50
+```
+
+---
+
+## When to Open Incidents
+
+**✅ OPEN AN INCIDENT IF**:
+- Error rate > 5% (more than 1 in 20 requests fail)
+- Latency p99 > 5s (99th percentile is very slow)
+- Any service down (can't connect)
+- Data inconsistency detected
+- Security issue found
+- User complains about reliability
+
+**❌ DON'T NEED INCIDENT IF**:
+- Informational alert (disk usage 70%)
+- Expected maintenance window
+- Test environment only
+- Single user affected (likely user error)
+- Automatic recovery in <1 min
+
+---
 
 ---
 
