@@ -68,6 +68,7 @@ websocket_task: asyncio.Task = None
 stream_task: asyncio.Task = None
 simulator_task: asyncio.Task = None
 autonomous_trader_task: asyncio.Task = None
+sync_task: asyncio.Task = None
 _trading_paused: bool = False
 current_prices: dict = {}  # symbol -> latest price
 
@@ -93,7 +94,7 @@ def reset_trading_paused() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
-    global websocket_task, stream_task, simulator_task, autonomous_trader_task
+    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task
 
     # Startup
     logger.info("Starting crypto daytrading platform...")
@@ -252,6 +253,39 @@ async def lifespan(app: FastAPI):
     autonomous_trader_task = asyncio.create_task(autonomous_trader.start())
     logger.info("Autonomous trader initialized and started")
 
+    # Start background sync task (ensure backup stays in sync with primary)
+    machine_id = os.getenv("MACHINE_ID", "main")
+    backup_url = os.getenv("BACKUP_MACHINE_URL", "http://192.168.3.25:8002")
+
+    async def ensure_backup_in_sync():
+        """Background task: periodically ensure backup has latest config."""
+        await asyncio.sleep(5)  # Wait for backup to initialize
+        sync_interval = 30  # Sync every 30 seconds
+        while True:
+            try:
+                if machine_id == "main":
+                    trader = get_autonomous_trader()
+                    if trader:
+                        current_config = {
+                            "entry_threshold": trader.config.entry_threshold,
+                            "exit_profit_target": trader.config.exit_profit_target,
+                            "exit_stop_loss": trader.config.exit_stop_loss,
+                            "position_size_pct": trader.config.position_size_pct,
+                            "max_positions": trader.config.max_positions,
+                            "max_daily_loss_pct": trader.config.max_daily_loss_pct,
+                            "symbols": trader.config.symbols,
+                            "enabled": trader.config.enabled
+                        }
+                        # Attempt sync (with retry logic built in)
+                        ConfigManager.sync_to_backup(backup_url, current_config)
+                await asyncio.sleep(sync_interval)
+            except Exception as e:
+                logger.error(f"Background sync task error: {e}")
+                await asyncio.sleep(sync_interval)
+
+    global sync_task
+    sync_task = asyncio.create_task(ensure_backup_in_sync())
+
     logger.info("Application startup complete")
     yield
 
@@ -280,6 +314,10 @@ async def lifespan(app: FastAPI):
         if trader:
             await trader.stop()
         autonomous_trader_task.cancel()
+
+    # Cancel background sync task
+    if sync_task and not sync_task.done():
+        sync_task.cancel()
 
     if ws:
         await ws.disconnect()

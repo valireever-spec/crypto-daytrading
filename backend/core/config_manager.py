@@ -82,22 +82,37 @@ class ConfigManager:
 
     @staticmethod
     def sync_to_backup(backup_url: str, config: Dict[str, Any]) -> bool:
-        """Sync config to backup machine via API."""
-        try:
-            import httpx
+        """Sync config to backup machine via API with retry logic."""
+        import httpx
+        import asyncio
 
-            endpoint = f"{backup_url}/api/autonomous/config/sync"
-            response = httpx.post(endpoint, json=config, timeout=5)
+        max_retries = 3
+        retry_delays = [1, 2, 4]  # exponential backoff: 1s, 2s, 4s
 
-            if response.status_code == 200:
-                logger.info(f"Synced config to backup: {backup_url}")
-                return True
+        for attempt in range(max_retries):
+            try:
+                endpoint = f"{backup_url}/api/autonomous/config/sync"
+                response = httpx.post(endpoint, json=config, timeout=5)
+
+                if response.status_code == 200:
+                    logger.info(f"Synced config to backup: {backup_url}")
+                    return True
+                else:
+                    logger.warning(f"Backup sync attempt {attempt + 1}/{max_retries} failed: HTTP {response.status_code}")
+            except Exception as e:
+                logger.warning(f"Backup sync attempt {attempt + 1}/{max_retries} failed: {e}")
+
+            # Retry with exponential backoff (except on last attempt)
+            if attempt < max_retries - 1:
+                delay = retry_delays[attempt]
+                logger.info(f"Retrying backup sync in {delay}s...")
+                import time
+                time.sleep(delay)
             else:
-                logger.warning(f"Backup sync failed: HTTP {response.status_code}")
+                logger.error(f"Backup sync failed after {max_retries} attempts")
                 return False
-        except Exception as e:
-            logger.warning(f"Could not sync to backup: {e}")
-            return False
+
+        return False
 
     @staticmethod
     def load_from_backup(backup_url: str) -> Optional[Dict[str, Any]]:

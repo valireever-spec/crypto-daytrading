@@ -159,10 +159,14 @@ async def sync_config_from_backup(config: dict):
     if config.get('max_daily_loss_pct') is not None:
         trader.config.max_daily_loss_pct = config['max_daily_loss_pct']
 
-    logger.info(f"Synced config from remote: {config}")
+    # PERSIST synced config to disk (Fix: was only in-memory)
+    ConfigManager.save_config(config)
+
+    logger.info(f"Synced and persisted config from remote: {config}")
     return JSONResponse({
         "status": "synced",
-        "message": "Config synced from remote"
+        "message": "Config synced and persisted",
+        "persisted": True
     })
 
 
