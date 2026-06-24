@@ -1,0 +1,17 @@
+[Unit]
+Description=Investing Platform Scenario Auto-Reweighter
+After=network.target investing-platform.service
+Wants=investing-platform-scenario-reweighter.timer
+
+[Service]
+Type=oneshot
+User=vali
+WorkingDirectory=/home/vali/projects/crypto-daytrading
+ExecStart=/usr/bin/python3 -c "from backend.analytics.scenario_auto_reweighting_scheduler import get_scenario_auto_reweighting_scheduler; scheduler = get_scenario_auto_reweighting_scheduler(); result = scheduler.run_reweighting(); print(result)"
+
+RemainAfterExit=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Investing Platform Scenario Auto-Reweighter Timer
+Requires=investing-platform-scenario-reweighter.service
+
+[Timer]
+OnCalendar=*-*-01 12:00:00
+Persistent=true
+Unit=investing-platform-scenario-reweighter.service
+
+[Install]
+WantedBy=timers.target

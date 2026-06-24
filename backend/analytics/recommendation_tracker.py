@@ -299,6 +299,11 @@ class RecommendationTracker:
             if not rec:
                 continue
 
+            # Skip outcomes with invalid return values
+            if outcome.actual_return_pct is None:
+                logger.debug(f"Skipping outcome {outcome.recommendation_id}: None actual_return_pct")
+                continue
+
             matches += 1
 
             # Check direction

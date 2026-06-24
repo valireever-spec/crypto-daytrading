@@ -8,8 +8,12 @@ import logging
 from typing import Dict, Tuple
 from datetime import datetime, timezone
 import numpy as np
+import json
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+WEIGHTS_CACHE_FILE = Path("logs/.scenario_weights_cache.json")
 
 
 class ScenarioProbabilityLearner:
@@ -35,13 +39,20 @@ class ScenarioProbabilityLearner:
         self.last_update = datetime.now(timezone.utc).isoformat()
 
         if initial_weights is None:
-            self.weights = {
-                "base": 0.50,
-                "upside": 0.25,
-                "downside": 0.25,
-            }
+            # Try to load from cache first
+            cached = self._load_weights_from_cache()
+            if cached:
+                self.weights = cached
+                logger.info("Loaded scenario weights from cache")
+            else:
+                self.weights = {
+                    "base": 0.50,
+                    "upside": 0.25,
+                    "downside": 0.25,
+                }
         else:
             self.weights = initial_weights
+            self._save_weights_to_cache()
 
     def update_from_accuracy(
         self,
@@ -106,6 +117,9 @@ class ScenarioProbabilityLearner:
 
         self.weights = blended
         self.last_update = datetime.now(timezone.utc).isoformat()
+
+        # Persist to cache
+        self._save_weights_to_cache()
 
         logger.info(
             f"Updated scenario weights: {self.weights}, confidence={confidence:.2f}"
@@ -232,6 +246,37 @@ class ScenarioProbabilityLearner:
             "last_update": self.last_update,
             "learning_rate": self.learning_rate,
         }
+
+    def _save_weights_to_cache(self) -> bool:
+        """Save weights to persistent cache file."""
+        try:
+            WEIGHTS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "weights": self.weights,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            WEIGHTS_CACHE_FILE.write_text(json.dumps(data, indent=2))
+            logger.debug("Saved scenario weights to cache")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to save weights cache: {e}")
+            return False
+
+    def _load_weights_from_cache(self) -> Dict[str, float]:
+        """Load weights from persistent cache file."""
+        if not WEIGHTS_CACHE_FILE.exists():
+            return None
+
+        try:
+            data = json.loads(WEIGHTS_CACHE_FILE.read_text())
+            weights = data.get("weights")
+            if weights and sum(weights.values()) > 0.99:  # Valid weights
+                logger.debug("Loaded scenario weights from cache")
+                return weights
+        except Exception as e:
+            logger.warning(f"Failed to load weights cache: {e}")
+
+        return None
 
 
 # Global instance

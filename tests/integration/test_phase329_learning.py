@@ -31,6 +31,11 @@ def reset_globals():
         shutil.rmtree(tracking_dir)
     tracking_dir.mkdir(parents=True, exist_ok=True)
 
+    # Clean weights cache
+    weights_cache = Path("logs/.scenario_weights_cache.json")
+    if weights_cache.exists():
+        weights_cache.unlink()
+
     rt._tracker = None
     spl._learner = None
     cmc._calibrator = None
@@ -41,6 +46,9 @@ def reset_globals():
     if tracking_dir.exists():
         shutil.rmtree(tracking_dir)
     tracking_dir.mkdir(parents=True, exist_ok=True)
+
+    if weights_cache.exists():
+        weights_cache.unlink()
 
     rt._tracker = None
     spl._learner = None

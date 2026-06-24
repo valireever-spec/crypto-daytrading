@@ -30,17 +30,20 @@ class ExecutionRecord(BaseModel):
 
 @router.post("/daemon/sync-recommendations")
 async def sync_recommendations_to_outcomes(
-    executions: List[ExecutionRecord] = Body(..., description="Execution records"),
+    executions: List[ExecutionRecord] = Body(default=[], description="Execution records (optional; auto-loads from audit log if empty)"),
+    auto_load: bool = Query(True, description="Auto-load from audit log if no executions provided"),
 ) -> Dict[str, Any]:
     """
     Run recommendation tracking daemon: match recommendations to portfolio outcomes.
 
-    Call this daily (systemd timer at 08:30) with execution log.
+    Call this daily (systemd timer at 08:30). Auto-loads executions from audit log if not provided.
 
     Parameters:
     -----------
     executions : list
-        Daily execution records (buy/sell)
+        Daily execution records (buy/sell) - optional, auto-loads from trade_audit.jsonl if empty
+    auto_load : bool
+        If true and executions empty, automatically load from audit log
 
     Returns:
     --------
@@ -48,43 +51,66 @@ async def sync_recommendations_to_outcomes(
         "matched_count": 5,
         "recorded_count": 5,
         "errors": 0,
+        "skipped_duplicates": 0,
+        "source": "provided" | "audit_log",
         "timestamp": "2026-06-24T08:30:00Z"
     }
     """
     try:
-        if not executions:
-            logger.warning("No executions provided for sync")
+        from backend.analytics.execution_log_loader import (
+            load_executions_from_audit_log,
+            get_last_sync_timestamp,
+            save_sync_timestamp,
+        )
+
+        daemon = get_recommendation_tracking_daemon()
+        exec_list = []
+        source = "provided"
+
+        # Use provided executions or auto-load from audit log
+        if executions:
+            # Convert Pydantic models to dicts
+            exec_list = [
+                {
+                    "symbol": e.symbol,
+                    "side": e.side,
+                    "timestamp": e.timestamp,
+                    "price": e.price,
+                    "allocation_pct": e.allocation_pct,
+                    "quantity": e.quantity,
+                }
+                for e in executions
+            ]
+        elif auto_load:
+            # Auto-load from audit log since last sync
+            last_sync = get_last_sync_timestamp()
+            exec_list = load_executions_from_audit_log(since_timestamp=last_sync)
+            source = "audit_log"
+        else:
+            logger.warning("No executions and auto_load disabled")
             return {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "matched_count": 0,
                 "recorded_count": 0,
                 "errors": 0,
+                "skipped_duplicates": 0,
+                "source": "none",
             }
-
-        daemon = get_recommendation_tracking_daemon()
-
-        # Convert Pydantic models to dicts
-        exec_list = [
-            {
-                "symbol": e.symbol,
-                "side": e.side,
-                "timestamp": e.timestamp,
-                "price": e.price,
-                "allocation_pct": e.allocation_pct,
-                "quantity": e.quantity,
-            }
-            for e in executions
-        ]
 
         result = daemon.run_daily_sync(exec_list)
 
+        # Save sync timestamp for next run
+        if result["recorded_count"] > 0 or result["matched_count"] > 0:
+            save_sync_timestamp(datetime.now(timezone.utc).isoformat())
+
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": source,
             **result,
         }
 
     except Exception as e:
-        logger.error(f"Sync error: {e}")
+        logger.error(f"Sync error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -210,6 +236,66 @@ async def get_reweighting_history(
 
     except Exception as e:
         logger.error(f"Error getting history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/costs/learned-estimates")
+async def get_learned_cost_estimates(
+    symbols: List[str] = Query(default=[], description="Symbols to estimate costs for (empty = all)"),
+) -> Dict[str, Any]:
+    """
+    Get learned cost estimates from calibration data.
+
+    Returns actual execution costs learned from historical trades.
+
+    Parameters:
+    -----------
+    symbols : list
+        Symbols to estimate (if empty, returns all learned symbols)
+
+    Returns:
+    --------
+    {
+        "total_cost_pct": 0.45,
+        "costs_by_symbol": {
+            "AAPL": {
+                "execution_cost_pct": 0.15,
+                "slippage_cost_pct": 0.05,
+                "total_cost_pct": 0.20,
+                "confidence": "learned",
+                "samples": 8
+            }
+        }
+    }
+    """
+    try:
+        from backend.analytics.cost_model_calibrator import get_cost_model_calibrator, get_learned_costs_for_trade
+
+        calibrator = get_cost_model_calibrator()
+        profiles = calibrator.get_all_profiles()
+
+        # Filter by requested symbols
+        if symbols:
+            profiles = {s: p for s, p in profiles.items() if s in symbols}
+
+        costs_by_symbol = {}
+        total_cost = 0.0
+
+        for symbol, profile in profiles.items():
+            cost_data = get_learned_costs_for_trade(symbol, volume_pct=1.0)
+            if cost_data:
+                costs_by_symbol[symbol] = cost_data
+                total_cost += cost_data.get("total_cost_pct", 0)
+
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "total_cost_pct": round(total_cost, 4),
+            "costs_by_symbol": costs_by_symbol,
+            "learned_symbols_count": len(profiles),
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting learned costs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

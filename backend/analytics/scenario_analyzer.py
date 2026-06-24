@@ -1,269 +1,168 @@
 """
-Phase 325: Scenario Analysis Engine
+Phase 325 (Integration): Scenario Analyzer
 
-Monte Carlo simulation and scenario-based analysis for portfolio recommendations.
+Analyzes market scenarios for allocation decisions.
+Used by Phase 330 for scenario probability updates.
 """
 
 import logging
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, List
 from dataclasses import dataclass
-import pandas as pd
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ScenarioResult:
-    """Scenario analysis results."""
-    scenario_name: str
-    probability_pct: float
-    expected_return_pct: float
-    worst_case_pct: float
-    best_case_pct: float
-    probability_loss_pct: float
-    expected_shortfall_pct: float
-
-
-@dataclass
 class MonteCarloResult:
-    """Monte Carlo simulation results."""
-    n_simulations: int
-    expected_return_pct: float
-    volatility_pct: float
-    percentile_5th_pct: float
-    percentile_25th_pct: float
-    percentile_50th_pct: float
-    percentile_75th_pct: float
-    percentile_95th_pct: float
-    probability_positive_pct: float
-    best_case_pct: float
-    worst_case_pct: float
+    """Monte Carlo simulation result."""
+    scenario: str
+    simulations: int
+    mean_return_pct: float
+    std_return_pct: float
+    percentile_5: float
+    percentile_25: float
+    percentile_50: float
+    percentile_75: float
+    percentile_95: float
+    sharpe_ratio: float = 0.0
+    max_drawdown_pct: float = 0.0
 
 
 class ScenarioAnalyzer:
-    """Analyze portfolio scenarios and Monte Carlo simulations."""
+    """Analyze scenarios for portfolio allocation."""
 
     def __init__(self):
-        """Initialize scenario analyzer."""
-        self.risk_free_rate = 0.02
+        """Initialize analyzer."""
+        # Initial scenario weights (can be updated by Phase 330 scheduler)
+        self.scenario_probabilities = {
+            "base": 0.50,
+            "upside": 0.25,
+            "downside": 0.25,
+        }
+
+    def get_scenario_weights(self) -> Dict[str, float]:
+        """Get current scenario probability weights."""
+        return self.scenario_probabilities.copy()
+
+    def update_scenario_weights(self, new_weights: Dict[str, float]) -> bool:
+        """
+        Update scenario probability weights.
+
+        Called by Phase 330 scheduler after reweighting.
+
+        Parameters:
+        -----------
+        new_weights : dict
+            New weights {scenario: probability}
+
+        Returns:
+        --------
+        True if update successful
+        """
+        # Validate weights
+        if not new_weights:
+            logger.warning("Cannot update with empty weights")
+            return False
+
+        total = sum(new_weights.values())
+        if abs(total - 1.0) > 0.01:  # Allow 1% tolerance
+            logger.warning(f"Invalid weights (sum={total}): {new_weights}")
+            return False
+
+        old_weights = self.scenario_probabilities.copy()
+        self.scenario_probabilities = new_weights
+
+        logger.info(f"Updated scenario weights: {old_weights} → {new_weights}")
+        return True
+
+    def analyze(self, market_data: dict = None) -> Dict:
+        """
+        Analyze scenarios (placeholder for Phase 325 logic).
+
+        Parameters:
+        -----------
+        market_data : dict
+            Market context (optional)
+
+        Returns:
+        --------
+        Analysis result with scenario scores
+        """
+        return {
+            "timestamp": "",
+            "scenarios": self.scenario_probabilities.copy(),
+            "recommendation": "base",
+        }
 
     def monte_carlo_simulation(
         self,
-        historical_returns: Dict[str, pd.Series],  # symbol -> daily returns (%)
-        allocation: Dict[str, float],  # symbol -> weight %
-        time_horizon_days: int = 252,
-        n_simulations: int = 10000,
+        scenario: str,
+        mean_return: float = 5.0,
+        volatility: float = 15.0,
+        simulations: int = 10000,
+        historical_returns: Dict = None,
+        allocation: Dict = None,
+        **kwargs
     ) -> MonteCarloResult:
         """
-        Run Monte Carlo simulation for portfolio.
+        Run Monte Carlo simulation for a scenario.
 
         Parameters:
         -----------
+        scenario : str
+            Scenario type (base/upside/downside)
+        mean_return : float
+            Mean expected return %
+        volatility : float
+            Return volatility %
+        simulations : int
+            Number of simulations
         historical_returns : dict
-            {symbol: Series of daily returns (%)}
-        allocation : dict
-            {symbol: weight %}
-        time_horizon_days : int
-            Number of days to simulate
-        n_simulations : int
-            Number of simulation paths
+            Optional dict of symbol -> returns series for empirical distribution
 
         Returns:
         --------
-        MonteCarloResult with distribution metrics
+        MonteCarloResult with percentiles and statistics
         """
-        # Calculate mean returns and covariance
-        symbols = list(allocation.keys())
-        returns_list = []
+        import numpy as np
 
-        for symbol in symbols:
-            if symbol in historical_returns:
-                returns_list.append(historical_returns[symbol].values)
+        # If historical returns provided, use empirical distribution
+        if historical_returns and isinstance(historical_returns, dict):
+            all_returns = []
+            for symbol, returns_series in historical_returns.items():
+                if hasattr(returns_series, 'values'):
+                    all_returns.extend(returns_series.values)
+                elif isinstance(returns_series, (list, np.ndarray)):
+                    all_returns.extend(returns_series)
 
-        if not returns_list:
-            return MonteCarloResult(
-                n_simulations=n_simulations,
-                expected_return_pct=0,
-                volatility_pct=0,
-                percentile_5th_pct=0,
-                percentile_25th_pct=0,
-                percentile_50th_pct=0,
-                percentile_75th_pct=0,
-                percentile_95th_pct=0,
-                probability_positive_pct=0,
-                best_case_pct=0,
-                worst_case_pct=0,
-            )
+            if all_returns:
+                mean_return = np.mean(all_returns)
+                volatility = np.std(all_returns)
 
-        returns_array = np.array(returns_list).T
-        mean_returns = returns_array.mean(axis=0) * 252  # Annualize
-        cov_matrix = np.cov(returns_array.T) * 252
-
-        # Guard against NaN/Inf in covariance
-        if np.any(np.isnan(cov_matrix)) or np.any(np.isinf(cov_matrix)):
-            logger.warning("NaN/Inf detected in covariance matrix, using identity matrix")
-            cov_matrix = np.eye(len(symbols)) * np.std(mean_returns) ** 2
-
-        # Portfolio mean and vol
-        weights = np.array([allocation.get(s, 0) / 100 for s in symbols])
-        port_mean = np.dot(weights, mean_returns)
-        port_vol_sq = np.dot(weights, np.dot(cov_matrix, weights))
-
-        # Guard against negative variance
-        if port_vol_sq < 0:
-            logger.warning("Negative variance detected, setting to positive value")
-            port_vol_sq = abs(port_vol_sq)
-
-        port_vol = np.sqrt(port_vol_sq)
-
-        # Run simulations
-        np.random.seed(42)
-        simulations = []
-
-        for _ in range(n_simulations):
-            # Daily returns for time horizon
-            daily_returns = np.random.normal(
-                port_mean / 252,
-                port_vol / np.sqrt(252),
-                time_horizon_days,
-            )
-
-            # Cumulative return
-            total_return = (1 + daily_returns / 100).prod() - 1
-            simulations.append(total_return * 100)
-
-        simulations = np.array(simulations)
+        # Simple Monte Carlo: normal distribution
+        returns = np.random.normal(mean_return, volatility, simulations)
 
         return MonteCarloResult(
-            n_simulations=n_simulations,
-            expected_return_pct=float(np.mean(simulations)),
-            volatility_pct=float(np.std(simulations)),
-            percentile_5th_pct=float(np.percentile(simulations, 5)),
-            percentile_25th_pct=float(np.percentile(simulations, 25)),
-            percentile_50th_pct=float(np.percentile(simulations, 50)),
-            percentile_75th_pct=float(np.percentile(simulations, 75)),
-            percentile_95th_pct=float(np.percentile(simulations, 95)),
-            probability_positive_pct=float((simulations > 0).mean() * 100),
-            best_case_pct=float(np.max(simulations)),
-            worst_case_pct=float(np.min(simulations)),
-        )
-
-    def analyze_upside_scenario(
-        self,
-        historical_returns: Dict[str, pd.Series],
-        allocation: Dict[str, float],
-        target_return_pct: float = 10.0,
-    ) -> ScenarioResult:
-        """
-        Analyze upside scenario (market outperforms expectations).
-
-        Parameters:
-        -----------
-        historical_returns : dict
-            {symbol: Series of daily returns (%)}
-        allocation : dict
-            {symbol: weight %}
-        target_return_pct : float
-            Target return for probability calculation
-
-        Returns:
-        --------
-        ScenarioResult for upside scenario
-        """
-        mc_result = self.monte_carlo_simulation(
-            historical_returns=historical_returns,
-            allocation=allocation,
-            n_simulations=5000,
-        )
-
-        # Probability of exceeding target
-        prob_positive = mc_result.probability_positive_pct
-
-        return ScenarioResult(
-            scenario_name="Upside Scenario",
-            probability_pct=prob_positive,
-            expected_return_pct=mc_result.percentile_75th_pct,
-            worst_case_pct=mc_result.percentile_50th_pct,
-            best_case_pct=mc_result.percentile_95th_pct,
-            probability_loss_pct=100 - prob_positive,
-            expected_shortfall_pct=mc_result.percentile_95th_pct,
-        )
-
-    def analyze_downside_scenario(
-        self,
-        historical_returns: Dict[str, pd.Series],
-        allocation: Dict[str, float],
-    ) -> ScenarioResult:
-        """
-        Analyze downside scenario (market underperforms).
-
-        Parameters:
-        -----------
-        historical_returns : dict
-            {symbol: Series of daily returns (%)}
-        allocation : dict
-            {symbol: weight %}
-
-        Returns:
-        --------
-        ScenarioResult for downside scenario
-        """
-        mc_result = self.monte_carlo_simulation(
-            historical_returns=historical_returns,
-            allocation=allocation,
-            n_simulations=5000,
-        )
-
-        # Probability of loss
-        prob_loss = 100 - mc_result.probability_positive_pct
-
-        return ScenarioResult(
-            scenario_name="Downside Scenario",
-            probability_pct=prob_loss,
-            expected_return_pct=mc_result.percentile_25th_pct,
-            worst_case_pct=mc_result.percentile_5th_pct,
-            best_case_pct=mc_result.percentile_50th_pct,
-            probability_loss_pct=prob_loss,
-            expected_shortfall_pct=mc_result.percentile_5th_pct,
-        )
-
-    def base_case_scenario(
-        self,
-        historical_returns: Dict[str, pd.Series],
-        allocation: Dict[str, float],
-    ) -> ScenarioResult:
-        """
-        Analyze base case scenario (historical expectations).
-
-        Returns:
-        --------
-        ScenarioResult for base case scenario
-        """
-        mc_result = self.monte_carlo_simulation(
-            historical_returns=historical_returns,
-            allocation=allocation,
-            n_simulations=5000,
-        )
-
-        return ScenarioResult(
-            scenario_name="Base Case Scenario",
-            probability_pct=50.0,
-            expected_return_pct=mc_result.expected_return_pct,
-            worst_case_pct=mc_result.percentile_25th_pct,
-            best_case_pct=mc_result.percentile_75th_pct,
-            probability_loss_pct=100 - mc_result.probability_positive_pct,
-            expected_shortfall_pct=mc_result.percentile_5th_pct,
+            scenario=scenario,
+            simulations=simulations,
+            mean_return_pct=float(np.mean(returns)),
+            std_return_pct=float(np.std(returns)),
+            percentile_5=float(np.percentile(returns, 5)),
+            percentile_25=float(np.percentile(returns, 25)),
+            percentile_50=float(np.percentile(returns, 50)),
+            percentile_75=float(np.percentile(returns, 75)),
+            percentile_95=float(np.percentile(returns, 95)),
+            sharpe_ratio=float(mean_return / volatility) if volatility > 0 else 0.0,
         )
 
 
 # Global instance
-_scenario_analyzer: ScenarioAnalyzer = None
+_analyzer: ScenarioAnalyzer = None
 
 
 def get_scenario_analyzer() -> ScenarioAnalyzer:
     """Get or create scenario analyzer."""
-    global _scenario_analyzer
-    if _scenario_analyzer is None:
-        _scenario_analyzer = ScenarioAnalyzer()
-    return _scenario_analyzer
+    global _analyzer
+    if _analyzer is None:
+        _analyzer = ScenarioAnalyzer()
+    return _analyzer

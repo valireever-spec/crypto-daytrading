@@ -1,0 +1,11 @@
+[Unit]
+Description=Investing Platform Learning Daemon Timer
+Requires=investing-platform-learning-daemon.service
+
+[Timer]
+OnCalendar=*-*-* 08:30:00
+Persistent=true
+Unit=investing-platform-learning-daemon.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=Investing Platform Learning Daemon
+After=network.target investing-platform.service
+Wants=investing-platform-learning-daemon.timer
+
+[Service]
+Type=oneshot
+User=vali
+WorkingDirectory=/home/vali/projects/crypto-daytrading
+ExecStart=/usr/bin/python3 -c "from backend.api.routers.learning_automation import get_recommendation_tracking_daemon; from backend.analytics.execution_log_loader import load_executions_from_audit_log, get_last_sync_timestamp; daemon = get_recommendation_tracking_daemon(); executions = load_executions_from_audit_log(since_timestamp=get_last_sync_timestamp()); result = daemon.run_daily_sync(executions); print(result)"
+
+RemainAfterExit=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -7,8 +7,12 @@ Accurate execution cost estimation by symbol liquidity tier.
 import logging
 from typing import Dict, Optional
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+TIERS_CONFIG_FILE = Path("config/cost_model_tiers.json")
 
 
 @dataclass
@@ -79,6 +83,12 @@ class RealisticCostModel:
         self.jurisdiction = jurisdiction
         self.realized_gains_rate = realized_gains_rate
         self.tax_rate = self.TAX_RATES.get(jurisdiction, 0.27)
+
+        # Load symbol tiers from config if available
+        custom_tiers = self._load_symbol_tiers_from_config()
+        if custom_tiers:
+            self.SYMBOL_TIERS.update(custom_tiers)
+            logger.info(f"Loaded {len(custom_tiers)} custom symbol tiers from config")
 
     def get_symbol_tier(self, symbol: str) -> str:
         """Get liquidity tier for symbol."""
@@ -238,6 +248,18 @@ class RealisticCostModel:
 
         adjusted_cost = base_execution_bps * volatility_multiplier * spread_multiplier
         return adjusted_cost
+
+    def _load_symbol_tiers_from_config(self) -> Dict[str, str]:
+        """Load custom symbol-to-tier mappings from config file."""
+        if not TIERS_CONFIG_FILE.exists():
+            return {}
+
+        try:
+            data = json.loads(TIERS_CONFIG_FILE.read_text())
+            return data.get("symbol_tiers", {})
+        except Exception as e:
+            logger.warning(f"Failed to load symbol tiers config: {e}")
+            return {}
 
 
 # Global instance
