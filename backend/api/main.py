@@ -21,7 +21,7 @@ from backend.analytics.allocation import init_allocation, get_allocation
 from backend.analytics.strategy_analytics import init_analytics, get_analytics
 from backend.analytics.backtest_engine import BacktestEngine
 from backend.analytics.historical_data import init_historical_service, get_historical_service
-from backend.analytics.regime_detector import init_regime_detector, get_regime_detector
+from backend.analytics.regime_detector import get_regime_detector
 from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader, TradingConfig
 from backend.execution.smart_executor import init_smart_executor
 from backend.analytics.tax_calculator import init_tax_calculator, Jurisdiction
@@ -30,6 +30,7 @@ from backend.analytics.stock_analyzer import init_stock_optimizer
 from backend.api.routers.stocks import router as stocks_router
 from backend.api.routers.backup_analytics import router as backup_analytics_router
 from backend.analytics.portfolio_analyzer import init_portfolio_analyzer
+from backend.api.routers.risk_metrics import router as risk_metrics_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -262,6 +263,7 @@ app = FastAPI(
 app.include_router(tax_router)
 app.include_router(stocks_router)
 app.include_router(backup_analytics_router)  # Backup analytics (standby mode)
+app.include_router(risk_metrics_router)  # Risk metrics API (Phase 321)
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"
