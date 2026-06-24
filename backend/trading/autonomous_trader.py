@@ -910,12 +910,26 @@ class AutonomousTrader:
 
     def get_status(self) -> Dict:
         """Get trader status."""
+        engine = get_paper_trading()
+        daily_pnl = 0.0
+        daily_pnl_pct = 0.0
+        total_equity = 10000.0
+
+        if engine:
+            account = engine.get_account_state()
+            daily_pnl = account.get('daily_pnl', 0.0)
+            total_equity = account.get('total_equity', 10000.0)
+            if total_equity > 0:
+                daily_pnl_pct = (daily_pnl / total_equity) * 100
+
         return {
             'running': self.running,
             'enabled': self.config.enabled,
             'active_positions': 0,  # Would calculate
             'total_trades': len(self.trade_history),
             'recent_trades': self.trade_history[-10:] if self.trade_history else [],
+            'daily_pnl': daily_pnl,
+            'daily_pnl_pct': daily_pnl_pct,
             'config': {
                 'entry_threshold': self.config.entry_threshold,
                 'exit_profit_target': self.config.exit_profit_target,

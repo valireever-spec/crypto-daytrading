@@ -65,8 +65,10 @@ class RedundancyMonitor:
         self.failover_events: List[FailoverEvent] = []
         self.health_check_history: List[Dict] = []
         self.last_failover_time: Optional[datetime] = None
+        self.last_recovery_time: Optional[datetime] = None
         self.uptime_start = datetime.now()
         self._lock = threading.Lock()
+        self.previous_overall_status = None
 
     async def _health_check_with_retry(self, url: str) -> tuple[bool, Optional[str]]:
         """Check health with retry logic and exponential backoff."""
@@ -273,6 +275,27 @@ class RedundancyMonitor:
         await self._send_alert("FAILOVER_ACTIVE",
                                "Primary is down, backup has taken over")
 
+    def _check_recovery(self, current_status: str) -> bool:
+        """Check if system has recovered from failover (BUG FIX #5).
+
+        Returns True if status transitioned from failover to healthy.
+        """
+        if (self.previous_overall_status in ["FAILOVER_ACTIVE", "DOWN", "DEGRADED"] and
+                current_status == "HEALTHY"):
+            self.last_recovery_time = datetime.now()
+            self.failover_active = False
+
+            event = FailoverEvent("RECOVERY_DETECTED", {
+                "reason": "Primary has recovered, resuming active-passive redundancy",
+                "timestamp": self.last_recovery_time.isoformat(),
+                "previous_status": self.previous_overall_status
+            })
+            self._record_failover_event(event)
+            logger.info(f"System recovery detected: {self.previous_overall_status} → {current_status}")
+            return True
+
+        return False
+
     def _check_graceful_degradation(self) -> List[str]:
         """Check if we should degrade services due to high replication lag."""
         actions = []
@@ -348,6 +371,9 @@ class RedundancyMonitor:
             overall_status = "DOWN"
             redundancy_level = "NO_REDUNDANCY"
 
+        # Check for recovery (BUG FIX #5)
+        recovery_detected = self._check_recovery(overall_status)
+
         # Determine replication lag severity
         if lag < 0:
             lag_status = "UNKNOWN"
@@ -364,6 +390,9 @@ class RedundancyMonitor:
         # Calculate uptime
         uptime_seconds = (datetime.now() - self.uptime_start).total_seconds()
         uptime_hours = uptime_seconds / 3600
+
+        # Update previous status for next call
+        self.previous_overall_status = overall_status
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -389,6 +418,10 @@ class RedundancyMonitor:
                 "active": self.failover_active,
                 "last_failover_time": self.last_failover_time.isoformat() if self.last_failover_time else None,
                 "readiness": failover_ready
+            },
+            "recovery": {
+                "detected": recovery_detected,
+                "last_recovery_time": self.last_recovery_time.isoformat() if self.last_recovery_time else None
             },
             "degradation": {
                 "actions": degradation_actions,
