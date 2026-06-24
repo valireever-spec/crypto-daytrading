@@ -29,6 +29,7 @@ from backend.api.routers.tax import router as tax_router
 from backend.api.routers.autonomous import router as autonomous_router
 from backend.api.routers.monitoring import router as monitoring_router
 from backend.api.routers.risk_management import router as risk_router
+from backend.api.routers.multi_asset import router as multi_asset_router
 from backend.analytics.stock_analyzer import init_stock_optimizer
 from backend.api.routers.stocks import router as stocks_router
 from backend.api.routers.backup_analytics import router as backup_analytics_router
@@ -276,6 +277,7 @@ app.include_router(tax_router)
 app.include_router(autonomous_router)
 app.include_router(monitoring_router)
 app.include_router(risk_router)
+app.include_router(multi_asset_router)
 app.include_router(stocks_router)
 app.include_router(backup_analytics_router)  # Backup analytics (standby mode)
 app.include_router(risk_metrics_router)  # Risk metrics API (Phase 321)
