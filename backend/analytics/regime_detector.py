@@ -39,7 +39,76 @@ class RegimeDetector:
 
     def detect_regime(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Detect market regime from OHLCV data."""
-        if df.empty or len(df) < max(self.lookback_trend, self.ma_window):
+        try:
+            if df.empty or len(df) < max(self.lookback_trend, self.ma_window):
+                return {
+                    "regime": "unknown",
+                    "trend_strength": 0.0,
+                    "trend_pct": 0.0,
+                    "volatility_level": "unknown",
+                    "volatility_ratio": 1.0,
+                    "rsi_value": 50.0,
+                    "support": None,
+                    "resistance": None,
+                    "recommendation": "Insufficient data",
+                }
+
+            closes = df["Close"]
+
+            # Calculate trend
+            close_current = float(closes.iloc[-1])
+            close_lookback = float(closes.iloc[-self.lookback_trend])
+            trend_pct = (close_current - close_lookback) / close_lookback
+            trend_strength = np.tanh(trend_pct * 3)
+
+            # Calculate volatility
+            returns = closes.pct_change().dropna()
+            vol_recent = returns.iloc[-20:].std() if len(returns) >= 20 else returns.std()
+            vol_historical = returns.std()
+            vol_ratio = vol_recent / vol_historical if vol_historical > 0 else 1.0
+
+            if vol_ratio > 1.5:
+                volatility_level = "extreme"
+            elif vol_ratio > 1.2:
+                volatility_level = "high"
+            elif vol_ratio > 0.8:
+                volatility_level = "medium"
+            else:
+                volatility_level = "low"
+
+            # Calculate RSI
+            rsi_value = self._calculate_rsi(closes)
+
+            # Calculate support and resistance
+            support, resistance = self._calculate_support_resistance(df)
+
+            # Determine regime
+            if volatility_level == "extreme":
+                regime = "VOLATILE"
+                recommendation = "⚠️ Extreme volatility: reduce position size, tighten stops"
+            elif trend_strength > 0.3 and volatility_level in ["low", "medium"]:
+                regime = "BULL"
+                recommendation = "✅ Bull market: aggressive entry, wider stops"
+            elif trend_strength < -0.3 and volatility_level in ["low", "medium"]:
+                regime = "BEAR"
+                recommendation = "⛔ Bear market: conservative entry, tight stops"
+            else:
+                regime = "SIDEWAYS"
+                recommendation = "↔️ Sideways market: mean-reversion strategy"
+
+            return {
+                "regime": regime,
+                "trend_strength": round(trend_strength, 3),
+                "trend_pct": round(trend_pct * 100, 1),
+                "volatility_level": volatility_level,
+                "volatility_ratio": round(vol_ratio, 2),
+                "rsi_value": round(rsi_value, 1),
+                "support": round(support, 2) if support else None,
+                "resistance": round(resistance, 2) if resistance else None,
+                "recommendation": recommendation,
+            }
+        except Exception as e:
+            logger.error(f"Regime detection error: {e}")
             return {
                 "regime": "unknown",
                 "trend_strength": 0.0,
@@ -49,63 +118,8 @@ class RegimeDetector:
                 "rsi_value": 50.0,
                 "support": None,
                 "resistance": None,
-                "recommendation": "Insufficient data",
+                "recommendation": "Error during calculation",
             }
-
-        closes = df["Close"]
-
-        # Calculate trend
-        close_current = float(closes.iloc[-1])
-        close_lookback = float(closes.iloc[-self.lookback_trend])
-        trend_pct = (close_current - close_lookback) / close_lookback
-        trend_strength = np.tanh(trend_pct * 3)
-
-        # Calculate volatility
-        returns = closes.pct_change().dropna()
-        vol_recent = returns.iloc[-20:].std() if len(returns) >= 20 else returns.std()
-        vol_historical = returns.std()
-        vol_ratio = vol_recent / vol_historical if vol_historical > 0 else 1.0
-
-        if vol_ratio > 1.5:
-            volatility_level = "extreme"
-        elif vol_ratio > 1.2:
-            volatility_level = "high"
-        elif vol_ratio > 0.8:
-            volatility_level = "medium"
-        else:
-            volatility_level = "low"
-
-        # Calculate RSI
-        rsi_value = self._calculate_rsi(closes)
-
-        # Calculate support and resistance
-        support, resistance = self._calculate_support_resistance(df)
-
-        # Determine regime
-        if volatility_level == "extreme":
-            regime = "VOLATILE"
-            recommendation = "⚠️ Extreme volatility: reduce position size, tighten stops"
-        elif trend_strength > 0.3 and volatility_level in ["low", "medium"]:
-            regime = "BULL"
-            recommendation = "✅ Bull market: aggressive entry, wider stops"
-        elif trend_strength < -0.3 and volatility_level in ["low", "medium"]:
-            regime = "BEAR"
-            recommendation = "⛔ Bear market: conservative entry, tight stops"
-        else:
-            regime = "SIDEWAYS"
-            recommendation = "↔️ Sideways market: mean-reversion strategy"
-
-        return {
-            "regime": regime,
-            "trend_strength": round(trend_strength, 3),
-            "trend_pct": round(trend_pct * 100, 1),
-            "volatility_level": volatility_level,
-            "volatility_ratio": round(vol_ratio, 2),
-            "rsi_value": round(rsi_value, 1),
-            "support": round(support, 2) if support else None,
-            "resistance": round(resistance, 2) if resistance else None,
-            "recommendation": recommendation,
-        }
 
     def get_adaptive_thresholds(self, regime_info: Dict[str, Any], base_entry: float = 55.0) -> Dict[str, float]:
         """Get regime-aware entry and exit thresholds."""
@@ -158,14 +172,18 @@ class RegimeDetector:
         """Calculate RSI."""
         if len(closes) < window:
             return 50.0
-        delta = closes.diff()
-        gain = delta.where(delta > 0, 0).rolling(window=window).mean()
-        loss = -delta.where(delta < 0, 0).rolling(window=window).mean()
-        rs = gain / loss.replace(0, 0.0001)
-        rsi = 100 - (100 / (1 + rs))
         try:
+            delta = closes.diff()
+            gain = delta.where(delta > 0, 0).rolling(window=window).mean()
+            loss = -delta.where(delta < 0, 0).rolling(window=window).mean()
+            # Ensure index alignment before division
+            gain = gain.fillna(0)
+            loss = loss.fillna(0)
+            rs = gain / loss.where(loss != 0, 0.0001)
+            rsi = 100 - (100 / (1 + rs.where(rs > 0, 0.0001)))
             return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
-        except:
+        except Exception as e:
+            logger.debug(f"RSI calculation failed: {e}")
             return 50.0
 
     def _calculate_support_resistance(self, df: pd.DataFrame, window: int = 20) -> Tuple[float, float]:
