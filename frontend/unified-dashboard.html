@@ -413,7 +413,8 @@
     <div class="container">
         <!-- DASHBOARD TAB -->
         <div id="dashboard" class="tab-content active">
-            <div class="button-group">
+            <div id="dashboard-content">
+                <div class="button-group">
                 <button onclick="refreshAll()">🔄 Refresh All</button>
                 <button class="secondary" onclick="toggleAutoRefresh()">⏸ Auto-Refresh (ON)</button>
                 <button class="secondary" onclick="exportDashboard()">💾 Export</button>
@@ -530,11 +531,13 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
 
         <!-- MARKET STATUS TAB -->
         <div id="market" class="tab-content">
-            <div class="button-group">
+            <div id="market-content">
+                <div class="button-group">
                 <button onclick="refreshMarket()">🔄 Refresh</button>
             </div>
 
@@ -627,11 +630,13 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
 
         <!-- STRATEGIES TAB -->
         <div id="strategies" class="tab-content">
-            <div class="button-group">
+            <div id="strategies-content">
+                <div class="button-group">
                 <button onclick="refreshStrategies()">🔄 Refresh</button>
             </div>
 
@@ -679,11 +684,13 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
 
         <!-- AUTONOMOUS TRADER TAB -->
         <div id="autonomous" class="tab-content">
-            <div class="button-group">
+            <div id="autonomous-content">
+                <div class="button-group">
                 <button onclick="refreshAutonomous()">🔄 Refresh</button>
                 <button onclick="startAutonomousTrader()" style="background: #4CAF50;">▶️ Start Trading</button>
                 <button onclick="stopAutonomousTrader()" style="background: #f44336;">⏹ Stop Trading</button>
@@ -762,11 +769,13 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
 
         <!-- HEALTH TAB -->
         <div id="health" class="tab-content">
-            <div class="button-group">
+            <div id="health-content">
+                <div class="button-group">
                 <button onclick="refreshHealth()">🔄 Refresh</button>
             </div>
 
@@ -795,6 +804,7 @@
                     <h2>📡 Connection Details</h2>
                     <div id="health-details" class="code-block">Loading...</div>
                 </div>
+            </div>
             </div>
         </div>
 
