@@ -7,8 +7,6 @@ from datetime import datetime, timedelta
 
 from backend.analytics.regime_detector import (
     RegimeDetector,
-    RegimeMetrics,
-    init_regime_detector,
     get_regime_detector,
 )
 

@@ -6,7 +6,6 @@ from backend.execution.smart_executor import (
     init_smart_executor, get_smart_executor
 )
 from backend.exchange.paper_trading import init_paper_trading, get_paper_trading
-from backend.analytics.regime_detector import init_regime_detector
 
 
 @pytest.fixture

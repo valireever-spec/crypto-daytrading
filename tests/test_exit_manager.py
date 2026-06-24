@@ -7,7 +7,6 @@ from backend.execution.exit_manager import (
     ExitManager, Position, ExitSignal, ExitReason,
     init_exit_manager, get_exit_manager
 )
-from backend.analytics.regime_detector import init_regime_detector
 
 
 @pytest.fixture

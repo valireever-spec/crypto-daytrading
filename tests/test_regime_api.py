@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 
 from backend.api.main import app
 from backend.analytics.historical_data import init_historical_service
-from backend.analytics.regime_detector import init_regime_detector
 
 
 @pytest.fixture

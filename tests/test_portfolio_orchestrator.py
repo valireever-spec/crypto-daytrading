@@ -6,7 +6,6 @@ from backend.execution.portfolio_orchestrator import (
     init_portfolio_orchestrator, get_portfolio_orchestrator
 )
 from backend.exchange.paper_trading import init_paper_trading
-from backend.analytics.regime_detector import init_regime_detector
 
 
 @pytest.fixture
