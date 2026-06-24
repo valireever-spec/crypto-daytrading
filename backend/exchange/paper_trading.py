@@ -52,7 +52,7 @@ class PaperTradingEngine:
     SLIPPAGE_MARKET = 0.001  # 0.1% for market orders
     SLIPPAGE_LIMIT = 0.0005  # 0.05% for limit orders
     FEE_RATE = 0.001  # 0.1% trading fee (Binance)
-    AUDIT_LOG = Path("logs/paper_trades.jsonl")
+    AUDIT_LOG = Path("logs/trades.jsonl")
 
     def __init__(self, starting_capital: float = 10000.0):
         """Initialize paper trading engine.

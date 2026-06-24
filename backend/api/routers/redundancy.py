@@ -24,7 +24,7 @@ BACKUP_API_URL = os.getenv("BACKUP_API_URL", BACKUP_API_URL_LOCAL)
 
 REPLICATION_LAG_WARNING_THRESHOLD = 2.0  # seconds
 REPLICATION_LAG_CRITICAL_THRESHOLD = 5.0  # seconds
-HEALTH_CHECK_TIMEOUT = 60  # seconds (backup service takes 60+ seconds to fully initialize)
+HEALTH_CHECK_TIMEOUT = 30  # seconds (was 60s, reduced for faster failover detection)
 ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "")  # Slack webhook
 
 # Retry configuration
