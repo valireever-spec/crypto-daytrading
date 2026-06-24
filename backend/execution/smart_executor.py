@@ -338,9 +338,14 @@ class SmartExecutor:
 
             detector = get_regime_detector()
             if detector:
-                rules = detector.get_regime_trading_rules(regime)
-                stop_price = price * (1 - rules["stop_loss_pct"] / 100)
-                target_price = price * (1 + rules["take_profit_pct"] / 100)
+                regime_info = {
+                    "regime": regime.lower(),
+                    "volatility_level": "medium",
+                    "rsi_value": 50.0,
+                }
+                thresholds = detector.get_adaptive_thresholds(regime_info)
+                stop_price = price * (1 - thresholds.get("stop_loss", 0.02))
+                target_price = price * (1 + thresholds.get("profit_target", 0.05))
             else:
                 stop_price = price * 0.98
                 target_price = price * 1.02
