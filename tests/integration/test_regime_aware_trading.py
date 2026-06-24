@@ -370,7 +370,7 @@ class TestRegimeAwareTrading:
         mock_engine.get_positions = MagicMock(return_value=[])
 
         with patch('backend.trading.autonomous_trader.get_paper_trading', return_value=mock_engine), \
-             patch('backend.trading.autonomous_trader.AutonomousTrader._calculate_signal') as mock_signal, \
+             patch('backend.trading.autonomous_trader.AutonomousTrader._calculate_signal_blocking') as mock_signal, \
              patch('backend.trading.autonomous_trader.AutonomousTrader._get_adaptive_entry_threshold') as mock_threshold, \
              patch('backend.trading.autonomous_trader.get_signal_explainer') as mock_explainer:
 
