@@ -50,6 +50,7 @@ from backend.api.routers.rebalancing import router as rebalancing_router
 from backend.api.routers.production_hardening import router as production_hardening_router
 from backend.api.routers.learning_feedback import router as learning_feedback_router
 from backend.api.routers.learning_automation import router as learning_automation_router
+from backend.api.routers.regime import router as regime_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -381,6 +382,7 @@ app.include_router(rebalancing_router)  # Constrained rebalancing (Phase 327)
 app.include_router(production_hardening_router)  # Production hardening (Phase 328)
 app.include_router(learning_feedback_router)  # Learning & feedback (Phase 329)
 app.include_router(learning_automation_router)  # Learning automation (Phase 330)
+app.include_router(regime_router)  # Market regime analysis (Phase 336+)
 
 # Mount frontend
 frontend_path = Path(__file__).parent.parent.parent / "frontend"
@@ -1810,6 +1812,51 @@ async def dashboard():
         return FileResponse(unified_path, media_type="text/html")
 
     raise HTTPException(status_code=404, detail="Dashboard not found")
+
+
+@app.get("/transactions.html")
+async def transactions_page():
+    """Serve transactions.html page."""
+    transactions_path = Path(__file__).parent.parent.parent / "frontend" / "transactions.html"
+    if transactions_path.exists():
+        return FileResponse(transactions_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Transactions page not found")
+
+
+@app.get("/transactions")
+async def transactions_redirect():
+    """Redirect /transactions to transactions.html."""
+    transactions_path = Path(__file__).parent.parent.parent / "frontend" / "transactions.html"
+    if transactions_path.exists():
+        return FileResponse(transactions_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Transactions page not found")
+
+
+@app.get("/monitoring")
+async def monitoring_page():
+    """Serve monitoring-dashboard.html page."""
+    monitoring_path = Path(__file__).parent.parent.parent / "frontend" / "monitoring-dashboard.html"
+    if monitoring_path.exists():
+        return FileResponse(monitoring_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Monitoring page not found")
+
+
+@app.get("/autonomous")
+async def autonomous_page():
+    """Serve autonomous-dashboard.html page."""
+    autonomous_path = Path(__file__).parent.parent.parent / "frontend" / "autonomous-dashboard.html"
+    if autonomous_path.exists():
+        return FileResponse(autonomous_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Autonomous page not found")
+
+
+@app.get("/learning")
+async def learning_page():
+    """Serve learning_dashboard.html page."""
+    learning_path = Path(__file__).parent.parent.parent / "frontend" / "learning_dashboard.html"
+    if learning_path.exists():
+        return FileResponse(learning_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Learning page not found")
 
 
 if __name__ == "__main__":

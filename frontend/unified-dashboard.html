@@ -407,7 +407,7 @@
         <button class="tab-button" data-tab="autonomous">🤖 Autonomous Trader</button>
         <button class="tab-button" data-tab="health">🏥 Health</button>
         <button class="tab-button" data-tab="api">🔌 API Reference</button>
-        <button class="tab-button" onclick="window.location.href='transactions.html'" style="margin-left: auto; background: #667eea; color: white; border-radius: 4px;">📊 Transaction History</button>
+        <button class="tab-button" onclick="window.location.href='/transactions'" style="margin-left: auto; background: #667eea; color: white; border-radius: 4px;">📊 Transaction History</button>
     </div>
 
     <div class="container">
@@ -853,19 +853,192 @@
         </div>
     </div>
 
+    <!-- API Utility Functions: Timeout, Retry, Error Handling (Inlined) -->
+    <script>
+// Fetch with timeout support
+async function fetchWithTimeout(url, options = {}, timeout = 15000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout - API took too long to respond');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Fetch with retry logic
+async function fetchWithRetry(url, options = {}, maxRetries = 3, initialDelay = 1000) {
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fetchWithTimeout(url, options, 15000);
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries - 1) {
+        const delay = initialDelay * Math.pow(2, attempt);
+        console.warn(`Attempt ${attempt + 1} failed, retrying in ${delay}ms:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
+// Safe Promise.all that handles partial failures
+async function safePromiseAll(promises, fallbacks = {}) {
+  const results = await Promise.allSettled(promises);
+  return results.map((result, index) =>
+    result.status === 'fulfilled' ? result.value : fallbacks[index] || null
+  );
+}
+
+// Safe DOM element access
+function safeGetElement(id) {
+  const element = document.getElementById(id);
+  if (!element) {
+    console.warn(`Element with ID "${id}" not found`);
+    return null;
+  }
+  return element;
+}
+
+// Safe classList manipulation
+function safeAddClass(element, className) {
+  if (element && element.classList) {
+    element.classList.add(className);
+  }
+}
+
+function safeRemoveClass(element, className) {
+  if (element && element.classList) {
+    element.classList.remove(className);
+  }
+}
+
+// Safe innerHTML with fallback
+function safeSetHTML(elementId, html) {
+  const element = safeGetElement(elementId);
+  if (element) {
+    element.innerHTML = html;
+  }
+}
+
+function safeSetText(elementId, text) {
+  const element = safeGetElement(elementId);
+  if (element) {
+    element.textContent = text;
+  }
+}
+
+// Input validation helpers
+function validatePositiveNumber(value, fieldName) {
+  const num = parseFloat(value);
+  if (isNaN(num) || num <= 0) {
+    return { valid: false, error: `${fieldName} must be a positive number` };
+  }
+  return { valid: true };
+}
+
+function validatePercentage(value, fieldName) {
+  const num = parseFloat(value);
+  if (isNaN(num) || num < 0 || num > 100) {
+    return { valid: false, error: `${fieldName} must be between 0 and 100` };
+  }
+  return { valid: true };
+}
+
+function validateSymbol(symbol) {
+  if (!symbol || typeof symbol !== 'string' || symbol.length === 0) {
+    return { valid: false, error: 'Symbol is required' };
+  }
+  return { valid: true };
+}
+
+// Safe numeric formatting
+function safeFormatNumber(value, decimals = 2) {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '—';
+  }
+  return parseFloat(value).toFixed(decimals);
+}
+
+// Error display helper
+function showError(elementId, errorMessage) {
+  safeSetHTML(elementId, `<div class="error-message" style="color: red; padding: 10px; background: #ffebee; border-radius: 4px;">❌ ${errorMessage}</div>`);
+}
+
+// Loading state helper
+function setLoadingState(elementId, isLoading) {
+  const element = safeGetElement(elementId);
+  if (!element) return;
+
+  if (isLoading) {
+    element.innerHTML = '<div class="loading" style="padding: 20px; text-align: center;">⏳ Loading...</div>';
+    element.style.opacity = '0.6';
+  } else {
+    element.style.opacity = '1';
+  }
+}
+
+// Safe JSON parsing
+function safeParseJSON(jsonString, fallback = {}) {
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error('JSON parse error:', error);
+    return fallback;
+  }
+}
+
+// Validate API response structure
+function validateResponse(response, requiredFields = []) {
+  if (!response || typeof response !== 'object') {
+    return { valid: false, error: 'Invalid response format' };
+  }
+
+  for (const field of requiredFields) {
+    if (!(field in response)) {
+      return { valid: false, error: `Missing required field: ${field}` };
+    }
+  }
+
+  return { valid: true };
+}
+    </script>
+
     <script>
         const API = 'http://127.0.0.1:8001/api';
         let autoRefreshEnabled = true;
         let autoRefreshInterval = null;
 
-        // Tab switching
+        // Tab switching - FIX: Added null check for DOM elements
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.addEventListener('click', () => {
                 const tabName = btn.dataset.tab;
-                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById(tabName).classList.add('active');
+                if (!tabName) return; // Skip if no tab name
+
+                document.querySelectorAll('.tab-button').forEach(b => {
+                    if (b && b.classList) b.classList.remove('active');
+                });
+                document.querySelectorAll('.tab-content').forEach(t => {
+                    if (t && t.classList) t.classList.remove('active');
+                });
+
+                if (btn && btn.classList) btn.classList.add('active');
+
+                const tabElement = document.getElementById(tabName);
+                if (tabElement && tabElement.classList) {
+                    tabElement.classList.add('active');
+                } else {
+                    console.warn(`Tab element "${tabName}" not found in DOM`);
+                }
 
                 if (tabName === 'market') refreshMarket();
                 else if (tabName === 'strategies') refreshStrategies();
@@ -875,16 +1048,23 @@
         });
 
         async function refreshAll() {
-            await Promise.all([refreshDashboard(), refreshMarket(), refreshHealth(), refreshAutonomous()]);
+            // Use Promise.allSettled so one failure doesn't break the UI
+            await Promise.allSettled([refreshDashboard(), refreshMarket(), refreshHealth(), refreshAutonomous()]);
         }
 
         async function refreshDashboard() {
             try {
-                const [dash, pos, trades] = await Promise.all([
-                    fetch(`${API}/dashboard`).then(r => r.json()),
-                    fetch(`${API}/paper/positions`).then(r => r.json()),
-                    fetch(`${API}/paper/trades?limit=10`).then(r => r.json())
+                // Use fetchWithRetry for resilience + Promise.allSettled for partial failures
+                const results = await Promise.allSettled([
+                    fetchWithRetry(`${API}/dashboard`),
+                    fetchWithRetry(`${API}/paper/positions`),
+                    fetchWithRetry(`${API}/paper/trades?limit=10`)
                 ]);
+
+                // Extract results with fallbacks
+                const dash = results[0].status === 'fulfilled' ? results[0].value : { account: {}, metrics: {}, positions: [] };
+                const pos = results[1].status === 'fulfilled' ? results[1].value : { positions: [] };
+                const trades = results[2].status === 'fulfilled' ? results[2].value : { trades: [] };
 
                 updateBotStatus(true);
                 const account = dash.account;
@@ -917,11 +1097,17 @@
 
         async function refreshMarket() {
             try {
-                const [regime, health, pricesResp] = await Promise.all([
-                    fetch(`${API}/regime/detect?symbol=BTCUSDT`, { method: 'POST' }).then(r => r.json()),
-                    fetch(`${API}/health`).then(r => r.json()),
-                    fetch(`${API}/prices`).then(r => r.json())
+                // Use fetchWithRetry for resilience + Promise.allSettled for partial failures
+                const results = await Promise.allSettled([
+                    fetchWithRetry(`${API}/regime/detect?symbol=BTCUSDT`, { method: 'POST' }),
+                    fetchWithRetry(`${API}/health`),
+                    fetchWithRetry(`${API}/prices`)
                 ]);
+
+                // Extract results with fallbacks
+                const regime = results[0].status === 'fulfilled' ? results[0].value : { regime: 'unknown', confidence: 0 };
+                const health = results[1].status === 'fulfilled' ? results[1].value : { status: 'unknown' };
+                const pricesResp = results[2].status === 'fulfilled' ? results[2].value : { prices: {}, stream_status: {} };
 
                 if (!regime || !regime.regime) {
                     console.warn('Invalid regime response:', regime);
@@ -997,10 +1183,15 @@
 
         async function refreshStrategies() {
             try {
-                const [stats, alloc] = await Promise.all([
-                    fetch(`${API}/strategies/all-stats`).then(r => r.json()),
-                    fetch(`${API}/allocation`).then(r => r.json())
+                // Use fetchWithRetry for resilience + Promise.allSettled for partial failures
+                const results = await Promise.allSettled([
+                    fetchWithRetry(`${API}/strategies/all-stats`),
+                    fetchWithRetry(`${API}/allocation`)
                 ]);
+
+                // Extract results with fallbacks
+                const stats = results[0].status === 'fulfilled' ? results[0].value : { strategies: {} };
+                const alloc = results[1].status === 'fulfilled' ? results[1].value : { allocation: {} };
 
                 const tbody = document.getElementById('strategies-table');
                 const rows = Object.entries(stats.strategies || {}).map(([name, s]) => `
@@ -1037,11 +1228,19 @@
 
         async function refreshHealth() {
             try {
-                const health = await fetch(`${API}/health`).then(r => r.json());
-                document.getElementById('health-status').textContent = health.status;
-                document.getElementById('health-mode').textContent = health.mode;
-                document.getElementById('health-ws').textContent = health.websocket.connected ? 'Connected' : 'Disconnected';
-                document.getElementById('health-details').textContent = JSON.stringify(health, null, 2);
+                // Use fetchWithRetry for resilience
+                const health = await fetchWithRetry(`${API}/health`);
+                const healthEl = document.getElementById('health-status');
+                if (healthEl) healthEl.textContent = health.status || 'unknown';
+
+                const modeEl = document.getElementById('health-mode');
+                if (modeEl) modeEl.textContent = health.mode || 'unknown';
+
+                const wsEl = document.getElementById('health-ws');
+                if (wsEl) wsEl.textContent = (health.websocket && health.websocket.connected) ? 'Connected' : 'Disconnected';
+
+                const detailsEl = document.getElementById('health-details');
+                if (detailsEl) detailsEl.textContent = JSON.stringify(health || {}, null, 2);
             } catch (e) {
                 console.error('Health error:', e);
                 updateBotStatus(false);
@@ -1050,21 +1249,50 @@
 
         async function refreshAutonomous() {
             try {
-                const status = await fetch(`${API}/autonomous/status`).then(r => r.json());
-                document.getElementById('autonomous-status').textContent = status.running ? 'RUNNING' : 'STOPPED';
-                document.getElementById('autonomous-status').style.color = status.running ? '#4CAF50' : '#f44336';
-                document.getElementById('autonomous-enabled').textContent = status.enabled ? 'YES' : 'NO';
-                document.getElementById('autonomous-enabled').style.color = status.enabled ? '#4CAF50' : '#ff9800';
-                document.getElementById('autonomous-positions').textContent = status.active_positions;
-                document.getElementById('autonomous-trades').textContent = status.total_trades;
+                // Use fetchWithRetry for resilience
+                const status = await fetchWithRetry(`${API}/autonomous/status`);
 
-                const config = status.config;
-                document.getElementById('config-entry').textContent = config.entry_threshold.toFixed(1);
-                document.getElementById('config-profit').textContent = (config.exit_profit_target * 100).toFixed(1) + '%';
-                document.getElementById('config-stop').textContent = (config.exit_stop_loss * 100).toFixed(1) + '%';
-                document.getElementById('config-size').textContent = (config.position_size_pct * 100).toFixed(1) + '%';
-                document.getElementById('config-max').textContent = config.max_positions;
-                document.getElementById('config-symbols').textContent = config.symbols.join(', ');
+                const statusEl = document.getElementById('autonomous-status');
+                if (statusEl) {
+                    statusEl.textContent = status.running ? 'RUNNING' : 'STOPPED';
+                    statusEl.style.color = status.running ? '#4CAF50' : '#f44336';
+                }
+
+                const enabledEl = document.getElementById('autonomous-enabled');
+                if (enabledEl) {
+                    enabledEl.textContent = status.enabled ? 'YES' : 'NO';
+                    enabledEl.style.color = status.enabled ? '#4CAF50' : '#ff9800';
+                }
+
+                const posEl = document.getElementById('autonomous-positions');
+                if (posEl) posEl.textContent = status.active_positions || 0;
+
+                const tradesEl = document.getElementById('autonomous-trades');
+                if (tradesEl) tradesEl.textContent = status.total_trades || 0;
+
+                const config = status.config || {};
+                // FIX: Added null checks and default values
+                const entryEl = document.getElementById('config-entry');
+                if (entryEl) entryEl.textContent = (config.entry_threshold || 0).toFixed(1);
+
+                const profitEl = document.getElementById('config-profit');
+                if (profitEl) profitEl.textContent = ((config.exit_profit_target || 0) * 100).toFixed(1) + '%';
+
+                const stopEl = document.getElementById('config-stop');
+                if (stopEl) stopEl.textContent = ((config.exit_stop_loss || 0) * 100).toFixed(1) + '%';
+
+                const sizeEl = document.getElementById('config-size');
+                if (sizeEl) {
+                  // FIX: position_size_pct doesn't exist, use default or hide
+                  const positionSize = config.position_size_pct || config.position_size || 0.02;
+                  sizeEl.textContent = (positionSize * 100).toFixed(1) + '%';
+                }
+
+                const maxEl = document.getElementById('config-max');
+                if (maxEl) maxEl.textContent = config.max_positions || 5;
+
+                const symbolsEl = document.getElementById('config-symbols');
+                if (symbolsEl) symbolsEl.textContent = (config.symbols || []).join(', ') || 'None';
 
                 const tradesTable = document.getElementById('autonomous-trades-table');
                 if (status.recent_trades && status.recent_trades.length > 0) {
