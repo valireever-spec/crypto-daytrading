@@ -235,6 +235,7 @@ async def get_learning_pipeline_health() -> Dict[str, Any]:
         from backend.analytics.recommendation_tracker import get_recommendation_tracker
         from backend.analytics.scenario_probability_learner import get_scenario_probability_learner
         from backend.analytics.cost_model_calibrator import get_cost_model_calibrator
+        from datetime import timedelta
 
         tracker = get_recommendation_tracker()
         learner = get_scenario_probability_learner()
@@ -242,24 +243,50 @@ async def get_learning_pipeline_health() -> Dict[str, Any]:
         daemon = get_recommendation_tracking_daemon()
         scheduler = get_scenario_auto_reweighting_scheduler()
 
-        # Determine component statuses
+        now = datetime.now(timezone.utc)
+
+        # Determine component statuses with staleness checks
         tracker_status = "operational" if tracker.recommendations else "initializing"
+
+        # Check if tracker data is stale (>30 days old)
+        if tracker.recommendations:
+            latest_rec = max(
+                (datetime.fromisoformat(r.timestamp) for r in tracker.recommendations),
+                default=now
+            )
+            if now - latest_rec > timedelta(days=30):
+                tracker_status = "stale"
+
         learner_status = "operational"
         calibrator_status = "learning" if len(calibrator.executions) < 20 else "confident"
-        daemon_status = "ready" if daemon.last_run else "awaiting_first_run"
+
+        daemon_status = "ready"
+        if daemon.last_run:
+            last_run = datetime.fromisoformat(daemon.last_run)
+            if now - last_run > timedelta(hours=24):
+                daemon_status = "stale"
+        else:
+            daemon_status = "awaiting_first_run"
+
         scheduler_status = "ready"
+        if scheduler.last_reweight_timestamp:
+            last_reweight = datetime.fromisoformat(scheduler.last_reweight_timestamp)
+            if now - last_reweight > timedelta(days=40):  # Monthly + buffer
+                scheduler_status = "stale"
 
         # Overall status
         all_statuses = [tracker_status, learner_status, calibrator_status, daemon_status, scheduler_status]
         if all(s in ["operational", "ready", "confident"] for s in all_statuses):
             overall = "healthy"
+        elif any(s == "stale" for s in all_statuses):
+            overall = "degraded"
         elif all(s != "error" for s in all_statuses):
             overall = "degraded"
         else:
             overall = "error"
 
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": now.isoformat(),
             "overall_status": overall,
             "components": {
                 "recommendation_tracker": tracker_status,
@@ -274,6 +301,11 @@ async def get_learning_pipeline_health() -> Dict[str, Any]:
                 "executions_recorded": len(calibrator.executions),
                 "daemon_last_run": daemon.last_run,
                 "scheduler_reweight_count": len(scheduler.reweight_history),
+            },
+            "thresholds": {
+                "recommendation_stale_days": 30,
+                "daemon_stale_hours": 24,
+                "scheduler_stale_days": 40,
             },
         }
 
