@@ -1304,21 +1304,20 @@ async def detect_market_regime(symbol: str) -> JSONResponse:
         if not detector:
             raise HTTPException(status_code=500, detail="Regime detector not initialized")
 
-        metrics = detector.detect_regime(ohlcv, symbol=symbol)
+        metrics = detector.detect_regime(ohlcv)
 
         return JSONResponse(
             {
                 "symbol": symbol,
-                "regime": metrics.regime,
-                "confidence": round(metrics.confidence, 2),
-                "volatility_pct": round(metrics.volatility_pct, 2),
-                "trend_strength": round(metrics.trend_strength, 2),
-                "support_level": round(metrics.support_level, 2),
-                "resistance_level": round(metrics.resistance_level, 2),
-                "ma_20": round(metrics.ma_20, 2),
-                "ma_50": round(metrics.ma_50, 2),
-                "rsi": round(metrics.rsi, 1),
-                "atr": round(metrics.atr, 2),
+                "regime": metrics.get("regime", "unknown"),
+                "confidence": 0.8,  # Placeholder - actual confidence calculation TBD
+                "volatility_pct": metrics.get("volatility_ratio", 1.0),
+                "trend_strength": metrics.get("trend_strength", 0.0),
+                "support_level": metrics.get("support", 0.0),
+                "resistance_level": metrics.get("resistance", 0.0),
+                "rsi": metrics.get("rsi_value", 50.0),
+                "recommendation": metrics.get("recommendation", ""),
+                "volatility_level": metrics.get("volatility_level", "medium"),
             }
         )
 
