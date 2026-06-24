@@ -299,6 +299,163 @@ async def get_learned_cost_estimates(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/dashboard/accuracy-metrics")
+async def get_dashboard_accuracy_metrics() -> Dict[str, Any]:
+    """
+    Get recommendation accuracy metrics for dashboard.
+
+    Returns:
+    --------
+    {
+        "overall_accuracy_pct": 75.2,
+        "total_recommendations": 47,
+        "correct_direction": 38,
+        "scenario_accuracy": {
+            "base": 80.5,
+            "upside": 70.2,
+            "downside": 65.1
+        },
+        "symbol_accuracy": {
+            "AAPL": 78.3,
+            "MSFT": 72.5,
+            ...
+        },
+        "trend": [
+            {"date": "2026-06-24", "accuracy": 75.2, "count": 5}
+        ]
+    }
+    """
+    try:
+        from backend.analytics.recommendation_tracker import get_recommendation_tracker
+
+        tracker = get_recommendation_tracker()
+        metrics = tracker.analyze_accuracy()
+
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "overall_accuracy_pct": round(metrics.accuracy_pct, 1),
+            "total_recommendations": metrics.total_recommendations,
+            "correct_direction": metrics.correct_direction,
+            "within_magnitude": metrics.within_magnitude_tolerance,
+            "scenario_accuracy": {
+                s: round(a, 1) for s, a in metrics.scenario_accuracy.items()
+            },
+            "symbol_accuracy": {
+                s: round(a, 1) for s, a in metrics.symbol_accuracy.items()
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting accuracy metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dashboard/scenario-heatmap")
+async def get_dashboard_scenario_heatmap() -> Dict[str, Any]:
+    """
+    Get scenario performance heatmap for dashboard.
+
+    Returns:
+    --------
+    {
+        "scenarios": {
+            "base": {
+                "count": 18,
+                "avg_expected": 2.5,
+                "avg_actual": 2.3,
+                "accuracy": 77.8
+            }
+        },
+        "matrix": [
+            {"scenario": "base", "expected": 2.5, "actual": 2.3, "delta": -0.2}
+        ]
+    }
+    """
+    try:
+        from backend.analytics.recommendation_tracker import get_recommendation_tracker
+
+        tracker = get_recommendation_tracker()
+        perf = tracker.get_scenario_performance()
+
+        # Build heatmap matrix
+        matrix = []
+        for scenario, metrics in perf.items():
+            matrix.append({
+                "scenario": scenario,
+                "count": metrics.get("count", 0),
+                "avg_expected": metrics.get("avg_expected_return", 0),
+                "avg_actual": metrics.get("avg_actual_return", 0),
+                "delta": metrics.get("avg_actual_return", 0) - metrics.get("avg_expected_return", 0),
+                "accuracy": metrics.get("accuracy_pct", 0),
+            })
+
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "scenarios": perf,
+            "matrix": matrix,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting scenario heatmap: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dashboard/cost-calibration")
+async def get_dashboard_cost_calibration() -> Dict[str, Any]:
+    """
+    Get cost calibration status for dashboard.
+
+    Returns:
+    --------
+    {
+        "total_executions": 142,
+        "symbols_learned": 12,
+        "avg_estimation_error": 35.2,
+        "top_errors": [
+            {"symbol": "AAPL", "error_pct": 46.7, "samples": 8}
+        ],
+        "readiness": "confident"
+    }
+    """
+    try:
+        from backend.analytics.cost_model_calibrator import get_cost_model_calibrator
+
+        calibrator = get_cost_model_calibrator()
+        profiles = calibrator.get_all_profiles()
+        status = calibrator.get_calibration_status()
+
+        # Calculate average error
+        errors = [p.cost_estimation_error_pct for p in profiles.values()]
+        avg_error = sum(errors) / len(errors) if errors else 0
+
+        # Top error symbols
+        top_errors = sorted(
+            [
+                {
+                    "symbol": s,
+                    "error_pct": round(p.cost_estimation_error_pct, 1),
+                    "samples": p.execution_count,
+                }
+                for s, p in profiles.items()
+            ],
+            key=lambda x: x["error_pct"],
+            reverse=True,
+        )[:5]
+
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "total_executions": status.get("total_executions_recorded", 0),
+            "symbols_learned": status.get("symbols_with_profiles", 0),
+            "avg_estimation_error": round(avg_error, 1),
+            "top_errors": top_errors,
+            "readiness": status.get("readiness", "learning"),
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting cost calibration: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/health/learning-pipeline")
 async def get_learning_pipeline_health() -> Dict[str, Any]:
     """

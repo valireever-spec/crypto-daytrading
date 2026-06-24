@@ -267,6 +267,41 @@ class TestLearningAutomationAPI:
             assert component in components
 
 
+class TestLearningDashboard:
+    """Test learning metrics dashboard endpoints."""
+
+    def test_accuracy_metrics_endpoint(self, client):
+        """Test accuracy metrics dashboard endpoint."""
+        response = client.get("/api/automation/dashboard/accuracy-metrics")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "overall_accuracy_pct" in data
+        assert "total_recommendations" in data
+        assert "scenario_accuracy" in data
+        assert "symbol_accuracy" in data
+
+    def test_scenario_heatmap_endpoint(self, client):
+        """Test scenario heatmap dashboard endpoint."""
+        response = client.get("/api/automation/dashboard/scenario-heatmap")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "scenarios" in data
+        assert "matrix" in data
+
+    def test_cost_calibration_endpoint(self, client):
+        """Test cost calibration dashboard endpoint."""
+        response = client.get("/api/automation/dashboard/cost-calibration")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "total_executions" in data
+        assert "symbols_learned" in data
+        assert "avg_estimation_error" in data
+        assert "readiness" in data
+
+
 class TestLearningAutomationIntegration:
     """Test integration between components."""
 

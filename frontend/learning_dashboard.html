@@ -1,0 +1,306 @@
+<!-- Learning Metrics Dashboard Tab (Phase 331) -->
+<div id="learning-tab" class="tab-content" style="display: none;">
+  <h2>Learning Metrics Dashboard</h2>
+
+  <!-- Real-time Statistics -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Overall Accuracy</div>
+      <div id="overall-accuracy" class="stat-value">--</div>
+      <div class="stat-subtext" id="accuracy-count">0 recommendations</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Direction Correct</div>
+      <div id="direction-correct" class="stat-value">--</div>
+      <div class="stat-subtext">within 2x magnitude</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Cost Estimation Error</div>
+      <div id="cost-error" class="stat-value">--</div>
+      <div class="stat-subtext" id="cost-samples">0 symbols learned</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Learning Pipeline</div>
+      <div id="pipeline-status" class="stat-value">--</div>
+      <div class="stat-subtext">all components ready</div>
+    </div>
+  </div>
+
+  <!-- Scenario Performance Heatmap -->
+  <div class="dashboard-section">
+    <h3>Scenario Performance Heatmap</h3>
+    <table class="heatmap-table">
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Count</th>
+          <th>Expected Return</th>
+          <th>Actual Return</th>
+          <th>Delta</th>
+          <th>Accuracy</th>
+        </tr>
+      </thead>
+      <tbody id="scenario-heatmap-body">
+        <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Top Cost Calibration Errors -->
+  <div class="dashboard-section">
+    <h3>Cost Calibration Status (Top Errors)</h3>
+    <table class="cost-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Estimation Error %</th>
+          <th>Execution Samples</th>
+          <th>Readiness</th>
+        </tr>
+      </thead>
+      <tbody id="cost-errors-body">
+        <tr><td colspan="4" style="text-align: center; padding: 20px;">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Symbol Accuracy Breakdown -->
+  <div class="dashboard-section">
+    <h3>Symbol Accuracy Breakdown</h3>
+    <div id="symbol-accuracy-container" style="max-height: 300px; overflow-y: auto;">
+      <table class="accuracy-table">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Accuracy %</th>
+            <th>Trend</th>
+          </tr>
+        </thead>
+        <tbody id="symbol-accuracy-body">
+          <tr><td colspan="3" style="text-align: center; padding: 20px;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Refresh Button -->
+  <div class="dashboard-controls">
+    <button onclick="refreshLearningDashboard()" class="btn-primary">Refresh Now</button>
+    <span id="last-refresh" style="margin-left: 20px; color: #666; font-size: 0.9em;">Never</span>
+  </div>
+</div>
+
+<style>
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 0.9em;
+  color: #666;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-size: 2em;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 10px 0;
+}
+
+.stat-subtext {
+  font-size: 0.85em;
+  color: #999;
+}
+
+.dashboard-section {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+}
+
+.dashboard-section h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #2c3e50;
+  font-size: 1.2em;
+}
+
+.heatmap-table, .cost-table, .accuracy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.heatmap-table thead, .cost-table thead, .accuracy-table thead {
+  background-color: #f5f5f5;
+}
+
+.heatmap-table th, .heatmap-table td,
+.cost-table th, .cost-table td,
+.accuracy-table th, .accuracy-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.heatmap-table th, .cost-table th, .accuracy-table th {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.heatmap-table tbody tr:hover,
+.cost-table tbody tr:hover,
+.accuracy-table tbody tr:hover {
+  background-color: #f9f9f9;
+}
+
+.dashboard-controls {
+  text-align: center;
+  margin-top: 30px;
+  padding: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+}
+
+.btn-primary:hover {
+  background-color: #2980b9;
+}
+
+@media (max-width: 1200px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<script>
+async function refreshLearningDashboard() {
+  try {
+    // Fetch all dashboard data in parallel
+    const [accuracyRes, heatmapRes, costRes] = await Promise.all([
+      fetch('/api/automation/dashboard/accuracy-metrics'),
+      fetch('/api/automation/dashboard/scenario-heatmap'),
+      fetch('/api/automation/dashboard/cost-calibration')
+    ]);
+
+    if (!accuracyRes.ok || !heatmapRes.ok || !costRes.ok) {
+      console.error('Failed to fetch dashboard data');
+      return;
+    }
+
+    const accuracy = await accuracyRes.json();
+    const heatmap = await heatmapRes.json();
+    const cost = await costRes.json();
+
+    // Update statistics
+    document.getElementById('overall-accuracy').textContent =
+      accuracy.overall_accuracy_pct.toFixed(1) + '%';
+    document.getElementById('accuracy-count').textContent =
+      accuracy.total_recommendations + ' recommendations';
+    document.getElementById('direction-correct').textContent =
+      accuracy.correct_direction + '/' + accuracy.total_recommendations;
+    document.getElementById('cost-error').textContent =
+      cost.avg_estimation_error.toFixed(1) + '%';
+    document.getElementById('cost-samples').textContent =
+      cost.symbols_learned + ' symbols learned';
+    document.getElementById('pipeline-status').textContent =
+      cost.readiness.charAt(0).toUpperCase() + cost.readiness.slice(1);
+
+    // Update scenario heatmap
+    const heatmapBody = document.getElementById('scenario-heatmap-body');
+    if (heatmap.matrix && heatmap.matrix.length > 0) {
+      heatmapBody.innerHTML = heatmap.matrix.map(row => `
+        <tr>
+          <td><strong>${row.scenario}</strong></td>
+          <td>${row.count}</td>
+          <td>${row.avg_expected.toFixed(2)}%</td>
+          <td>${row.avg_actual.toFixed(2)}%</td>
+          <td style="color: ${row.delta >= 0 ? '#27ae60' : '#e74c3c'}">
+            ${row.delta >= 0 ? '+' : ''}${row.delta.toFixed(2)}%
+          </td>
+          <td><strong>${row.accuracy.toFixed(1)}%</strong></td>
+        </tr>
+      `).join('');
+    }
+
+    // Update cost errors
+    const costBody = document.getElementById('cost-errors-body');
+    if (cost.top_errors && cost.top_errors.length > 0) {
+      costBody.innerHTML = cost.top_errors.map(row => `
+        <tr>
+          <td><strong>${row.symbol}</strong></td>
+          <td>${row.error_pct.toFixed(1)}%</td>
+          <td>${row.samples}</td>
+          <td>${row.error_pct > 50 ? '🔴 Learning' : row.error_pct > 30 ? '🟡 Improving' : '🟢 Confident'}</td>
+        </tr>
+      `).join('');
+    } else {
+      costBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999;">No execution data yet</td></tr>';
+    }
+
+    // Update symbol accuracy
+    const symbolBody = document.getElementById('symbol-accuracy-body');
+    if (accuracy.symbol_accuracy && Object.keys(accuracy.symbol_accuracy).length > 0) {
+      symbolBody.innerHTML = Object.entries(accuracy.symbol_accuracy)
+        .sort((a, b) => b[1] - a[1])
+        .map(([symbol, pct]) => `
+          <tr>
+            <td><strong>${symbol}</strong></td>
+            <td>${pct.toFixed(1)}%</td>
+            <td>${pct >= 75 ? '📈 Excellent' : pct >= 50 ? '→ Good' : '📉 Learning'}</td>
+          </tr>
+        `).join('');
+    } else {
+      symbolBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #999;">No symbol data yet</td></tr>';
+    }
+
+    // Update refresh timestamp
+    const now = new Date();
+    document.getElementById('last-refresh').textContent =
+      'Last updated: ' + now.toLocaleTimeString();
+
+  } catch (error) {
+    console.error('Error refreshing learning dashboard:', error);
+  }
+}
+
+// Auto-refresh every 30 seconds
+setInterval(refreshLearningDashboard, 30000);
+
+// Refresh on tab switch
+document.addEventListener('tabSwitched', (e) => {
+  if (e.detail?.tabId === 'learning-tab') {
+    refreshLearningDashboard();
+  }
+});
+</script>
