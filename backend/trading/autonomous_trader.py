@@ -220,6 +220,20 @@ class AutonomousTrader:
 
         return None
 
+    async def _calculate_signal(self, symbol: str) -> tuple:
+        """Calculate composite signal for a symbol (async wrapper for testing).
+
+        Returns:
+            (signal_score, components) tuple where signal_score is 0-100
+        """
+        loop = asyncio.get_event_loop()
+        signal_score, components = await loop.run_in_executor(
+            _signal_thread_pool,
+            self._calculate_signal_blocking,
+            symbol
+        )
+        return signal_score, components
+
     async def _check_exits(self):
         """Check if any positions should be exited (Phase 314/316: Dynamic stops + regime-aware)."""
         try:

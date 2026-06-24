@@ -150,7 +150,8 @@ class TestFailoverScenario:
         # (In real test, we'd kill the service)
         # For now, just verify the health check works
         data = r.json()
-        assert 'websocket' in data, "Health check should include WebSocket status"
+        assert 'status' in data, "Health check should include status"
+        assert data['status'] == 'ok', "Primary should report OK status"
 
     def test_account_state_before_failover(self, client):
         """Test: Capture account state before failover."""

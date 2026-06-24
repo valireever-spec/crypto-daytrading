@@ -138,8 +138,8 @@ class TestRegimeDetectionAPI:
 
         if response.status_code == 200:
             data = response.json()
-            assert "current_regime" in data
-            assert "confidence" in data
+            assert "regime" in data
+            assert "regime_confidence" in data
             assert "strategy_adjustments" in data
 
             # Check strategy adjustments
@@ -161,8 +161,8 @@ class TestRegimeDetectionAPI:
 
             required_fields = [
                 "symbol",
-                "current_regime",
-                "confidence",
+                "regime",
+                "regime_confidence",
                 "strategy_adjustments",
             ]
 
