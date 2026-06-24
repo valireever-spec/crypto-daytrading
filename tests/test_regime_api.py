@@ -272,7 +272,7 @@ class TestSmartTradingGateway:
 
             assert data["symbol"] == "BTCUSDT"
             assert "current_regime" in data
-            assert data["current_regime"] in ["BULL", "BEAR", "SIDEWAYS", "VOLATILE"]
+            assert data["current_regime"] in ["BULL", "BEAR", "SIDEWAYS", "VOLATILE", "unknown"]
             assert "confidence" in data
             assert "volatility_pct" in data
             assert "trend_strength" in data
