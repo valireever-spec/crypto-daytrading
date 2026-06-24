@@ -251,6 +251,13 @@ class ScenarioCustomizer:
         # Reconstruct covariance matrix
         adjusted_cov = adjusted_corr * np.outer(std_devs, std_devs)
 
+        # Guard: ensure covariance matrix is valid (positive semi-definite)
+        # Check that diagonal is positive
+        if np.any(np.diag(adjusted_cov) <= 0):
+            logger.warning("Invalid covariance matrix detected, using regularization")
+            # Add small positive value to diagonal (Tikhonov regularization)
+            adjusted_cov += np.eye(len(std_devs)) * 1e-6 * np.mean(np.diag(cov_matrix))
+
         return adjusted_cov
 
     def analyze_scenario(

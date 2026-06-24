@@ -66,9 +66,22 @@ class AllocationSolver:
         mean_returns = returns_array.mean(axis=0) * 252
         cov_matrix = np.cov(returns_array.T) * 252
 
+        # Guard against NaN/Inf in covariance
+        if np.any(np.isnan(cov_matrix)) or np.any(np.isinf(cov_matrix)):
+            logger.warning("NaN/Inf detected in covariance matrix, using identity matrix")
+            cov_matrix = np.eye(len(symbols)) * np.std(mean_returns) ** 2
+
+        # Guard against NaN/Inf in returns
+        if np.any(np.isnan(mean_returns)) or np.any(np.isinf(mean_returns)):
+            logger.warning("NaN/Inf detected in returns, replacing with zeros")
+            mean_returns = np.nan_to_num(mean_returns, nan=0.0, posinf=0.1, neginf=-0.1)
+
         # Optimization
         def objective(w):
-            port_vol = np.sqrt(np.dot(w, np.dot(cov_matrix, w)))
+            port_vol_sq = np.dot(w, np.dot(cov_matrix, w))
+            if port_vol_sq < 0:
+                port_vol_sq = abs(port_vol_sq)
+            port_vol = np.sqrt(port_vol_sq)
             return port_vol
 
         def return_constraint(w):

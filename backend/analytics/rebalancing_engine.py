@@ -85,6 +85,15 @@ class RebalancingEngine:
         drift_per_symbol = {}
         max_drift = 0.0
 
+        # Guard: validate input data
+        for sym, val in list(current_allocation.items()) + list(target_allocation.items()):
+            if not isinstance(val, (int, float)) or np.isnan(val) or np.isinf(val):
+                logger.warning(f"Invalid allocation value for {sym}: {val}, replacing with 0")
+                if sym in current_allocation:
+                    current_allocation[sym] = 0.0
+                if sym in target_allocation:
+                    target_allocation[sym] = 0.0
+
         for symbol in set(list(current_allocation.keys()) + list(target_allocation.keys())):
             current = current_allocation.get(symbol, 0.0)
             target = target_allocation.get(symbol, 0.0)

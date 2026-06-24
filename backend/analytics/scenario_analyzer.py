@@ -100,10 +100,22 @@ class ScenarioAnalyzer:
         mean_returns = returns_array.mean(axis=0) * 252  # Annualize
         cov_matrix = np.cov(returns_array.T) * 252
 
+        # Guard against NaN/Inf in covariance
+        if np.any(np.isnan(cov_matrix)) or np.any(np.isinf(cov_matrix)):
+            logger.warning("NaN/Inf detected in covariance matrix, using identity matrix")
+            cov_matrix = np.eye(len(symbols)) * np.std(mean_returns) ** 2
+
         # Portfolio mean and vol
         weights = np.array([allocation.get(s, 0) / 100 for s in symbols])
         port_mean = np.dot(weights, mean_returns)
-        port_vol = np.sqrt(np.dot(weights, np.dot(cov_matrix, weights)))
+        port_vol_sq = np.dot(weights, np.dot(cov_matrix, weights))
+
+        # Guard against negative variance
+        if port_vol_sq < 0:
+            logger.warning("Negative variance detected, setting to positive value")
+            port_vol_sq = abs(port_vol_sq)
+
+        port_vol = np.sqrt(port_vol_sq)
 
         # Run simulations
         np.random.seed(42)
