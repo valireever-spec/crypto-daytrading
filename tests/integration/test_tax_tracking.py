@@ -371,7 +371,7 @@ class TestTaxAPIEndpoints:
         response = client.get("/api/tax/liability")
         assert response.status_code == 200
         data = response.json()
-        assert "estimated_tax_liability" in data
+        assert "estimated_tax" in data
         assert "effective_tax_rate_pct" in data
         assert data["net_gain_loss"] > 0
 

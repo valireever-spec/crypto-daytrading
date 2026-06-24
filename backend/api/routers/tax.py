@@ -62,7 +62,17 @@ async def initialize_tax_tracking(jurisdiction: str = "DE") -> Dict:
         Initialization status
     """
     try:
-        juris = Jurisdiction[jurisdiction.upper()]
+        # Map jurisdiction codes to enum names
+        code_to_enum = {j.value: j for j in Jurisdiction}
+        juris_upper = jurisdiction.upper()
+
+        # Try to find by value (e.g., "DE" -> GERMANY)
+        if juris_upper in code_to_enum:
+            juris = code_to_enum[juris_upper]
+        else:
+            # Try to find by name (e.g., "GERMANY")
+            juris = Jurisdiction[juris_upper]
+
         calc = init_tax_calculator(juris)
         return {
             "status": "initialized",
@@ -218,7 +228,7 @@ async def get_tax_liability() -> Dict:
             "short_term_gains": round(liability.short_term_gains, 2),
             "deductible_expenses": round(liability.deductible_expenses, 2),
             "taxable_income": round(liability.taxable_income, 2),
-            "estimated_tax_liability": round(liability.estimated_tax, 2),
+            "estimated_tax": round(liability.estimated_tax, 2),
             "effective_tax_rate_pct": round((liability.estimated_tax / max(liability.taxable_income, 1)) * 100, 2),
             "tax_rate": round(liability.tax_rate * 100, 1),
         }

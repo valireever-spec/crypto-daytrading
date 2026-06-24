@@ -57,8 +57,8 @@ class TestHAStrategyConsistency:
 
         async def test_signal():
             # Get the same data that both would use
-            signal1 = await primary_trader._calculate_signal('BTCUSDT')
-            signal2 = await primary_trader._calculate_signal('BTCUSDT')
+            signal1, _ = await primary_trader._calculate_signal('BTCUSDT')
+            signal2, _ = await primary_trader._calculate_signal('BTCUSDT')
 
             # Same symbol should produce same signal (within 0.1 points)
             assert abs(signal1 - signal2) < 0.1, \
