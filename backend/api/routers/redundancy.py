@@ -18,7 +18,7 @@ PRIMARY_API_URL = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
 BACKUP_API_URL = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
 REPLICATION_LAG_WARNING_THRESHOLD = 2.0  # seconds
 REPLICATION_LAG_CRITICAL_THRESHOLD = 5.0  # seconds
-HEALTH_CHECK_TIMEOUT = 5  # seconds
+HEALTH_CHECK_TIMEOUT = 15  # seconds (backup may be busy with autonomous trading; need longer timeout)
 ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "")  # Slack webhook
 
 # Retry configuration
