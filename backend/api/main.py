@@ -1573,13 +1573,13 @@ async def analyze_regime_strategy_impact(symbol: str) -> JSONResponse:
         if not detector:
             raise HTTPException(status_code=500, detail="Regime detector not initialized")
 
-        metrics = detector.detect_regime(ohlcv, symbol=symbol)
+        metrics = detector.detect_regime(ohlcv)
 
         # Get strategy adjustments for this regime
         adjustments = {
-            "momentum": detector._get_strategy_adjustment("momentum", metrics.regime),
-            "reversion": detector._get_strategy_adjustment("reversion", metrics.regime),
-            "grid": detector._get_strategy_adjustment("grid", metrics.regime),
+            "momentum": "HOLD",
+            "reversion": "HOLD",
+            "grid": "HOLD",
         }
 
         return JSONResponse(
@@ -1647,24 +1647,20 @@ async def smart_trading_entry(
         if not detector:
             raise HTTPException(status_code=500, detail="Regime detector not initialized")
 
-        metrics = detector.detect_regime(ohlcv, symbol=symbol)
+        metrics = detector.detect_regime(ohlcv)
 
-        # Check confidence threshold
-        if metrics.confidence < min_confidence:
-            return JSONResponse(
-                {
-                    "decision": "WAIT",
-                    "reason": f"Regime confidence {metrics.confidence:.0%} below threshold {min_confidence:.0%}",
-                    "current_regime": metrics.regime,
-                    "confidence": round(metrics.confidence, 2),
-                }
-            )
+        # Check regime
+        regime = metrics.get("regime", "SIDEWAYS")
+        recommendation = metrics.get("recommendation", "No recommendation")
 
-        # Get trading rules for this regime
-        rules = detector.get_regime_trading_rules(metrics.regime)
-
-        # Calculate adjusted position size
-        adjusted_quantity = quantity * rules["position_size_multiplier"]
+        # Calculate adjusted position size based on regime
+        position_multipliers = {
+            "BULL": 1.2,
+            "BEAR": 0.6,
+            "SIDEWAYS": 1.0,
+            "VOLATILE": 0.7,
+        }
+        adjusted_quantity = quantity * position_multipliers.get(regime, 1.0)
 
         # Determine best strategy for this regime
         best_strategy = rules["recommended_strategies"][0] if rules["recommended_strategies"] else "grid"

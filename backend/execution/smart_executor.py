@@ -137,7 +137,7 @@ class SmartExecutor:
 
                     if ohlcv is not None and not ohlcv.empty and len(ohlcv) >= 20:
                         try:
-                            regime_metrics = detector.detect_regime(ohlcv, context.symbol)
+                            regime_metrics = detector.detect_regime(ohlcv)
                             regime_name = regime_metrics.get("regime", "SIDEWAYS")
                             regime_confidence = regime_metrics.get("confidence", 0.5)
                         except Exception as regime_error:
