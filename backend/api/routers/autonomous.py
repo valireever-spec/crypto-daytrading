@@ -1,6 +1,7 @@
 """API endpoints for autonomous trading control."""
 
 import logging
+import os
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -10,6 +11,7 @@ from backend.trading.autonomous_trader import (
     get_autonomous_trader,
     TradingConfig
 )
+from backend.core.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Autonomous Trading"])
@@ -110,18 +112,57 @@ async def update_trading_config(request: ConfigUpdateRequest):
     if request.symbols is not None:
         trader.config.symbols = request.symbols
 
-    logger.info(f"Updated trading config: {trader.config}")
+    # Prepare config dict
+    config_dict = {
+        "entry_threshold": trader.config.entry_threshold,
+        "exit_profit_target": trader.config.exit_profit_target,
+        "exit_stop_loss": trader.config.exit_stop_loss,
+        "position_size_pct": trader.config.position_size_pct,
+        "max_positions": trader.config.max_positions,
+        "max_daily_loss_pct": trader.config.max_daily_loss_pct,
+        "symbols": trader.config.symbols,
+        "enabled": trader.config.enabled
+    }
+
+    # Save to persistent storage
+    ConfigManager.save_config(config_dict)
+
+    # Sync to backup if this is primary
+    machine_id = os.getenv("MACHINE_ID", "main")
+    if machine_id == "main":
+        backup_url = os.getenv("BACKUP_MACHINE_URL", "http://192.168.3.25:8002")
+        ConfigManager.sync_to_backup(backup_url, config_dict)
+
+    logger.info(f"Updated and persisted trading config: {config_dict}")
     return JSONResponse({
         "status": "updated",
-        "config": {
-            "entry_threshold": trader.config.entry_threshold,
-            "exit_profit_target": trader.config.exit_profit_target,
-            "exit_stop_loss": trader.config.exit_stop_loss,
-            "position_size_pct": trader.config.position_size_pct,
-            "max_positions": trader.config.max_positions,
-            "max_daily_loss_pct": trader.config.max_daily_loss_pct,
-            "symbols": trader.config.symbols
-        }
+        "persisted": True,
+        "synced": machine_id == "main",
+        "config": config_dict
+    })
+
+
+@router.post("/api/autonomous/config/sync")
+async def sync_config_from_backup(config: dict):
+    """Receive config sync from backup (backup → primary fallback)."""
+    trader = get_autonomous_trader()
+    if not trader:
+        raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
+
+    # Apply config from backup
+    if config.get('entry_threshold') is not None:
+        trader.config.entry_threshold = config['entry_threshold']
+    if config.get('position_size_pct') is not None:
+        trader.config.position_size_pct = config['position_size_pct']
+    if config.get('max_positions') is not None:
+        trader.config.max_positions = config['max_positions']
+    if config.get('max_daily_loss_pct') is not None:
+        trader.config.max_daily_loss_pct = config['max_daily_loss_pct']
+
+    logger.info(f"Synced config from remote: {config}")
+    return JSONResponse({
+        "status": "synced",
+        "message": "Config synced from remote"
     })
 
 

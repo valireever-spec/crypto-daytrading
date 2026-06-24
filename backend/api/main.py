@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.core.config import settings
+from backend.core.config_manager import ConfigManager
 from backend.core.logging import setup_logging
 from backend.core.structured_logging import setup_structured_logging
 from backend.core.metrics import get_metrics
@@ -234,19 +235,20 @@ async def lifespan(app: FastAPI):
 
     # Initialize and start autonomous trader
     global autonomous_trader_task
-    # Load trading configuration from environment variables (.env)
+    # Load trading configuration from persistent storage (logs/trading_config.json) or .env
+    config_dict = ConfigManager.load_config()
     trader_config = TradingConfig(
-        enabled=True,
-        entry_threshold=60.0,
-        exit_profit_target=0.03,
-        exit_stop_loss=0.02,
-        position_size_pct=float(os.getenv('POSITION_SIZE_PCT', '0.02')),   # From .env (optimized: 2%)
-        max_positions=int(os.getenv('MAX_POSITIONS', '6')),                # From .env (optimized: 6)
-        max_daily_loss_pct=float(os.getenv('MAX_DAILY_LOSS_PCT', '8.0')),  # From .env (optimized: 8%)
-        symbols=['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
+        enabled=config_dict.get('enabled', True),
+        entry_threshold=config_dict.get('entry_threshold', 60.0),
+        exit_profit_target=config_dict.get('exit_profit_target', 0.03),
+        exit_stop_loss=config_dict.get('exit_stop_loss', 0.02),
+        position_size_pct=config_dict.get('position_size_pct', 0.02),
+        max_positions=config_dict.get('max_positions', 6),
+        max_daily_loss_pct=config_dict.get('max_daily_loss_pct', 8.0),
+        symbols=config_dict.get('symbols', ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'])
     )
     autonomous_trader = init_autonomous_trader(trader_config)
-    logger.info(f"Trading config from .env: position_size={trader_config.position_size_pct*100:.1f}%, max_positions={trader_config.max_positions}, max_daily_loss={trader_config.max_daily_loss_pct:.1f}%")
+    logger.info(f"Trading config loaded: position_size={trader_config.position_size_pct*100:.1f}%, max_positions={trader_config.max_positions}, max_daily_loss={trader_config.max_daily_loss_pct:.1f}%")
     autonomous_trader_task = asyncio.create_task(autonomous_trader.start())
     logger.info("Autonomous trader initialized and started")
 
