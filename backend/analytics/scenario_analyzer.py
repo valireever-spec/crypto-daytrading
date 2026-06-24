@@ -20,15 +20,23 @@ class MonteCarloResult:
     mean_return_pct: float = 0.0
     std_return_pct: float = 0.0
     percentile_5: float = 0.0
+    percentile_5th_pct: float = 0.0
     percentile_25: float = 0.0
+    percentile_25th_pct: float = 0.0
     percentile_50: float = 0.0
+    percentile_50th_pct: float = 0.0
     percentile_75: float = 0.0
+    percentile_75th_pct: float = 0.0
     percentile_95: float = 0.0
+    percentile_95th_pct: float = 0.0
     sharpe_ratio: float = 0.0
     max_drawdown_pct: float = 0.0
     expected_return_pct: float = 0.0
     volatility_pct: float = 0.0
     probability_positive_pct: float = 50.0
+    best_case_pct: float = 0.0
+    worst_case_pct: float = 0.0
+    expected_shortfall_pct: float = 0.0
 
 
 @dataclass
@@ -39,6 +47,9 @@ class ScenarioResult:
     volatility_pct: float
     probability_pct: float
     sharpe_ratio: float = 0.0
+    best_case_pct: float = 0.0
+    worst_case_pct: float = 0.0
+    expected_shortfall_pct: float = 0.0
 
 
 class ScenarioAnalyzer:
@@ -153,7 +164,32 @@ class ScenarioAnalyzer:
             simulations = n_simulations
 
         # If historical returns provided, use empirical distribution
-        if historical_returns and isinstance(historical_returns, dict):
+        if isinstance(historical_returns, dict):
+            if historical_returns == {}:
+                # Empty returns dict - return zero values
+                return MonteCarloResult(
+                    scenario=scenario,
+                    simulations=simulations,
+                    mean_return_pct=0.0,
+                    std_return_pct=0.0,
+                    percentile_5=0.0,
+                    percentile_5th_pct=0.0,
+                    percentile_25=0.0,
+                    percentile_25th_pct=0.0,
+                    percentile_50=0.0,
+                    percentile_50th_pct=0.0,
+                    percentile_75=0.0,
+                    percentile_75th_pct=0.0,
+                    percentile_95=0.0,
+                    percentile_95th_pct=0.0,
+                    sharpe_ratio=0.0,
+                    expected_return_pct=0.0,
+                    volatility_pct=0.0,
+                    probability_positive_pct=50.0,
+                    best_case_pct=0.0,
+                    worst_case_pct=0.0,
+                )
+
             all_returns = []
             for symbol, returns_series in historical_returns.items():
                 if hasattr(returns_series, 'values'):
@@ -171,20 +207,32 @@ class ScenarioAnalyzer:
         # Calculate probability of positive return
         prob_positive = (returns > 0).sum() / len(returns) * 100
 
+        # Calculate expected shortfall (CVaR - Conditional Value at Risk): average of worst 5%
+        worst_5_pct = returns[returns <= np.percentile(returns, 5)]
+        expected_shortfall = float(np.mean(worst_5_pct)) if len(worst_5_pct) > 0 else float(np.percentile(returns, 5))
+
         return MonteCarloResult(
             scenario=scenario,
             simulations=simulations,
             mean_return_pct=float(np.mean(returns)),
             std_return_pct=float(np.std(returns)),
             percentile_5=float(np.percentile(returns, 5)),
+            percentile_5th_pct=float(np.percentile(returns, 5)),
             percentile_25=float(np.percentile(returns, 25)),
+            percentile_25th_pct=float(np.percentile(returns, 25)),
             percentile_50=float(np.percentile(returns, 50)),
+            percentile_50th_pct=float(np.percentile(returns, 50)),
             percentile_75=float(np.percentile(returns, 75)),
+            percentile_75th_pct=float(np.percentile(returns, 75)),
             percentile_95=float(np.percentile(returns, 95)),
+            percentile_95th_pct=float(np.percentile(returns, 95)),
             sharpe_ratio=float((mean_return - self.risk_free_rate) / volatility) if volatility > 0 else 0.0,
             expected_return_pct=float(np.mean(returns)),
             volatility_pct=float(np.std(returns)),
             probability_positive_pct=float(prob_positive),
+            best_case_pct=float(np.percentile(returns, 95)),
+            worst_case_pct=float(np.percentile(returns, 5)),
+            expected_shortfall_pct=expected_shortfall,
         )
 
     def analyze_upside_scenario(
@@ -216,6 +264,8 @@ class ScenarioAnalyzer:
             volatility_pct=float(std_dev),
             probability_pct=25.0,
             sharpe_ratio=float((upside_return - self.risk_free_rate) / std_dev) if std_dev > 0 else 0.0,
+            best_case_pct=float(upside_return * 1.5),
+            worst_case_pct=float(upside_return * 0.5),
         )
 
     def analyze_downside_scenario(
@@ -247,6 +297,8 @@ class ScenarioAnalyzer:
             volatility_pct=float(std_dev),
             probability_pct=25.0,
             sharpe_ratio=float((downside_return - self.risk_free_rate) / std_dev) if std_dev > 0 else 0.0,
+            best_case_pct=float(downside_return * 0.5),
+            worst_case_pct=float(downside_return * 1.5),
         )
 
     def base_case_scenario(
@@ -278,6 +330,8 @@ class ScenarioAnalyzer:
             volatility_pct=float(std_dev),
             probability_pct=50.0,
             sharpe_ratio=float((base_return - self.risk_free_rate) / std_dev) if std_dev > 0 else 0.0,
+            best_case_pct=float(base_return + (std_dev * 1.65)),
+            worst_case_pct=float(base_return - (std_dev * 1.65)),
         )
 
 
