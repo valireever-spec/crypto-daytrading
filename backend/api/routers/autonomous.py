@@ -22,6 +22,7 @@ class ConfigUpdateRequest(BaseModel):
     exit_stop_loss: Optional[float] = None
     position_size_pct: Optional[float] = None
     max_positions: Optional[int] = None
+    max_daily_loss_pct: Optional[float] = None
     symbols: Optional[List[str]] = None
 
 
@@ -81,6 +82,7 @@ async def get_trading_config():
         "exit_stop_loss": trader.config.exit_stop_loss,
         "position_size_pct": trader.config.position_size_pct,
         "max_positions": trader.config.max_positions,
+        "max_daily_loss_pct": trader.config.max_daily_loss_pct,
         "symbols": trader.config.symbols,
         "enabled": trader.config.enabled
     })
@@ -103,6 +105,8 @@ async def update_trading_config(request: ConfigUpdateRequest):
         trader.config.position_size_pct = request.position_size_pct
     if request.max_positions is not None:
         trader.config.max_positions = request.max_positions
+    if request.max_daily_loss_pct is not None:
+        trader.config.max_daily_loss_pct = request.max_daily_loss_pct
     if request.symbols is not None:
         trader.config.symbols = request.symbols
 
@@ -115,6 +119,7 @@ async def update_trading_config(request: ConfigUpdateRequest):
             "exit_stop_loss": trader.config.exit_stop_loss,
             "position_size_pct": trader.config.position_size_pct,
             "max_positions": trader.config.max_positions,
+            "max_daily_loss_pct": trader.config.max_daily_loss_pct,
             "symbols": trader.config.symbols
         }
     })

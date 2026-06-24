@@ -42,6 +42,7 @@ class TradingConfig:
     exit_stop_loss: float = 0.02  # 2% stop loss
     position_size_pct: float = 0.05  # 5% of capital per position
     max_positions: int = 5
+    max_daily_loss_pct: float = 5.0  # Max daily loss before stopping (from .env)
     symbols: List[str] = None  # Symbols to trade
 
     def __post_init__(self):

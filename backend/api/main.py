@@ -234,16 +234,19 @@ async def lifespan(app: FastAPI):
 
     # Initialize and start autonomous trader
     global autonomous_trader_task
+    # Load trading configuration from environment variables (.env)
     trader_config = TradingConfig(
         enabled=True,
         entry_threshold=60.0,
         exit_profit_target=0.03,
         exit_stop_loss=0.02,
-        position_size_pct=0.10,
-        max_positions=5,
+        position_size_pct=float(os.getenv('POSITION_SIZE_PCT', '0.02')),   # From .env (optimized: 2%)
+        max_positions=int(os.getenv('MAX_POSITIONS', '6')),                # From .env (optimized: 6)
+        max_daily_loss_pct=float(os.getenv('MAX_DAILY_LOSS_PCT', '8.0')),  # From .env (optimized: 8%)
         symbols=['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
     )
     autonomous_trader = init_autonomous_trader(trader_config)
+    logger.info(f"Trading config from .env: position_size={trader_config.position_size_pct*100:.1f}%, max_positions={trader_config.max_positions}, max_daily_loss={trader_config.max_daily_loss_pct:.1f}%")
     autonomous_trader_task = asyncio.create_task(autonomous_trader.start())
     logger.info("Autonomous trader initialized and started")
 
