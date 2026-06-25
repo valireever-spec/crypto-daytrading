@@ -189,7 +189,12 @@ class AutonomousTrader:
                 from backend.exchange.binance_stream import get_stream_client
                 stream_client = get_stream_client()
                 if stream_client:
-                    last_update_age = (datetime.utcnow() - stream_client.last_update).total_seconds() if stream_client.last_update else 999
+                    # last_update is Dict[symbol, datetime], get most recent
+                    if isinstance(stream_client.last_update, dict) and stream_client.last_update:
+                        most_recent = max(stream_client.last_update.values())
+                        last_update_age = (datetime.utcnow() - most_recent).total_seconds()
+                    else:
+                        last_update_age = 999
                     circuit_breaker.check_websocket_health(stream_client.is_connected, last_update_age)
 
                 # Check #3: Database Integrity (trip if hash verification fails)

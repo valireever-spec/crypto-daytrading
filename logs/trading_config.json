@@ -1,8 +1,8 @@
 {
-  "entry_threshold": 65.0,
-  "exit_profit_target": 0.04,
-  "exit_stop_loss": 0.025,
-  "position_size_pct": 0.05,
+  "entry_threshold": 60.0,
+  "exit_profit_target": 0.03,
+  "exit_stop_loss": 0.02,
+  "position_size_pct": 0.1,
   "max_positions": 5,
   "max_daily_loss_pct": 5.0,
   "symbols": [
@@ -10,7 +10,7 @@
     "ETHUSDT",
     "BNBUSDT"
   ],
-  "enabled": true,
-  "_last_updated": "2026-06-25T08:40:04.071523Z",
+  "enabled": false,
+  "_last_updated": "2026-06-25T13:58:12.485859Z",
   "_source": "api_update"
 }

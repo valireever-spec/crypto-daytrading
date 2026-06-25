@@ -20,6 +20,7 @@ router = APIRouter(tags=["Autonomous Trading"])
 
 class ConfigUpdateRequest(BaseModel):
     """Request model for config updates."""
+    enabled: Optional[bool] = None
     entry_threshold: Optional[float] = None
     exit_profit_target: Optional[float] = None
     exit_stop_loss: Optional[float] = None
@@ -98,6 +99,8 @@ async def update_trading_config(request: ConfigUpdateRequest):
     if not trader:
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
 
+    if request.enabled is not None:
+        trader.config.enabled = request.enabled
     if request.entry_threshold is not None:
         trader.config.entry_threshold = request.entry_threshold
     if request.exit_profit_target is not None:
@@ -151,6 +154,8 @@ async def sync_config_from_backup(request: ConfigUpdateRequest):
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
 
     # Apply all config fields from sync request
+    if request.enabled is not None:
+        trader.config.enabled = request.enabled
     if request.entry_threshold is not None:
         trader.config.entry_threshold = request.entry_threshold
     if request.exit_profit_target is not None:
