@@ -256,17 +256,37 @@ curl -X POST http://localhost:8001/api/paper/close-all
 
 ```bash
 #!/bin/bash
+
+# Check WebSocket connection freshness
+HEALTH=$(curl -s http://localhost:8001/api/health/detailed)
+WS_CONNECTED=$(echo "$HEALTH" | jq -r '.websocket.connected')
+WS_LAST_UPDATE=$(echo "$HEALTH" | jq -r '.websocket.last_price_update')
+
 echo "=== System Health ===" && \
 curl http://localhost:8001/api/health && \
 echo "" && \
+echo "=== WebSocket Status ===" && \
+echo "$HEALTH" | jq '.websocket' && \
+echo "" && \
 echo "=== Data Quality ===" && \
-curl http://localhost:8001/api/health/detailed | jq .data_quality && \
+echo "$HEALTH" | jq .data_quality && \
 echo "" && \
 echo "=== Positions ===" && \
 curl http://localhost:8001/api/paper/positions | jq '.positions | length' && \
 echo "" && \
 echo "=== P&L ===" && \
-curl http://localhost:8001/api/paper/account | jq '{daily_pnl, total_equity}'
+curl http://localhost:8001/api/paper/account | jq '{daily_pnl, total_equity}' && \
+echo "" && \
+echo "=== WebSocket Connection Check ===" && \
+if [ "$WS_CONNECTED" != "true" ]; then
+  echo "🔴 WARNING: WebSocket NOT CONNECTED"
+  echo "Last update: $WS_LAST_UPDATE"
+  echo "ACTION: Restart API immediately"
+  echo "Command: pkill -f uvicorn; sleep 2; python -m uvicorn backend.api.main:app &"
+else
+  echo "✅ WebSocket connected"
+  echo "Last update: $WS_LAST_UPDATE"
+fi
 ```
 
 ---
