@@ -143,30 +143,49 @@ async def update_trading_config(request: ConfigUpdateRequest):
 
 
 @router.post("/api/autonomous/config/sync")
-async def sync_config_from_backup(config: dict):
-    """Receive config sync from backup (backup → primary fallback)."""
+async def sync_config_from_backup(request: ConfigUpdateRequest):
+    """Receive config sync from primary machine (primary → backup)."""
     trader = get_autonomous_trader()
     if not trader:
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
 
-    # Apply config from backup
-    if config.get('entry_threshold') is not None:
-        trader.config.entry_threshold = config['entry_threshold']
-    if config.get('position_size_pct') is not None:
-        trader.config.position_size_pct = config['position_size_pct']
-    if config.get('max_positions') is not None:
-        trader.config.max_positions = config['max_positions']
-    if config.get('max_daily_loss_pct') is not None:
-        trader.config.max_daily_loss_pct = config['max_daily_loss_pct']
+    # Apply all config fields from sync request
+    if request.entry_threshold is not None:
+        trader.config.entry_threshold = request.entry_threshold
+    if request.exit_profit_target is not None:
+        trader.config.exit_profit_target = request.exit_profit_target
+    if request.exit_stop_loss is not None:
+        trader.config.exit_stop_loss = request.exit_stop_loss
+    if request.position_size_pct is not None:
+        trader.config.position_size_pct = request.position_size_pct
+    if request.max_positions is not None:
+        trader.config.max_positions = request.max_positions
+    if request.max_daily_loss_pct is not None:
+        trader.config.max_daily_loss_pct = request.max_daily_loss_pct
+    if request.symbols is not None:
+        trader.config.symbols = request.symbols
 
-    # PERSIST synced config to disk (Fix: was only in-memory)
-    ConfigManager.save_config(config)
+    # Convert to dict for storage
+    config_dict = {
+        "entry_threshold": trader.config.entry_threshold,
+        "exit_profit_target": trader.config.exit_profit_target,
+        "exit_stop_loss": trader.config.exit_stop_loss,
+        "position_size_pct": trader.config.position_size_pct,
+        "max_positions": trader.config.max_positions,
+        "max_daily_loss_pct": trader.config.max_daily_loss_pct,
+        "symbols": trader.config.symbols,
+        "enabled": trader.config.enabled
+    }
 
-    logger.info(f"Synced and persisted config from remote: {config}")
+    # PERSIST synced config to disk
+    ConfigManager.save_config(config_dict)
+
+    logger.info(f"Synced config from primary: {config_dict}")
     return JSONResponse({
         "status": "synced",
         "message": "Config synced and persisted",
-        "persisted": True
+        "persisted": True,
+        "config": config_dict
     })
 
 

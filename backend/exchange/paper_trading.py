@@ -66,6 +66,7 @@ class PaperTradingEngine:
         self.trade_history: List[Trade] = []
         self.daily_pnl = 0.0
         self.total_pnl = 0.0
+        self.last_daily_reset = datetime.utcnow().date()
 
         # Ensure logs directory exists
         self.AUDIT_LOG.parent.mkdir(exist_ok=True)
@@ -215,8 +216,20 @@ class PaperTradingEngine:
                     prices[symbol] - position.entry_price
                 ) * position.quantity
 
+    def _check_and_reset_daily_pnl(self) -> None:
+        """Reset daily P&L at UTC midnight (00:00)."""
+        today = datetime.utcnow().date()
+        if today > self.last_daily_reset:
+            logger.info(
+                f"Daily reset: Daily P&L was {self.daily_pnl:.2f}, now reset to 0.0"
+            )
+            self.daily_pnl = 0.0
+            self.last_daily_reset = today
+
     def get_account_state(self) -> Dict:
         """Get current account state."""
+        self._check_and_reset_daily_pnl()
+
         positions_value = sum(
             p.current_price * p.quantity for p in self.positions.values()
         )
