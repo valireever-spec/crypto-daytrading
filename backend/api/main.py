@@ -336,6 +336,10 @@ app = FastAPI(
 setup_structured_logging(level=logging.INFO, json_format=True)
 logger = logging.getLogger(__name__)
 
+# Validate environment configuration
+from backend.core.config_manager import ConfigManager
+ConfigManager.validate_env_config()
+
 # Initialize auth manager
 auth_manager = get_auth_manager()
 

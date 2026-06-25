@@ -35,15 +35,15 @@ class TradeSignal:
 
 @dataclass
 class TradingConfig:
-    """Configuration for autonomous trading."""
+    """Configuration for autonomous trading (all values from .env)."""
     enabled: bool = True
-    entry_threshold: float = 55.0  # Signal score to trigger BUY (adjusted for GARP blending)
-    exit_profit_target: float = 0.03  # 3% profit target
-    exit_stop_loss: float = 0.02  # 2% stop loss
-    position_size_pct: float = 0.05  # 5% of capital per position
-    max_positions: int = 5
-    max_daily_loss_pct: float = 5.0  # Max daily loss before stopping (from .env)
-    symbols: List[str] = None  # Symbols to trade
+    entry_threshold: float = 60.0  # From ENTRY_THRESHOLD env var
+    exit_profit_target: float = 0.03  # From EXIT_PROFIT_TARGET env var
+    exit_stop_loss: float = 0.02  # From EXIT_STOP_LOSS env var
+    position_size_pct: float = 0.05  # From POSITION_SIZE_PCT env var
+    max_positions: int = 5  # From MAX_POSITIONS env var
+    max_daily_loss_pct: float = 5.0  # From MAX_DAILY_LOSS_PCT env var
+    symbols: List[str] = None  # From TRADING_SYMBOLS env var
     loop_sleep_seconds: float = 10.0  # Sleep between trading loop iterations
     retry_sleep_seconds: float = 5.0  # Sleep on error before retry
 

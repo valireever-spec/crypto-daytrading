@@ -16,9 +16,35 @@ logger = logging.getLogger(__name__)
 CONFIG_DIR = Path("logs")
 CONFIG_FILE = CONFIG_DIR / "trading_config.json"
 
+# Critical environment variables that should be explicitly set
+CRITICAL_ENV_VARS = [
+    "MACHINE_ID",
+    "BACKUP_MACHINE_URL",
+    "PRIMARY_API_URL",
+]
+
 
 class ConfigManager:
     """Manages persistent trading configuration."""
+
+    @staticmethod
+    def validate_env_config() -> None:
+        """Validate that critical environment variables are set.
+
+        Logs warnings if critical env vars are using hardcoded defaults.
+        Should be called during startup to catch misconfiguration early.
+        """
+        missing = []
+        for var in CRITICAL_ENV_VARS:
+            if var not in os.environ:
+                missing.append(var)
+                logger.warning(f"Critical env var not set: {var} (using hardcoded default)")
+
+        if missing:
+            logger.warning(
+                f"Missing {len(missing)} critical env vars: {', '.join(missing)}. "
+                f"Set these in .env file for production."
+            )
 
     @staticmethod
     def get_config_path() -> Path:
@@ -57,9 +83,9 @@ class ConfigManager:
             "position_size_pct": float(os.getenv("POSITION_SIZE_PCT", "0.05")),
             "max_positions": int(os.getenv("MAX_POSITIONS", "5")),
             "max_daily_loss_pct": float(os.getenv("MAX_DAILY_LOSS_PCT", "5.0")),
-            "entry_threshold": 60.0,
-            "exit_profit_target": 0.03,
-            "exit_stop_loss": 0.02,
+            "entry_threshold": float(os.getenv("ENTRY_THRESHOLD", "60.0")),
+            "exit_profit_target": float(os.getenv("EXIT_PROFIT_TARGET", "0.03")),
+            "exit_stop_loss": float(os.getenv("EXIT_STOP_LOSS", "0.02")),
             "enabled": True,
             "symbols": symbols,
         }
