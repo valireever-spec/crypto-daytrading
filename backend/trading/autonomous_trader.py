@@ -15,6 +15,7 @@ from backend.strategies.garp_value_strategy import apply_garp_value_strategy
 from backend.analytics.signal_explainer import get_signal_explainer
 from backend.analytics.volatility_manager import get_volatility_manager
 from backend.trading.portfolio_decision_coordinator import get_portfolio_decision_coordinator
+from backend.core.data_quality import get_data_quality_measurer
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,30 @@ class AutonomousTrader:
                 if not warmup_complete:
                     warmup_complete = True
                     logger.info(f"✅ Warmup complete: received prices for {list(prices.keys())}")
+
+                # HARDENING: Measure data quality (Pillar #3: Data Quality Gate)
+                data_quality = await self._measure_data_quality(prices)
+                logger.info(
+                    f"Data Quality Score: {data_quality.overall_score:.0f}% {data_quality}",
+                    extra={"extra_fields": {
+                        "event": "DATA_QUALITY_CHECK",
+                        "overall_score": round(data_quality.overall_score, 1),
+                        "pass_gate": data_quality.pass_gate,
+                        "price_sanity": round(data_quality.price_sanity, 1),
+                        "symbol_coverage": round(data_quality.symbol_coverage, 1),
+                        "websocket_health": round(data_quality.websocket_health, 1),
+                        "age_variance": round(data_quality.age_variance, 1),
+                        "failures": data_quality.failures
+                    }}
+                )
+
+                if not data_quality.pass_gate:
+                    logger.critical(
+                        f"⚠️ Data quality gate FAILED ({data_quality.overall_score:.0f}% < 90%), "
+                        f"skipping trading this iteration. Failures: {data_quality.failures}"
+                    )
+                    await asyncio.sleep(self.config.loop_sleep_seconds)
+                    continue
 
                 # Check daily loss limit (BUG FIX #1: Enforce max_daily_loss_pct)
                 daily_loss_exceeded = await self._check_daily_loss_limit()
@@ -1068,6 +1093,48 @@ class AutonomousTrader:
         except Exception as e:
             logger.error(f"Error fetching prices: {e}")
             return {}
+
+    async def _measure_data_quality(self, prices: Dict[str, float]):
+        """Measure data quality across 6 dimensions (HARDENING: Pillar #3).
+
+        Returns DataQualityScore with overall score ≥90% required to trade.
+        """
+        from backend.exchange.binance_stream import get_stream_client
+
+        measurer = get_data_quality_measurer()
+        client = get_stream_client()
+
+        # Get WebSocket health info
+        websocket_health = {}
+        if client:
+            health_status = await client.get_connection_status()
+            websocket_health = {
+                "connected": client.is_connected,
+                "reconnect_attempts": client.reconnect_attempts,
+                "last_update": health_status.get("last_update"),
+            }
+
+        # Get price age info
+        last_updates = {}
+        if client:
+            last_updates = client.last_update.copy()
+
+        # Get historical volatility (estimated from regime detector)
+        historical_volatility = {}
+        for symbol in self.config.symbols:
+            # Default to 2% until we have better volatility data
+            historical_volatility[symbol] = 2.0
+
+        # Measure data quality
+        score = measurer.measure(
+            current_prices=prices,
+            required_symbols=self.config.symbols,
+            websocket_health=websocket_health,
+            last_updates=last_updates,
+            historical_volatility=historical_volatility,
+        )
+
+        return score
 
     def get_status(self) -> Dict:
         """Get trader status."""
