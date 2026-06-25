@@ -1,8 +1,10 @@
-"""SQLite database for position persistence (Pillar #5 Hardening - CRITICAL)."""
+"""SQLite database for position persistence (Pillar #5 + #10 Hardening - CRITICAL)."""
 
 import sqlite3
 import logging
 import math
+import hashlib
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -45,7 +47,7 @@ class TradingDatabase:
             )
         """)
 
-        # Trades table: audit trail of all fills
+        # Trades table: audit trail of all fills (PILLAR #10: Hash-verified, append-only)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,8 +59,28 @@ class TradingDatabase:
                 order_id TEXT UNIQUE,
                 status TEXT DEFAULT 'FILLED',
                 slippage_pct REAL,
+                hash TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+
+        # HARDENING (Pillar #10): Create triggers to enforce append-only semantics
+        # Prevent UPDATE on trades table
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS prevent_trade_update
+            BEFORE UPDATE ON trades
+            BEGIN
+              SELECT RAISE(ABORT, 'Trades table is append-only: UPDATE not allowed');
+            END
+        """)
+
+        # Prevent DELETE on trades table
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS prevent_trade_delete
+            BEFORE DELETE ON trades
+            BEGIN
+              SELECT RAISE(ABORT, 'Trades table is append-only: DELETE not allowed');
+            END
         """)
 
         # Configuration snapshots for rollback
@@ -145,6 +167,106 @@ class TradingDatabase:
         # Validate side
         if not isinstance(side, str) or side not in VALID_SIDES:
             raise ValueError(f"Invalid side: {side} (must be 'BUY' or 'SELL')")
+
+    @staticmethod
+    def _calculate_trade_hash(trade_data: Dict) -> str:
+        """Calculate SHA256 hash of trade data for integrity verification (Pillar #10).
+
+        Args:
+            trade_data: Trade record dict (symbol, side, quantity, price, trade_time, order_id)
+
+        Returns:
+            SHA256 hash hex string
+        """
+        # Create deterministic representation (sorted keys for consistency)
+        data_to_hash = {
+            'symbol': trade_data.get('symbol'),
+            'side': trade_data.get('side'),
+            'quantity': trade_data.get('quantity'),
+            'price': trade_data.get('price'),
+            'trade_time': trade_data.get('trade_time'),
+            'order_id': trade_data.get('order_id'),
+        }
+        json_str = json.dumps(data_to_hash, sort_keys=True)
+        return hashlib.sha256(json_str.encode()).hexdigest()
+
+    def verify_trade_integrity(self, trade_id: int) -> bool:
+        """Verify a trade hasn't been tampered with by recalculating hash (Pillar #10).
+
+        Args:
+            trade_id: Trade ID to verify
+
+        Returns:
+            True if hash matches (trade is intact), False if corrupted
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT * FROM trades WHERE id = ?", (trade_id,))
+            row = cursor.fetchone()
+            conn.close()
+
+            if not row:
+                logger.warning(f"Trade {trade_id} not found")
+                return False
+
+            stored_hash = row['hash']
+            # Recalculate hash from current data
+            current_hash = self._calculate_trade_hash(dict(row))
+
+            if stored_hash != current_hash:
+                logger.error(f"🚨 HASH MISMATCH: Trade {trade_id} has been tampered with!")
+                logger.error(f"   Stored:   {stored_hash}")
+                logger.error(f"   Current:  {current_hash}")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error verifying trade integrity: {e}")
+            return False
+
+    def verify_all_trades_integrity(self) -> bool:
+        """Verify integrity of all trades in database (Pillar #10).
+
+        Returns:
+            True if all trades are intact, False if any corrupted
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT COUNT(*) FROM trades")
+            count = cursor.fetchone()[0]
+
+            if count == 0:
+                logger.info("No trades to verify")
+                conn.close()
+                return True
+
+            # Verify each trade
+            cursor.execute("SELECT id FROM trades")
+            trade_ids = [row[0] for row in cursor.fetchall()]
+            conn.close()
+
+            corrupted = []
+            for trade_id in trade_ids:
+                if not self.verify_trade_integrity(trade_id):
+                    corrupted.append(trade_id)
+
+            if corrupted:
+                logger.error(f"🚨 DATABASE INTEGRITY FAILED: {len(corrupted)}/{count} trades corrupted!")
+                logger.error(f"   Corrupted trades: {corrupted}")
+                return False
+
+            logger.info(f"✅ Database integrity verified: {count} trades, all intact")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error verifying database integrity: {e}")
+            return False
 
     def insert_position(
         self,
@@ -295,18 +417,29 @@ class TradingDatabase:
         try:
             cursor = conn.cursor()
 
+            # HARDENING (Pillar #10): Calculate hash for integrity verification
+            trade_data = {
+                'symbol': symbol,
+                'side': side,
+                'quantity': quantity,
+                'price': price,
+                'trade_time': trade_time.isoformat(),
+                'order_id': order_id,
+            }
+            trade_hash = self._calculate_trade_hash(trade_data)
+
             cursor.execute(
                 """
-                INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'FILLED')
+                INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, status, hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'FILLED', ?)
                 """,
-                (symbol, side, quantity, price, trade_time.isoformat(), order_id, slippage_pct),
+                (symbol, side, quantity, price, trade_time.isoformat(), order_id, slippage_pct, trade_hash),
             )
 
             conn.commit()
             trade_id = cursor.lastrowid
 
-            logger.info(f"Trade logged to DB: {side} {symbol} {quantity} @ {price} (id={trade_id})")
+            logger.info(f"Trade logged to DB (hash-verified): {side} {symbol} {quantity} @ {price} (id={trade_id})")
             return trade_id
 
         except sqlite3.IntegrityError as e:

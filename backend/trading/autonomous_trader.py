@@ -19,6 +19,7 @@ from backend.analytics.volatility_manager import get_volatility_manager
 from backend.trading.portfolio_decision_coordinator import get_portfolio_decision_coordinator
 from backend.core.data_quality import get_data_quality_measurer
 from backend.core.data_validator import get_price_validator, OrderFillValidator, PositionReconciler
+from backend.core.circuit_breaker import get_circuit_breaker
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -177,6 +178,36 @@ class AutonomousTrader:
                         "failures": data_quality.failures
                     }}
                 )
+
+                # HARDENING: Circuit Breaker checks (Pillar #14: Auto-stop on anomalies)
+                circuit_breaker = get_circuit_breaker()
+
+                # Check #1: Data Quality (trip if <30%)
+                circuit_breaker.check_data_quality(data_quality.overall_score)
+
+                # Check #2: WebSocket Health (trip if disconnected >2 minutes)
+                from backend.exchange.binance_stream import get_stream_client
+                stream_client = get_stream_client()
+                if stream_client:
+                    last_update_age = (datetime.utcnow() - stream_client.last_update).total_seconds() if stream_client.last_update else 999
+                    circuit_breaker.check_websocket_health(stream_client.is_connected, last_update_age)
+
+                # Check #3: Database Integrity (trip if hash verification fails)
+                try:
+                    from backend.core.database import get_database
+                    db = get_database()
+                    integrity_ok = db.verify_all_trades_integrity()
+                    circuit_breaker.check_database_integrity(integrity_ok)
+                except Exception as e:
+                    logger.warning(f"Could not verify database integrity: {e}")
+
+                # If circuit breaker is open, stop new entries
+                if not circuit_breaker.check_health():
+                    cb_status = circuit_breaker.get_status_report()
+                    logger.critical(f"🚨 CIRCUIT BREAKER ACTIVE: {cb_status['reason']}")
+                    skip_entries = True
+                else:
+                    skip_entries = False
 
                 # HARDENING: Differentiated quality gates (Entries vs Exits)
                 # Exits are lenient to ensure stop losses and profit targets execute
