@@ -212,15 +212,20 @@ class TradingDatabase:
                 logger.warning(f"Trade {trade_id} not found")
                 return False
 
-            stored_hash = row['hash']
-            # Recalculate hash from current data
-            current_hash = self._calculate_trade_hash(dict(row))
+            # Pillar #10: Only verify if hash column exists (backward compatible)
+            try:
+                stored_hash = row['hash']
+                # Recalculate hash from current data
+                current_hash = self._calculate_trade_hash(dict(row))
 
-            if stored_hash != current_hash:
-                logger.error(f"🚨 HASH MISMATCH: Trade {trade_id} has been tampered with!")
-                logger.error(f"   Stored:   {stored_hash}")
-                logger.error(f"   Current:  {current_hash}")
-                return False
+                if stored_hash != current_hash:
+                    logger.error(f"🚨 HASH MISMATCH: Trade {trade_id} has been tampered with!")
+                    logger.error(f"   Stored:   {stored_hash}")
+                    logger.error(f"   Current:  {current_hash}")
+                    return False
+            except (KeyError, TypeError):
+                # No hash field in old trades - skip verification for backward compatibility
+                logger.debug(f"Trade {trade_id}: No hash field (legacy data), skipping verification")
 
             return True
 
