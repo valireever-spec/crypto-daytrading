@@ -215,3 +215,22 @@ Conditions:
 
 **Last Updated:** 2026-06-25  
 **Next Review:** End of Phase 1 (2026-07-15)
+
+---
+
+## 🟠 Newly Discovered: WebSocket Auto-Reconnect May Fail (Pillar #7)
+
+**Issue:** WebSocket connection can die and not auto-reconnect after prolonged outage  
+**Status:** Identified during Phase 1 test session  
+**Symptom:** `websocket.connected: false`, prices stale >4 hours  
+**Frequency:** Rare (happened once in testing)  
+**Impact:** Prices incorrect, trading dangerous, circuit breaker doesn't trigger immediately  
+**Workaround:** Restart API (fixes in 30 seconds)  
+**Timeline:** Phase 2 (improve reconnection logic)
+
+**Fix for Phase 2:**
+1. Implement max retry count with alerting
+2. Force restart after N consecutive failures
+3. Add health check endpoint to monitor WebSocket age
+4. Alert if price_update_age > 60 seconds
+
