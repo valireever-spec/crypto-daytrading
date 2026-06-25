@@ -117,7 +117,9 @@ class PaperTradingEngine:
                 }
 
             # Calculate fill price with slippage
-            slippage = self.SLIPPAGE_MARKET if order_type == "MARKET" else self.SLIPPAGE_LIMIT
+            slippage = (
+                self.SLIPPAGE_MARKET if order_type == "MARKET" else self.SLIPPAGE_LIMIT
+            )
             if side == "BUY":
                 fill_price = current_price * (1 + slippage)
             else:  # SELL
@@ -141,7 +143,9 @@ class PaperTradingEngine:
                     "reason": f"Requested {quantity}, filled {fill_quantity}",
                 }
 
-            expected_min = current_price * (1 - slippage - 0.001)  # Slippage + 0.1% tolerance
+            expected_min = current_price * (
+                1 - slippage - 0.001
+            )  # Slippage + 0.1% tolerance
             expected_max = current_price * (1 + slippage + 0.001)
             if not (expected_min < fill_price < expected_max):
                 logger.warning(
@@ -232,7 +236,9 @@ class PaperTradingEngine:
                     price=fill_price,
                     trade_time=now,
                     order_id=order_id,
-                    slippage_pct=(abs(fill_price - current_price) / current_price * 100),
+                    slippage_pct=(
+                        abs(fill_price - current_price) / current_price * 100
+                    ),
                 )
             except Exception as e:
                 logger.error(f"Failed to log trade to DB: {e}")
@@ -241,6 +247,7 @@ class PaperTradingEngine:
             if strategy_name and side == "SELL" and entry_price_for_analytics:
                 try:
                     from backend.analytics.strategy_analytics import get_analytics
+
                     analytics = get_analytics()
                     if analytics:
                         analytics.record_trade(
@@ -250,7 +257,9 @@ class PaperTradingEngine:
                             entry_price=entry_price_for_analytics,
                             exit_price=fill_price,
                         )
-                        logger.info(f"Recorded {strategy_name} trade for {symbol}: P&L ${realized_pnl:.2f}")
+                        logger.info(
+                            f"Recorded {strategy_name} trade for {symbol}: P&L ${realized_pnl:.2f}"
+                        )
                 except Exception as e:
                     logger.warning(f"Could not record strategy analytics: {e}")
 
@@ -358,17 +367,20 @@ class PaperTradingEngine:
 
             # Log to immutable transaction log (Pillar #6: State Persistence)
             immutable_logger = get_immutable_logger()
-            immutable_logger.log_transaction("TRADE", {
-                "order_id": trade.order_id,
-                "symbol": trade.symbol,
-                "side": trade.side,
-                "quantity": trade.quantity,
-                "price": trade.price,
-                "fee": trade.fee,
-                "realized_pnl": trade.realized_pnl,
-                "mode": trade.mode,
-                "status": trade.status,
-            })
+            immutable_logger.log_transaction(
+                "TRADE",
+                {
+                    "order_id": trade.order_id,
+                    "symbol": trade.symbol,
+                    "side": trade.side,
+                    "quantity": trade.quantity,
+                    "price": trade.price,
+                    "fee": trade.fee,
+                    "realized_pnl": trade.realized_pnl,
+                    "mode": trade.mode,
+                    "status": trade.status,
+                },
+            )
 
         except Exception as e:
             logger.error(f"Failed to log trade: {e}")
@@ -393,11 +405,15 @@ class PaperTradingEngine:
                 logger.info("No orphaned positions to restore from database")
                 return
 
-            logger.critical(f"RECOVERING {len(db_positions)} ORPHANED POSITIONS FROM DATABASE!")
+            logger.critical(
+                f"RECOVERING {len(db_positions)} ORPHANED POSITIONS FROM DATABASE!"
+            )
 
             # Pillar #10: Check for suspicious patterns (too many positions = stale data)
             if len(db_positions) > 10:
-                logger.critical(f"🚨 ALERT: {len(db_positions)} positions exceeds safety limit (10). Likely stale data. Clearing all.")
+                logger.critical(
+                    f"🚨 ALERT: {len(db_positions)} positions exceeds safety limit (10). Likely stale data. Clearing all."
+                )
                 db.clear_all_positions()
                 return
 
@@ -429,7 +445,9 @@ class PaperTradingEngine:
                     validation_errors.append(f"Duplicate position for {symbol}")
 
                 if validation_errors:
-                    logger.error(f"🚨 REJECTING CORRUPTED POSITION {pos_id}: {', '.join(validation_errors)}")
+                    logger.error(
+                        f"🚨 REJECTING CORRUPTED POSITION {pos_id}: {', '.join(validation_errors)}"
+                    )
                     continue
 
                 # Restore position to in-memory state
@@ -443,10 +461,14 @@ class PaperTradingEngine:
                     db_id=pos_id,
                 )
 
-                logger.critical(f"RESTORED: {symbol} {quantity} @ {entry_price} (db_id={pos_id})")
+                logger.critical(
+                    f"RESTORED: {symbol} {quantity} @ {entry_price} (db_id={pos_id})"
+                )
                 restored_count += 1
 
-            logger.info(f"✅ Restored {restored_count}/{len(db_positions)} positions (rejected {len(db_positions) - restored_count} corrupted)")
+            logger.info(
+                f"✅ Restored {restored_count}/{len(db_positions)} positions (rejected {len(db_positions) - restored_count} corrupted)"
+            )
 
         except Exception as e:
             logger.error(f"Failed to restore positions from DB: {e}")

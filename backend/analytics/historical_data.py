@@ -39,7 +39,9 @@ class HistoricalDataService:
             # Normalize symbol for yfinance
             yf_symbol = self._normalize_symbol(symbol)
 
-            logger.info(f"Fetching {yf_symbol} data from {start_date.date()} to {end_date.date()}")
+            logger.info(
+                f"Fetching {yf_symbol} data from {start_date.date()} to {end_date.date()}"
+            )
 
             # Fetch data
             ticker = yf.download(
@@ -135,10 +137,7 @@ class HistoricalDataService:
             # Fetch 10 years of daily data
             start_date = datetime.utcnow() - timedelta(days=3650)
             data = self.fetch_ohlcv(
-                symbol,
-                start_date,
-                datetime.utcnow(),
-                interval="1d"
+                symbol, start_date, datetime.utcnow(), interval="1d"
             )
 
             if data is None or data.empty:
@@ -181,22 +180,22 @@ class HistoricalDataService:
         """
         # Rename columns to standard format
         rename_map = {
-            'open': 'Open',
-            'high': 'High',
-            'low': 'Low',
-            'close': 'Close',
-            'volume': 'Volume',
-            'Open': 'Open',
-            'High': 'High',
-            'Low': 'Low',
-            'Close': 'Close',
-            'Volume': 'Volume',
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+            "volume": "Volume",
+            "Open": "Open",
+            "High": "High",
+            "Low": "Low",
+            "Close": "Close",
+            "Volume": "Volume",
         }
 
         df = df.rename(columns=rename_map)
 
         # Ensure required columns exist
-        required = ['Open', 'High', 'Low', 'Close', 'Volume']
+        required = ["Open", "High", "Low", "Close", "Volume"]
         for col in required:
             if col not in df.columns:
                 logger.warning(f"Missing column: {col}")

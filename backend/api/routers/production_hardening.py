@@ -5,7 +5,7 @@ History cleanup, realistic costs, and feedback loops.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Body, Query
 from pydantic import BaseModel
@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/hardening", tags=["hardening"])
 
 class TradeEstimate(BaseModel):
     """Trade for cost estimation."""
+
     symbol: str
     side: str
     volume_pct: float
@@ -87,7 +88,9 @@ async def execute_rebalancing_cleanup(
             "archived_count": result.archived_count,
             "remaining_count": result.remaining_count,
             "space_freed_kb": round(result.space_freed_kb, 1),
-            "last_archived_date": result.last_archived_date.isoformat() if result.last_archived_date else None,
+            "last_archived_date": result.last_archived_date.isoformat()
+            if result.last_archived_date
+            else None,
             "next_cleanup_recommended": result.next_cleanup_recommended,
         }
 

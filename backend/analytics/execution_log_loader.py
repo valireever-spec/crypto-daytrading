@@ -8,7 +8,7 @@ import logging
 from typing import List, Dict, Optional
 from pathlib import Path
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,9 @@ def load_executions_from_audit_log(
                     # Filter by timestamp if provided
                     if cutoff_dt:
                         try:
-                            record_dt = datetime.fromisoformat(record.get("timestamp", ""))
+                            record_dt = datetime.fromisoformat(
+                                record.get("timestamp", "")
+                            )
                             if record_dt < cutoff_dt:
                                 continue
                         except (ValueError, TypeError):
@@ -172,7 +174,9 @@ def _safe_float(value) -> Optional[float]:
         return None
 
 
-def get_last_sync_timestamp(sync_state_file: Path = Path("logs/.daemon_last_sync")) -> Optional[str]:
+def get_last_sync_timestamp(
+    sync_state_file: Path = Path("logs/.daemon_last_sync"),
+) -> Optional[str]:
     """
     Get timestamp of last successful daemon sync.
 

@@ -6,18 +6,16 @@ correlation breakdowns, sector rotations).
 """
 
 import logging
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
-import pandas as pd
-import numpy as np
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
 class StressScenario(str, Enum):
     """Pre-defined stress test scenarios."""
+
     MARKET_CRASH = "market_crash"  # -20% across all assets
     VOLATILITY_SPIKE = "volatility_spike"  # 2x normal volatility
     CORRELATION_BREAKDOWN = "correlation_breakdown"  # All assets move together
@@ -31,6 +29,7 @@ class StressScenario(str, Enum):
 @dataclass
 class StressTestResult:
     """Result of a stress test scenario."""
+
     scenario: StressScenario
     portfolio_loss_pct: float
     affected_symbols: Dict[str, float]  # symbol → loss %
@@ -112,8 +111,8 @@ class StressTestEngine:
     def run_stress_test(
         self,
         position_values: Dict[str, float],  # symbol → value in EUR
-        current_prices: Dict[str, float],   # symbol → price
-        symbol_sectors: Dict[str, str],     # symbol → sector
+        current_prices: Dict[str, float],  # symbol → price
+        symbol_sectors: Dict[str, str],  # symbol → sector
         scenario: StressScenario,
     ) -> StressTestResult:
         """
@@ -148,10 +147,16 @@ class StressTestEngine:
             total_loss += loss
 
         portfolio_total = sum(position_values.values())
-        portfolio_loss_pct = (total_loss / portfolio_total * 100) if portfolio_total > 0 else 0
+        portfolio_loss_pct = (
+            (total_loss / portfolio_total * 100) if portfolio_total > 0 else 0
+        )
 
         # Find worst affected symbol
-        worst_symbol = min(affected_symbols, key=affected_symbols.get) if affected_symbols else "UNKNOWN"
+        worst_symbol = (
+            min(affected_symbols, key=affected_symbols.get)
+            if affected_symbols
+            else "UNKNOWN"
+        )
         worst_loss = affected_symbols.get(worst_symbol, 0)
 
         # Estimate recovery (assuming mean reversion)
@@ -181,9 +186,12 @@ class StressTestEngine:
         params: Dict[str, Any],
     ) -> float:
         """Calculate shock for a symbol given scenario parameters."""
-        is_crypto = symbol.startswith(('BTC', 'ETH', 'BNB')) or 'USDT' in symbol
-        is_tech = symbol_sectors.get(symbol, 'other') == 'technology'
-        is_defensive = symbol_sectors.get(symbol, 'other') in ['healthcare', 'utilities']
+        is_crypto = symbol.startswith(("BTC", "ETH", "BNB")) or "USDT" in symbol
+        is_tech = symbol_sectors.get(symbol, "other") == "technology"
+        is_defensive = symbol_sectors.get(symbol, "other") in [
+            "healthcare",
+            "utilities",
+        ]
 
         # Base shock
         if is_crypto:
@@ -267,7 +275,9 @@ class StressTestEngine:
         worst = min(results.items(), key=lambda x: x[1].portfolio_loss_pct)
         return worst[0], worst[1]
 
-    def get_stress_summary(self, results: Dict[StressScenario, StressTestResult]) -> str:
+    def get_stress_summary(
+        self, results: Dict[StressScenario, StressTestResult]
+    ) -> str:
         """Get human-readable stress test summary."""
         summary = "⚠️ STRESS TEST RESULTS:\n\n"
 
@@ -280,7 +290,9 @@ class StressTestEngine:
         summary += f"  Risk: {worst_result.risk_classification}\n\n"
 
         summary += "All Scenarios:\n"
-        for scenario, result in sorted(results.items(), key=lambda x: x[1].portfolio_loss_pct):
+        for scenario, result in sorted(
+            results.items(), key=lambda x: x[1].portfolio_loss_pct
+        ):
             summary += f"  • {scenario.value}: {result.portfolio_loss_pct:+.2f}%\n"
 
         return summary

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CleanupResult:
     """Result of cleanup operation."""
+
     archived_count: int
     remaining_count: int
     space_freed_kb: float
@@ -73,11 +74,16 @@ class HistoryCleanupManager:
         to_keep = history_list[len(history_list) - self.retention_count :]
 
         # Archive as JSON
-        archive_file = self.archive_dir / f"rebalancing_{datetime.now(timezone.utc).isoformat()}.json"
+        archive_file = (
+            self.archive_dir
+            / f"rebalancing_{datetime.now(timezone.utc).isoformat()}.json"
+        )
         archived_data = [
             {
                 "num_trades": len(p.trades) if hasattr(p, "trades") else 0,
-                "total_cost_pct": p.total_cost_pct if hasattr(p, "total_cost_pct") else 0,
+                "total_cost_pct": p.total_cost_pct
+                if hasattr(p, "total_cost_pct")
+                else 0,
                 "feasible": p.feasible if hasattr(p, "feasible") else False,
             }
             for p in to_archive
@@ -87,7 +93,9 @@ class HistoryCleanupManager:
             with open(archive_file, "w") as f:
                 json.dump(archived_data, f, indent=2)
             space_freed = archive_file.stat().st_size / 1024
-            logger.info(f"Archived {len(to_archive)} rebalancing records to {archive_file}")
+            logger.info(
+                f"Archived {len(to_archive)} rebalancing records to {archive_file}"
+            )
         except Exception as e:
             logger.error(f"Error archiving rebalancing history: {e}")
             space_freed = 0.0
@@ -136,7 +144,10 @@ class HistoryCleanupManager:
         )
 
         # Archive
-        archive_file = self.archive_dir / f"performance_{datetime.now(timezone.utc).isoformat()}.json"
+        archive_file = (
+            self.archive_dir
+            / f"performance_{datetime.now(timezone.utc).isoformat()}.json"
+        )
         archived_data = {
             "recommendations_archived": len(recommendations) - len(recs_to_keep),
             "outcomes_archived": len(outcomes) - len(outcomes_to_keep),

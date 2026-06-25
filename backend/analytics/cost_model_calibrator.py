@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ExecutionRecord:
     """Single execution record."""
+
     symbol: str
     side: str  # BUY or SELL
     planned_cost_pct: float  # Estimated cost
@@ -27,6 +28,7 @@ class ExecutionRecord:
 @dataclass
 class SymbolCostProfile:
     """Symbol-specific cost profile."""
+
     symbol: str
     execution_count: int
     avg_estimated_cost_pct: float
@@ -252,7 +254,9 @@ def get_cost_model_calibrator() -> CostModelCalibrator:
     return _calibrator
 
 
-def get_learned_costs_for_trade(symbol: str, volume_pct: float) -> Optional[Dict[str, float]]:
+def get_learned_costs_for_trade(
+    symbol: str, volume_pct: float
+) -> Optional[Dict[str, float]]:
     """
     Get learned cost estimate for a trade.
 

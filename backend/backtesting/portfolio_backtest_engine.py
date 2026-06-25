@@ -6,9 +6,9 @@ against historical price data to validate accuracy and profitability.
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import numpy as np
 
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BacktestTrade:
     """Record of a trade executed during backtest."""
+
     entry_date: datetime
     exit_date: Optional[datetime]
     symbol: str
@@ -35,6 +36,7 @@ class BacktestTrade:
 @dataclass
 class BacktestMetrics:
     """Summary metrics from backtest."""
+
     total_return_pct: float
     annualized_return_pct: float
     max_drawdown_pct: float
@@ -53,6 +55,7 @@ class BacktestMetrics:
 @dataclass
 class DecisionValidation:
     """Validation of a specific decision type (exits, rotations, etc.)."""
+
     decision_type: str
     decision_count: int
     correct_decisions: int
@@ -74,7 +77,9 @@ class PortfolioBacktestEngine:
     def backtest_regime_exits(
         self,
         symbol_price_history: Dict[str, pd.DataFrame],  # symbol → OHLCV DataFrame
-        regime_history: Dict[str, List[Tuple[datetime, str]]],  # symbol → [(date, regime)]
+        regime_history: Dict[
+            str, List[Tuple[datetime, str]]
+        ],  # symbol → [(date, regime)]
         initial_capital: float = 100000,
         position_size_pct: float = 0.05,
     ) -> Tuple[BacktestMetrics, List[BacktestTrade]]:
@@ -113,50 +118,61 @@ class PortfolioBacktestEngine:
                 if date not in price_df.index:
                     continue
 
-                current_price = float(price_df.loc[date, 'Close'])
+                current_price = float(price_df.loc[date, "Close"])
                 current_regime = self._get_regime_at_date(symbol, date, regime_history)
 
                 previous_regime = previous_regimes.get(symbol)
 
                 # ENTRY: Regime flips to bull/sideways → open position
                 if previous_regime and previous_regime != current_regime:
-                    if current_regime in ['bull', 'sideways'] and symbol not in positions:
+                    if (
+                        current_regime in ["bull", "sideways"]
+                        and symbol not in positions
+                    ):
                         position_value = portfolio_value * position_size_pct
                         quantity = position_value / current_price
 
                         positions[symbol] = {
-                            'entry_price': current_price,
-                            'entry_date': date,
-                            'quantity': quantity,
+                            "entry_price": current_price,
+                            "entry_date": date,
+                            "quantity": quantity,
                         }
 
-                        logger.debug(f"ENTRY: {symbol} @ {current_price:.2f} ({current_regime})")
+                        logger.debug(
+                            f"ENTRY: {symbol} @ {current_price:.2f} ({current_regime})"
+                        )
 
                     # EXIT: Regime flips to bear/volatile → close position
-                    elif current_regime in ['bear', 'volatile'] and symbol in positions:
+                    elif current_regime in ["bear", "volatile"] and symbol in positions:
                         pos = positions[symbol]
-                        pnl = (current_price - pos['entry_price']) * pos['quantity']
-                        pnl_pct = ((current_price - pos['entry_price']) / pos['entry_price']) * 100
+                        pnl = (current_price - pos["entry_price"]) * pos["quantity"]
+                        pnl_pct = (
+                            (current_price - pos["entry_price"]) / pos["entry_price"]
+                        ) * 100
 
-                        self.trades.append(BacktestTrade(
-                            entry_date=pos['entry_date'],
-                            exit_date=date,
-                            symbol=symbol,
-                            entry_price=pos['entry_price'],
-                            exit_price=current_price,
-                            quantity=pos['quantity'],
-                            entry_reason=f"Regime flip to {previous_regime}",
-                            exit_reason=f"Regime flip to {current_regime}",
-                            pnl=pnl,
-                            pnl_pct=pnl_pct,
-                            duration_days=(date - pos['entry_date']).days,
-                            trade_type="EXIT",
-                        ))
+                        self.trades.append(
+                            BacktestTrade(
+                                entry_date=pos["entry_date"],
+                                exit_date=date,
+                                symbol=symbol,
+                                entry_price=pos["entry_price"],
+                                exit_price=current_price,
+                                quantity=pos["quantity"],
+                                entry_reason=f"Regime flip to {previous_regime}",
+                                exit_reason=f"Regime flip to {current_regime}",
+                                pnl=pnl,
+                                pnl_pct=pnl_pct,
+                                duration_days=(date - pos["entry_date"]).days,
+                                trade_type="EXIT",
+                            )
+                        )
 
                         portfolio_value += pnl
                         del positions[symbol]
 
-                        logger.debug(f"EXIT: {symbol} @ {current_price:.2f} → PnL: {pnl_pct:.2f}%")
+                        logger.debug(
+                            f"EXIT: {symbol} @ {current_price:.2f} → PnL: {pnl_pct:.2f}%"
+                        )
 
                 previous_regimes[symbol] = current_regime
 
@@ -228,28 +244,42 @@ class PortfolioBacktestEngine:
                 if abs(drift) > 10:
                     # Find underperforming symbols in overweight sector to sell
                     if drift > 0:
-                        symbols_in_sector = [s for s, sec in symbol_sectors.items() if sec == sector]
+                        symbols_in_sector = [
+                            s for s, sec in symbol_sectors.items() if sec == sector
+                        ]
                         for symbol in symbols_in_sector:
-                            if symbol in positions and date in symbol_price_history[symbol].index:
+                            if (
+                                symbol in positions
+                                and date in symbol_price_history[symbol].index
+                            ):
                                 pos = positions[symbol]
-                                exit_price = float(symbol_price_history[symbol].loc[date, 'Close'])
-                                pnl = (exit_price - pos['entry_price']) * pos['quantity']
-                                pnl_pct = ((exit_price - pos['entry_price']) / pos['entry_price']) * 100
+                                exit_price = float(
+                                    symbol_price_history[symbol].loc[date, "Close"]
+                                )
+                                pnl = (exit_price - pos["entry_price"]) * pos[
+                                    "quantity"
+                                ]
+                                pnl_pct = (
+                                    (exit_price - pos["entry_price"])
+                                    / pos["entry_price"]
+                                ) * 100
 
-                                self.trades.append(BacktestTrade(
-                                    entry_date=pos['entry_date'],
-                                    exit_date=date,
-                                    symbol=symbol,
-                                    entry_price=pos['entry_price'],
-                                    exit_price=exit_price,
-                                    quantity=pos['quantity'],
-                                    entry_reason=f"Entry in {sector}",
-                                    exit_reason=f"Sector rotation: {sector} overweight",
-                                    pnl=pnl,
-                                    pnl_pct=pnl_pct,
-                                    duration_days=(date - pos['entry_date']).days,
-                                    trade_type="ROTATION",
-                                ))
+                                self.trades.append(
+                                    BacktestTrade(
+                                        entry_date=pos["entry_date"],
+                                        exit_date=date,
+                                        symbol=symbol,
+                                        entry_price=pos["entry_price"],
+                                        exit_price=exit_price,
+                                        quantity=pos["quantity"],
+                                        entry_reason=f"Entry in {sector}",
+                                        exit_reason=f"Sector rotation: {sector} overweight",
+                                        pnl=pnl,
+                                        pnl_pct=pnl_pct,
+                                        duration_days=(date - pos["entry_date"]).days,
+                                        trade_type="ROTATION",
+                                    )
+                                )
 
                                 portfolio_value += pnl
                                 del positions[symbol]
@@ -299,13 +329,19 @@ class PortfolioBacktestEngine:
 
         for date in all_dates:
             # Check if rebalancing is needed
-            if last_rebalance_date is None or (date - last_rebalance_date).days >= rebalance_frequency_days:
+            if (
+                last_rebalance_date is None
+                or (date - last_rebalance_date).days >= rebalance_frequency_days
+            ):
                 # Calculate current allocation
                 current_allocation = {}
                 for symbol in symbol_price_history.keys():
-                    if date in symbol_price_history[symbol].index and symbol in positions:
-                        price = float(symbol_price_history[symbol].loc[date, 'Close'])
-                        value = positions[symbol]['quantity'] * price
+                    if (
+                        date in symbol_price_history[symbol].index
+                        and symbol in positions
+                    ):
+                        price = float(symbol_price_history[symbol].loc[date, "Close"])
+                        value = positions[symbol]["quantity"] * price
                         current_allocation[symbol] = (value / portfolio_value) * 100
                     else:
                         current_allocation[symbol] = 0
@@ -317,28 +353,34 @@ class PortfolioBacktestEngine:
 
                     if abs(drift) > 2:  # Only rebalance if drift > 2%
                         if date in symbol_price_history[symbol].index:
-                            price = float(symbol_price_history[symbol].loc[date, 'Close'])
+                            price = float(
+                                symbol_price_history[symbol].loc[date, "Close"]
+                            )
 
                             if drift > 0 and symbol in positions:
                                 # Sell
                                 pos = positions[symbol]
-                                pnl = (price - pos['entry_price']) * pos['quantity']
-                                pnl_pct = ((price - pos['entry_price']) / pos['entry_price']) * 100
+                                pnl = (price - pos["entry_price"]) * pos["quantity"]
+                                pnl_pct = (
+                                    (price - pos["entry_price"]) / pos["entry_price"]
+                                ) * 100
 
-                                self.trades.append(BacktestTrade(
-                                    entry_date=pos['entry_date'],
-                                    exit_date=date,
-                                    symbol=symbol,
-                                    entry_price=pos['entry_price'],
-                                    exit_price=price,
-                                    quantity=pos['quantity'],
-                                    entry_reason="Entry for rebalancing",
-                                    exit_reason=f"Rebalance: sell {abs(drift):.1f}% drift",
-                                    pnl=pnl,
-                                    pnl_pct=pnl_pct,
-                                    duration_days=(date - pos['entry_date']).days,
-                                    trade_type="REBALANCE",
-                                ))
+                                self.trades.append(
+                                    BacktestTrade(
+                                        entry_date=pos["entry_date"],
+                                        exit_date=date,
+                                        symbol=symbol,
+                                        entry_price=pos["entry_price"],
+                                        exit_price=price,
+                                        quantity=pos["quantity"],
+                                        entry_reason="Entry for rebalancing",
+                                        exit_reason=f"Rebalance: sell {abs(drift):.1f}% drift",
+                                        pnl=pnl,
+                                        pnl_pct=pnl_pct,
+                                        duration_days=(date - pos["entry_date"]).days,
+                                        trade_type="REBALANCE",
+                                    )
+                                )
 
                                 portfolio_value += pnl
                                 del positions[symbol]
@@ -346,15 +388,17 @@ class PortfolioBacktestEngine:
                             elif drift < 0:
                                 # Buy
                                 target_value = portfolio_value * (target_pct / 100)
-                                current_value = positions.get(symbol, {}).get('quantity', 0) * price
+                                current_value = (
+                                    positions.get(symbol, {}).get("quantity", 0) * price
+                                )
                                 buy_value = target_value - current_value
 
                                 if buy_value > 0:
                                     quantity = buy_value / price
                                     positions[symbol] = {
-                                        'entry_price': price,
-                                        'entry_date': date,
-                                        'quantity': quantity,
+                                        "entry_price": price,
+                                        "entry_date": date,
+                                        "quantity": quantity,
                                     }
 
                 last_rebalance_date = date
@@ -416,12 +460,15 @@ class PortfolioBacktestEngine:
         total_value = 0
 
         for symbol, pos in positions.items():
-            if symbol not in symbol_price_history or date not in symbol_price_history[symbol].index:
+            if (
+                symbol not in symbol_price_history
+                or date not in symbol_price_history[symbol].index
+            ):
                 continue
 
-            price = float(symbol_price_history[symbol].loc[date, 'Close'])
-            value = pos['quantity'] * price
-            sector = symbol_sectors.get(symbol, 'other')
+            price = float(symbol_price_history[symbol].loc[date, "Close"])
+            value = pos["quantity"] * price
+            sector = symbol_sectors.get(symbol, "other")
 
             sector_values[sector] = sector_values.get(sector, 0) + value
             total_value += value
@@ -454,7 +501,21 @@ class PortfolioBacktestEngine:
             },
         }
 
-        return targets.get(regime, {k: 14 for k in ["technology", "cryptocurrency", "consumer", "finance", "healthcare", "energy", "utilities"]})
+        return targets.get(
+            regime,
+            {
+                k: 14
+                for k in [
+                    "technology",
+                    "cryptocurrency",
+                    "consumer",
+                    "finance",
+                    "healthcare",
+                    "energy",
+                    "utilities",
+                ]
+            },
+        )
 
     def _calculate_metrics(
         self,
@@ -469,7 +530,9 @@ class PortfolioBacktestEngine:
         # Annualized return (assuming 252 trading days)
         days = len(self.equity_curve)
         years = max(days / 252, 0.01)
-        annualized_return = (((final_capital / initial_capital) ** (1 / years)) - 1) * 100
+        annualized_return = (
+            ((final_capital / initial_capital) ** (1 / years)) - 1
+        ) * 100
 
         # Drawdown
         if self.equity_curve:
@@ -483,7 +546,9 @@ class PortfolioBacktestEngine:
         if len(self.equity_curve) > 1:
             returns = []
             for i in range(1, len(self.equity_curve)):
-                ret = (self.equity_curve[i][1] - self.equity_curve[i - 1][1]) / self.equity_curve[i - 1][1]
+                ret = (
+                    self.equity_curve[i][1] - self.equity_curve[i - 1][1]
+                ) / self.equity_curve[i - 1][1]
                 returns.append(ret * 100)
 
             avg_return = np.mean(returns) if returns else 0

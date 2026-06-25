@@ -5,15 +5,14 @@ REST API for performance attribution analysis.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from typing import Dict, Optional, Any
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Body
 import pandas as pd
 import numpy as np
 
 from backend.analytics.attribution_engine import (
     get_attribution_engine,
-    PositionContribution,
 )
 from backend.analytics.factor_calculator import FactorCalculator
 from backend.exchange.paper_trading import get_paper_trading
@@ -105,7 +104,9 @@ async def analyze_position_contribution(
 @router.post("/factor-attribution")
 async def analyze_factor_attribution(
     symbol_returns: Dict[str, float] = Body(..., description="Symbol returns (%)"),
-    symbol_factors: Optional[Dict[str, Dict[str, float]]] = Body(None, description="Symbol factor exposures"),
+    symbol_factors: Optional[Dict[str, Dict[str, float]]] = Body(
+        None, description="Symbol factor exposures"
+    ),
 ) -> Dict[str, Any]:
     """
     Analyze factor-based attribution.
@@ -154,7 +155,8 @@ async def analyze_factor_attribution(
         contributions = engine.calculate_factor_attribution(
             returns=pd.Series(list(symbol_returns.values())),
             factors={
-                f: pd.Series([v]) for f, v in (
+                f: pd.Series([v])
+                for f, v in (
                     next(iter(symbol_factors.values())) if symbol_factors else {}
                 ).items()
             },
@@ -173,7 +175,9 @@ async def analyze_factor_attribution(
                 }
                 for c in contributions
             ],
-            "total_contribution_pct": round(sum(c.contribution_pct for c in contributions), 2),
+            "total_contribution_pct": round(
+                sum(c.contribution_pct for c in contributions), 2
+            ),
         }
 
     except Exception as e:
@@ -183,8 +187,12 @@ async def analyze_factor_attribution(
 
 @router.post("/drift-analysis")
 async def analyze_drift(
-    portfolio_positions: Dict[str, float] = Body(..., description="Portfolio position values"),
-    benchmark_positions: Dict[str, float] = Body(..., description="Benchmark position values"),
+    portfolio_positions: Dict[str, float] = Body(
+        ..., description="Portfolio position values"
+    ),
+    benchmark_positions: Dict[str, float] = Body(
+        ..., description="Benchmark position values"
+    ),
     position_returns: Dict[str, float] = Body(..., description="Position returns (%)"),
 ) -> Dict[str, Any]:
     """
@@ -276,7 +284,9 @@ async def get_attribution_summary(
     try:
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=503, detail="Paper trading engine not available")
+            raise HTTPException(
+                status_code=503, detail="Paper trading engine not available"
+            )
 
         positions = engine.get_positions()
         if not positions:

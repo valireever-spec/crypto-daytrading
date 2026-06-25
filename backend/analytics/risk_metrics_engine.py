@@ -6,7 +6,7 @@ volatility, and regime-specific risk profiles.
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 import pandas as pd
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RiskMetrics:
     """Comprehensive risk metrics for portfolio."""
+
     timestamp: datetime
     value_at_risk_95: float  # 95% VaR
     value_at_risk_99: float  # 99% VaR
@@ -35,6 +36,7 @@ class RiskMetrics:
 @dataclass
 class RegimeRiskProfile:
     """Risk metrics specific to market regime."""
+
     regime: str  # bull/bear/sideways/volatile
     volatility_pct: float
     var_95_pct: float
@@ -87,8 +89,16 @@ class RiskMetricsEngine:
         var_99 = np.percentile(returns.dropna(), (1 - 0.99) * 100)
 
         # Expected Shortfall (CVaR): average loss beyond VaR
-        es_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
-        es_99 = returns[returns <= var_99].mean() if len(returns[returns <= var_99]) > 0 else var_99
+        es_95 = (
+            returns[returns <= var_95].mean()
+            if len(returns[returns <= var_95]) > 0
+            else var_95
+        )
+        es_99 = (
+            returns[returns <= var_99].mean()
+            if len(returns[returns <= var_99]) > 0
+            else var_99
+        )
 
         # Volatility (annualized)
         daily_vol = returns.std()
@@ -107,7 +117,9 @@ class RiskMetricsEngine:
         # Sortino ratio (only downside volatility)
         downside_returns = returns[returns < 0]
         downside_vol = downside_returns.std()
-        sortino = (excess_return / downside_vol) * np.sqrt(252) if downside_vol > 0 else 0
+        sortino = (
+            (excess_return / downside_vol) * np.sqrt(252) if downside_vol > 0 else 0
+        )
 
         # Distribution metrics (using numpy)
         returns_clean = returns.dropna()
@@ -115,9 +127,11 @@ class RiskMetricsEngine:
             mean = returns_clean.mean()
             std = returns_clean.std()
             # Skewness
-            skew = ((returns_clean - mean) ** 3).mean() / (std ** 3) if std > 0 else 0
+            skew = ((returns_clean - mean) ** 3).mean() / (std**3) if std > 0 else 0
             # Kurtosis (excess)
-            kurt = ((returns_clean - mean) ** 4).mean() / (std ** 4) - 3 if std > 0 else 0
+            kurt = (
+                ((returns_clean - mean) ** 4).mean() / (std**4) - 3 if std > 0 else 0
+            )
         else:
             skew = 0
             kurt = 0
@@ -142,7 +156,9 @@ class RiskMetricsEngine:
     def get_regime_risk_profile(
         self,
         symbol_returns: Dict[str, pd.Series],  # symbol → daily returns
-        symbol_regimes: Dict[str, List[Tuple[datetime, str]]],  # symbol → [(date, regime)]
+        symbol_regimes: Dict[
+            str, List[Tuple[datetime, str]]
+        ],  # symbol → [(date, regime)]
         regime: str = "bull",
     ) -> RegimeRiskProfile:
         """
@@ -177,7 +193,9 @@ class RiskMetricsEngine:
                     else:
                         end_date = returns.index[-1]
 
-                    regime_rets = returns[(returns.index >= date) & (returns.index < end_date)]
+                    regime_rets = returns[
+                        (returns.index >= date) & (returns.index < end_date)
+                    ]
                     regime_returns.extend(regime_rets.values)
 
         if not regime_returns:
@@ -210,13 +228,20 @@ class RiskMetricsEngine:
         losses = regime_rets_array[regime_rets_array < 0]
         avg_loss = np.mean(losses) if len(losses) > 0 else 0
         worst_day = np.min(regime_rets_array) if len(regime_rets_array) > 0 else 0
-        prob_loss_1pct = (np.sum(regime_rets_array < -1) / len(regime_rets_array) * 100) \
-                        if len(regime_rets_array) > 0 else 0
+        prob_loss_1pct = (
+            (np.sum(regime_rets_array < -1) / len(regime_rets_array) * 100)
+            if len(regime_rets_array) > 0
+            else 0
+        )
 
         # Sharpe
         avg_ret = np.mean(regime_rets_array)
         daily_vol_std = np.std(regime_rets_array)
-        sharpe = ((avg_ret - 0.02 / 252) / daily_vol_std) * np.sqrt(252) if daily_vol_std > 0 else 0
+        sharpe = (
+            ((avg_ret - 0.02 / 252) / daily_vol_std) * np.sqrt(252)
+            if daily_vol_std > 0
+            else 0
+        )
 
         return RegimeRiskProfile(
             regime=regime,

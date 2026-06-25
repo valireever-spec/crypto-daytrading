@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StrategyStats:
     """Performance statistics for a single strategy."""
+
     strategy_name: str
     total_trades: int = 0
     winning_trades: int = 0
@@ -48,7 +49,7 @@ class StrategyStats:
         gross_loss = abs(self.avg_loss) * self.losing_trades
 
         if gross_loss == 0:
-            return float('inf') if gross_profit > 0 else 0.0
+            return float("inf") if gross_profit > 0 else 0.0
         return gross_profit / gross_loss
 
 
@@ -104,14 +105,14 @@ class StrategyAnalytics:
         if pnl > 0:
             stats.winning_trades += 1
             stats.avg_win = (
-                (stats.avg_win * (stats.winning_trades - 1) + pnl) / stats.winning_trades
-            )
+                stats.avg_win * (stats.winning_trades - 1) + pnl
+            ) / stats.winning_trades
             stats.largest_win = max(stats.largest_win, pnl)
         else:
             stats.losing_trades += 1
             stats.avg_loss = (
-                (stats.avg_loss * (stats.losing_trades - 1) + pnl) / stats.losing_trades
-            )
+                stats.avg_loss * (stats.losing_trades - 1) + pnl
+            ) / stats.losing_trades
             stats.largest_loss = min(stats.largest_loss, pnl)
 
         # Update consecutive wins/losses
@@ -127,13 +128,15 @@ class StrategyAnalytics:
         stats.last_trade_time = timestamp
 
         # Record trade
-        stats.trades.append({
-            "pnl": pnl,
-            "quantity": quantity,
-            "entry_price": entry_price,
-            "exit_price": exit_price,
-            "timestamp": timestamp.isoformat() if timestamp else None,
-        })
+        stats.trades.append(
+            {
+                "pnl": pnl,
+                "quantity": quantity,
+                "entry_price": entry_price,
+                "exit_price": exit_price,
+                "timestamp": timestamp.isoformat() if timestamp else None,
+            }
+        )
 
         logger.info(
             f"Recorded trade for {strategy_name}: "
@@ -197,7 +200,9 @@ class StrategyAnalytics:
         stats = self.strategies[strategy_name]
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        recent_trades = [t for t in stats.trades if datetime.fromisoformat(t["timestamp"]) > cutoff]
+        recent_trades = [
+            t for t in stats.trades if datetime.fromisoformat(t["timestamp"]) > cutoff
+        ]
 
         # Rebuild stats from recent trades
         recent_stats = StrategyStats(strategy_name=strategy_name, trades=recent_trades)
@@ -207,15 +212,13 @@ class StrategyAnalytics:
             if pnl > 0:
                 recent_stats.winning_trades += 1
                 recent_stats.avg_win = (
-                    (recent_stats.avg_win * (recent_stats.winning_trades - 1) + pnl)
-                    / recent_stats.winning_trades
-                )
+                    recent_stats.avg_win * (recent_stats.winning_trades - 1) + pnl
+                ) / recent_stats.winning_trades
             else:
                 recent_stats.losing_trades += 1
                 recent_stats.avg_loss = (
-                    (recent_stats.avg_loss * (recent_stats.losing_trades - 1) + pnl)
-                    / recent_stats.losing_trades
-                )
+                    recent_stats.avg_loss * (recent_stats.losing_trades - 1) + pnl
+                ) / recent_stats.losing_trades
             recent_stats.total_pnl += pnl
 
         return recent_stats
@@ -252,7 +255,9 @@ class StrategyAnalytics:
             equal = 1.0 / len(allocations) if allocations else 0
             return {name: equal for name in allocations}
 
-        normalized = {name: (score / total_score) for name, score in allocations.items()}
+        normalized = {
+            name: (score / total_score) for name, score in allocations.items()
+        }
         return normalized
 
     def reset_strategy(self, strategy_name: str) -> None:

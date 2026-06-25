@@ -3,11 +3,9 @@ Portfolio Analysis Service - Runs on backup trader during standby
 Provides P&L, risk metrics, backtesting, and performance reporting
 """
 
-import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 import statistics
-import asyncio
 
 
 class PortfolioAnalyzer:
@@ -31,7 +29,8 @@ class PortfolioAnalyzer:
         """Calculate daily P&L breakdown"""
         today = datetime.now().date()
         today_trades = [
-            t for t in self.trades_history
+            t
+            for t in self.trades_history
             if datetime.fromisoformat(t["timestamp"]).date() == today
         ]
 
@@ -65,7 +64,7 @@ class PortfolioAnalyzer:
         # Sharpe ratio (annualized, assuming 252 trading days)
         mean_return = statistics.mean(returns) if returns else 0
         std_dev = statistics.stdev(returns) if len(returns) > 1 else 0
-        sharpe = (mean_return * 252) / (std_dev * (252 ** 0.5)) if std_dev > 0 else 0
+        sharpe = (mean_return * 252) / (std_dev * (252**0.5)) if std_dev > 0 else 0
 
         # Maximum drawdown
         max_drawdown = self._calculate_max_drawdown()
@@ -83,7 +82,9 @@ class PortfolioAnalyzer:
             "total_return": round(sum(returns), 4),
         }
 
-    def calculate_portfolio_drift(self, targets: Dict[str, float] = None) -> Dict[str, Any]:
+    def calculate_portfolio_drift(
+        self, targets: Dict[str, float] = None
+    ) -> Dict[str, Any]:
         """Detect portfolio drift from target allocation"""
         if not self.account_state:
             return {}
@@ -170,7 +171,9 @@ class PortfolioAnalyzer:
             daily_pnl[date] += trade.get("pnl", 0)
 
         # Convert to returns (pnl / starting equity)
-        starting_equity = self.account_state.get("total_equity", 1) + sum(daily_pnl.values())
+        starting_equity = self.account_state.get("total_equity", 1) + sum(
+            daily_pnl.values()
+        )
         return [pnl / starting_equity for pnl in daily_pnl.values()]
 
     def _calculate_max_drawdown(self) -> float:
@@ -180,9 +183,7 @@ class PortfolioAnalyzer:
 
         cumulative_returns = [0]
         for trade in self.trades_history:
-            cumulative_returns.append(
-                cumulative_returns[-1] + trade.get("pnl", 0)
-            )
+            cumulative_returns.append(cumulative_returns[-1] + trade.get("pnl", 0))
 
         peak = max(cumulative_returns)
         max_dd = max(peak - val for val in cumulative_returns)

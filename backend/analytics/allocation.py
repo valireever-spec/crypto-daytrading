@@ -27,6 +27,7 @@ TIME_PRESETS = {
 @dataclass
 class AllocationState:
     """Current allocation state."""
+
     momentum: float
     reversion: float
     grid: float
@@ -54,12 +55,18 @@ class AllocationManager:
                 with open(ALLOCATION_FILE, "r") as f:
                     data = json.load(f)
                     self.current_allocation = {
-                        "momentum": data.get("momentum", DEFAULT_ALLOCATION["momentum"]),
-                        "reversion": data.get("reversion", DEFAULT_ALLOCATION["reversion"]),
+                        "momentum": data.get(
+                            "momentum", DEFAULT_ALLOCATION["momentum"]
+                        ),
+                        "reversion": data.get(
+                            "reversion", DEFAULT_ALLOCATION["reversion"]
+                        ),
                         "grid": data.get("grid", DEFAULT_ALLOCATION["grid"]),
                     }
                     self.preset = data.get("preset", "custom")
-                    logger.info(f"Loaded allocation from disk: {self.current_allocation}")
+                    logger.info(
+                        f"Loaded allocation from disk: {self.current_allocation}"
+                    )
             except Exception as e:
                 logger.error(f"Error loading allocation: {e}")
                 self.current_allocation = DEFAULT_ALLOCATION.copy()

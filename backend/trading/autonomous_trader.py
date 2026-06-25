@@ -11,21 +11,26 @@ from datetime import datetime
 
 from backend.exchange.paper_trading import get_paper_trading
 from backend.analytics.regime_detector import get_regime_detector
-from backend.analytics.signals import get_signal_generator
 from backend.execution.smart_executor import get_smart_executor
 from backend.strategies.garp_value_strategy import apply_garp_value_strategy
 from backend.analytics.signal_explainer import get_signal_explainer
 from backend.analytics.volatility_manager import get_volatility_manager
-from backend.trading.portfolio_decision_coordinator import get_portfolio_decision_coordinator
+from backend.trading.portfolio_decision_coordinator import (
+    get_portfolio_decision_coordinator,
+)
 from backend.core.data_quality import get_data_quality_measurer
-from backend.core.data_validator import get_price_validator, OrderFillValidator, PositionReconciler
+from backend.core.data_validator import (
+    get_price_validator,
+)
 from backend.core.circuit_breaker import get_circuit_breaker
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
 # Thread pool for CPU-intensive calculations (prevents blocking event loop)
-_signal_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="signal_calc")
+_signal_thread_pool = ThreadPoolExecutor(
+    max_workers=2, thread_name_prefix="signal_calc"
+)
 
 
 def log_trading_decision(
@@ -72,6 +77,7 @@ def log_trading_decision(
 @dataclass
 class TradeSignal:
     """Signal to buy or sell."""
+
     symbol: str
     side: str  # BUY or SELL
     strength: float  # 0-100
@@ -82,6 +88,7 @@ class TradeSignal:
 @dataclass
 class TradingConfig:
     """Configuration for autonomous trading (all values from .env)."""
+
     enabled: bool = True
     entry_threshold: float = 60.0  # From ENTRY_THRESHOLD env var
     exit_profit_target: float = 0.03  # From EXIT_PROFIT_TARGET env var
@@ -97,8 +104,12 @@ class TradingConfig:
         if self.symbols is None:
             # Crypto + major stocks
             self.symbols = [
-                'BTCUSDT', 'ETHUSDT', 'BNBUSDT',  # Crypto
-                'EQ_AAPL', 'EQ_MSFT', 'EQ_TSLA',   # US Stocks
+                "BTCUSDT",
+                "ETHUSDT",
+                "BNBUSDT",  # Crypto
+                "EQ_AAPL",
+                "EQ_MSFT",
+                "EQ_TSLA",  # US Stocks
             ]
 
         # Remove duplicates while preserving order (BUG #5 fix)
@@ -110,7 +121,9 @@ class TradingConfig:
                 unique_symbols.append(symbol)
 
         if len(unique_symbols) != len(self.symbols):
-            logger.warning(f"TradingConfig: removed {len(self.symbols) - len(unique_symbols)} duplicate symbols")
+            logger.warning(
+                f"TradingConfig: removed {len(self.symbols) - len(unique_symbols)} duplicate symbols"
+            )
             self.symbols = unique_symbols
 
 
@@ -131,7 +144,9 @@ class AutonomousTrader:
             engine = get_paper_trading()
             if engine:
                 positions = engine.get_positions()
-                logger.info(f"✅ Synced {len(positions)} positions from paper trading engine on startup")
+                logger.info(
+                    f"✅ Synced {len(positions)} positions from paper trading engine on startup"
+                )
         except Exception as e:
             logger.warning(f"Could not sync with engine on startup: {e}")
 
@@ -154,7 +169,9 @@ class AutonomousTrader:
     async def _trading_loop(self):
         """Main trading loop - runs continuously."""
         loop_count = 0
-        portfolio_check_interval = 6  # Check portfolio decisions every 60 seconds (6 * 10s)
+        portfolio_check_interval = (
+            6  # Check portfolio decisions every 60 seconds (6 * 10s)
+        )
         warmup_complete = False
 
         while self.running:
@@ -165,29 +182,35 @@ class AutonomousTrader:
                 # Get current prices - if empty, WebSocket hasn't connected yet
                 prices = await self._get_current_prices()
                 if not prices or len(prices) < len(self.config.symbols):
-                    logger.debug(f"⏳ Waiting for Binance WebSocket prices... ({len(prices) if prices else 0}/{len(self.config.symbols)})")
+                    logger.debug(
+                        f"⏳ Waiting for Binance WebSocket prices... ({len(prices) if prices else 0}/{len(self.config.symbols)})"
+                    )
                     await asyncio.sleep(1)
                     continue
 
                 # First successful price fetch - log warmup complete
                 if not warmup_complete:
                     warmup_complete = True
-                    logger.info(f"✅ Warmup complete: received prices for {list(prices.keys())}")
+                    logger.info(
+                        f"✅ Warmup complete: received prices for {list(prices.keys())}"
+                    )
 
                 # HARDENING: Measure data quality (Pillar #3: Data Quality Gate)
                 data_quality = await self._measure_data_quality(prices)
                 logger.info(
                     f"Data Quality Score: {data_quality.overall_score:.0f}% {data_quality}",
-                    extra={"extra_fields": {
-                        "event": "DATA_QUALITY_CHECK",
-                        "overall_score": round(data_quality.overall_score, 1),
-                        "pass_gate": data_quality.pass_gate,
-                        "price_sanity": round(data_quality.price_sanity, 1),
-                        "symbol_coverage": round(data_quality.symbol_coverage, 1),
-                        "websocket_health": round(data_quality.websocket_health, 1),
-                        "age_variance": round(data_quality.age_variance, 1),
-                        "failures": data_quality.failures
-                    }}
+                    extra={
+                        "extra_fields": {
+                            "event": "DATA_QUALITY_CHECK",
+                            "overall_score": round(data_quality.overall_score, 1),
+                            "pass_gate": data_quality.pass_gate,
+                            "price_sanity": round(data_quality.price_sanity, 1),
+                            "symbol_coverage": round(data_quality.symbol_coverage, 1),
+                            "websocket_health": round(data_quality.websocket_health, 1),
+                            "age_variance": round(data_quality.age_variance, 1),
+                            "failures": data_quality.failures,
+                        }
+                    },
                 )
 
                 # HARDENING: Circuit Breaker checks (Pillar #14: Auto-stop on anomalies)
@@ -198,15 +221,23 @@ class AutonomousTrader:
 
                 # Check #2: WebSocket Health (trip if disconnected >2 minutes)
                 from backend.exchange.binance_stream import get_stream_client
+
                 stream_client = get_stream_client()
                 if stream_client:
                     # last_update is Dict[symbol, datetime], get most recent
-                    if isinstance(stream_client.last_update, dict) and stream_client.last_update:
+                    if (
+                        isinstance(stream_client.last_update, dict)
+                        and stream_client.last_update
+                    ):
                         most_recent = max(stream_client.last_update.values())
-                        last_update_age = (datetime.utcnow() - most_recent).total_seconds()
+                        last_update_age = (
+                            datetime.utcnow() - most_recent
+                        ).total_seconds()
                     else:
                         last_update_age = 999
-                    circuit_breaker.check_websocket_health(stream_client.is_connected, last_update_age)
+                    circuit_breaker.check_websocket_health(
+                        stream_client.is_connected, last_update_age
+                    )
 
                 # Check #3: Database Integrity (skip for now - Pillar #10 not fully integrated yet)
                 # TODO: Re-enable after Phase 1 with proper schema support
@@ -229,8 +260,12 @@ class AutonomousTrader:
 
                 # HARDENING: Differentiated quality gates (Entries vs Exits)
                 # Exits are lenient to ensure stop losses and profit targets execute
-                quality_gate_pass_entry = data_quality.overall_score >= 90.0  # Strict for entries
-                quality_gate_pass_exit = data_quality.overall_score >= 60.0   # Lenient for exits
+                quality_gate_pass_entry = (
+                    data_quality.overall_score >= 90.0
+                )  # Strict for entries
+                quality_gate_pass_exit = (
+                    data_quality.overall_score >= 60.0
+                )  # Lenient for exits
 
                 if not quality_gate_pass_entry:
                     logger.warning(
@@ -251,14 +286,18 @@ class AutonomousTrader:
                     )
                     # Even in emergency, need some minimum data
                     if data_quality.overall_score < 30.0:
-                        logger.critical("Data quality catastrophically low, waiting for recovery")
+                        logger.critical(
+                            "Data quality catastrophically low, waiting for recovery"
+                        )
                         await asyncio.sleep(self.config.loop_sleep_seconds)
                         continue
 
                 # Check daily loss limit (BUG FIX #1: Enforce max_daily_loss_pct)
                 daily_loss_exceeded = await self._check_daily_loss_limit()
                 if daily_loss_exceeded:
-                    logger.critical("🛑 Daily loss limit exceeded - stopping all trading!")
+                    logger.critical(
+                        "🛑 Daily loss limit exceeded - stopping all trading!"
+                    )
                     self.running = False
                     break
 
@@ -271,9 +310,13 @@ class AutonomousTrader:
                     for symbol in self.config.symbols:
                         signal = await self._check_symbol(symbol)
                         if signal:
-                            logger.info(f"✅ Signal generated for {symbol}: {signal.reason}")
+                            logger.info(
+                                f"✅ Signal generated for {symbol}: {signal.reason}"
+                            )
                 else:
-                    logger.debug(f"Skipping entry signals due to data quality gate (<90%)")
+                    logger.debug(
+                        "Skipping entry signals due to data quality gate (<90%)"
+                    )
 
                 # Check exits for existing positions (EXITS - lenient quality gate, always run)
                 # This ensures stop losses and profit targets execute even with degraded data quality
@@ -298,44 +341,66 @@ class AutonomousTrader:
 
             # Check if already have position or at max positions (GAP #9 fix)
             positions = engine.get_positions()
-            if any(p['symbol'] == symbol for p in positions):
+            if any(p["symbol"] == symbol for p in positions):
                 logger.debug(f"{symbol}: Already have position, skipping")
                 return None  # Already have position in this symbol
 
             if len(positions) >= self.config.max_positions:
-                logger.debug(f"{symbol}: At max positions ({len(positions)}/{self.config.max_positions}), skipping")
+                logger.debug(
+                    f"{symbol}: At max positions ({len(positions)}/{self.config.max_positions}), skipping"
+                )
                 return None  # At position limit
 
             # Calculate composite signal using thread pool (prevents blocking event loop)
-            signal_score, component_scores = await asyncio.get_event_loop().run_in_executor(
-                _signal_thread_pool,
-                self._calculate_signal_blocking,
-                symbol
+            (
+                signal_score,
+                component_scores,
+            ) = await asyncio.get_event_loop().run_in_executor(
+                _signal_thread_pool, self._calculate_signal_blocking, symbol
             )
 
             # HARDENING: Validate signal quality before proceeding (Pillar #2)
             import math
-            if not isinstance(signal_score, (int, float)) or math.isnan(signal_score) or math.isinf(signal_score):
-                logger.error(f"{symbol}: Invalid signal score {signal_score} (NaN/Inf/type error), skipping")
+
+            if (
+                not isinstance(signal_score, (int, float))
+                or math.isnan(signal_score)
+                or math.isinf(signal_score)
+            ):
+                logger.error(
+                    f"{symbol}: Invalid signal score {signal_score} (NaN/Inf/type error), skipping"
+                )
                 return None
 
             if signal_score < 0 or signal_score > 100:
-                logger.error(f"{symbol}: Signal score {signal_score} out of range [0-100], skipping")
+                logger.error(
+                    f"{symbol}: Signal score {signal_score} out of range [0-100], skipping"
+                )
                 return None
 
             if not isinstance(component_scores, dict) or not component_scores:
-                logger.error(f"{symbol}: Invalid component scores {component_scores}, skipping")
+                logger.error(
+                    f"{symbol}: Invalid component scores {component_scores}, skipping"
+                )
                 return None
 
             # Validate all component scores are numbers
             for comp_name, comp_value in component_scores.items():
-                if not isinstance(comp_value, (int, float)) or math.isnan(comp_value) or math.isinf(comp_value):
-                    logger.error(f"{symbol}: Component {comp_name} has invalid value {comp_value}, skipping")
+                if (
+                    not isinstance(comp_value, (int, float))
+                    or math.isnan(comp_value)
+                    or math.isinf(comp_value)
+                ):
+                    logger.error(
+                        f"{symbol}: Component {comp_name} has invalid value {comp_value}, skipping"
+                    )
                     return None
 
             # Get market regime and adaptive entry threshold (Phase 316)
             regime_detector = get_regime_detector()
-            regime_info, adaptive_threshold = await self._get_adaptive_entry_threshold(symbol, regime_detector)
+            regime_info, adaptive_threshold = await self._get_adaptive_entry_threshold(
+                symbol, regime_detector
+            )
 
             # Explain the signal (Phase 313)
             explainer = get_signal_explainer()
@@ -353,7 +418,7 @@ class AutonomousTrader:
                 "bear": "⛔",
                 "sideways": "↔️",
                 "volatile": "⚠️",
-                "unknown": "❓"
+                "unknown": "❓",
             }.get(regime_info.get("regime", "unknown"), "?")
             regime_str = f"{regime_emoji} {regime_info.get('regime', 'unknown')} (entry_threshold: {adaptive_threshold:.1f})"
 
@@ -368,16 +433,18 @@ class AutonomousTrader:
                         "signal_score": round(signal_score, 2),
                         "threshold": round(adaptive_threshold, 2),
                         "passed": signal_passed,
-                        "reasoning": explanation['reasoning'],
+                        "reasoning": explanation["reasoning"],
                         "component_scores": {
                             k: round(v, 2) if isinstance(v, float) else v
                             for k, v in component_scores.items()
                         },
                         "regime": regime_info.get("regime", "unknown"),
-                        "regime_confidence": round(regime_info.get("trend_strength", 0), 2),
+                        "regime_confidence": round(
+                            regime_info.get("trend_strength", 0), 2
+                        ),
                         "asset_class": asset_class,
                     }
-                }
+                },
             )
 
             if signal_passed:
@@ -386,22 +453,24 @@ class AutonomousTrader:
                     decision_type="ENTRY",
                     symbol=symbol,
                     decision="ACCEPT",
-                    reason=explanation['reasoning'],
+                    reason=explanation["reasoning"],
                     context={
                         "signal_score": signal_score,
                         "threshold": adaptive_threshold,
                         "regime": regime_info.get("regime", "unknown"),
                         "asset_class": asset_class,
-                    }
+                    },
                 )
 
                 # Generate entry signal
                 signal = TradeSignal(
                     symbol=symbol,
-                    side='BUY',
+                    side="BUY",
                     strength=signal_score,
-                    reason=explanation['reasoning'],  # Use explanation instead of generic reason
-                    timestamp=datetime.utcnow()
+                    reason=explanation[
+                        "reasoning"
+                    ],  # Use explanation instead of generic reason
+                    timestamp=datetime.utcnow(),
                 )
 
                 # Rate-limit: don't signal same symbol too frequently
@@ -411,8 +480,10 @@ class AutonomousTrader:
 
                 # Log detailed breakdown
                 logger.info(f"{symbol}: Entry signal details:")
-                for comp in explanation['breakdown']:
-                    logger.info(f"  {comp['label']:30} {comp['score']:6.1f} ({comp['weight']:>3}) → {comp['contribution']:6.1f}")
+                for comp in explanation["breakdown"]:
+                    logger.info(
+                        f"  {comp['label']:30} {comp['score']:6.1f} ({comp['weight']:>3}) → {comp['contribution']:6.1f}"
+                    )
 
                 # Attempt to execute trade
                 await self._execute_entry(signal)
@@ -432,9 +503,7 @@ class AutonomousTrader:
         """
         loop = asyncio.get_event_loop()
         signal_score, components = await loop.run_in_executor(
-            _signal_thread_pool,
-            self._calculate_signal_blocking,
-            symbol
+            _signal_thread_pool, self._calculate_signal_blocking, symbol
         )
         return signal_score, components
 
@@ -456,16 +525,17 @@ class AutonomousTrader:
             regime_detector = get_regime_detector()
 
             for pos in positions:
-                symbol = pos['symbol']
+                symbol = pos["symbol"]
                 current_price = prices.get(symbol)
                 if not current_price:
                     continue
 
-                entry_price = pos['entry_price']
+                entry_price = pos["entry_price"]
                 pnl_pct = (current_price - entry_price) / entry_price
 
                 # Get dynamic stops and regime-aware thresholds
                 from backend.analytics.historical_data import get_historical_service
+
                 hist_service = get_historical_service()
                 dynamic_stops = None
                 exit_thresholds = None
@@ -479,20 +549,30 @@ class AutonomousTrader:
                         dynamic_stops = vol_mgr.calculate_stops(entry_price, ohlcv)
                         # Get regime-aware exit thresholds
                         regime_info = regime_detector.detect_regime(ohlcv)
-                        exit_thresholds = regime_detector.get_adaptive_thresholds(regime_info)
+                        exit_thresholds = regime_detector.get_adaptive_thresholds(
+                            regime_info
+                        )
 
                 # Use dynamic stops and regime thresholds if available, otherwise fall back to fixed
                 if dynamic_stops and exit_thresholds:
                     # Use regime-adjusted thresholds (Phase 316)
-                    stop_loss_pct = exit_thresholds.get("stop_loss", self.config.exit_stop_loss)
-                    take_profit_pct = exit_thresholds.get("profit_target", self.config.exit_profit_target)
+                    stop_loss_pct = exit_thresholds.get(
+                        "stop_loss", self.config.exit_stop_loss
+                    )
+                    take_profit_pct = exit_thresholds.get(
+                        "profit_target", self.config.exit_profit_target
+                    )
                     regime_name = regime_info.get("regime", "unknown")
-                    logger.debug(f"{symbol}: Regime-aware exits ({regime_name}) - TP: {take_profit_pct*100:.2f}%, SL: {stop_loss_pct*100:.2f}%")
+                    logger.debug(
+                        f"{symbol}: Regime-aware exits ({regime_name}) - TP: {take_profit_pct*100:.2f}%, SL: {stop_loss_pct*100:.2f}%"
+                    )
                 elif dynamic_stops:
                     # Use dynamic ATR-based stops
                     stop_loss_pct = dynamic_stops["stop_loss_pct"]
                     take_profit_pct = dynamic_stops["take_profit_pct"]
-                    logger.debug(f"{symbol}: Dynamic stops - SL: {stop_loss_pct*100:.2f}%, TP: {take_profit_pct*100:.2f}%")
+                    logger.debug(
+                        f"{symbol}: Dynamic stops - SL: {stop_loss_pct*100:.2f}%, TP: {take_profit_pct*100:.2f}%"
+                    )
                 else:
                     # Fall back to fixed config
                     stop_loss_pct = self.config.exit_stop_loss
@@ -503,7 +583,7 @@ class AutonomousTrader:
                     await self._execute_exit(
                         symbol,
                         current_price,
-                        f'Profit target hit ({pnl_pct*100:.1f}%)',
+                        f"Profit target hit ({pnl_pct*100:.1f}%)",
                         pnl_pct,
                     )
                     continue
@@ -513,7 +593,7 @@ class AutonomousTrader:
                     await self._execute_exit(
                         symbol,
                         current_price,
-                        f'Stop loss hit ({pnl_pct*100:.1f}%)',
+                        f"Stop loss hit ({pnl_pct*100:.1f}%)",
                         pnl_pct,
                     )
                     continue
@@ -533,8 +613,8 @@ class AutonomousTrader:
                 return False
 
             account = engine.get_account_state()
-            daily_pnl = account.get('daily_pnl', 0.0)
-            total_equity = account.get('total_equity', 10000.0)
+            daily_pnl = account.get("daily_pnl", 0.0)
+            total_equity = account.get("total_equity", 10000.0)
 
             if total_equity <= 0:
                 return False
@@ -551,7 +631,9 @@ class AutonomousTrader:
                 return True
 
             # Log if approaching limit (80% of limit)
-            if daily_pnl < 0 and daily_loss_pct >= (self.config.max_daily_loss_pct * 0.8):
+            if daily_pnl < 0 and daily_loss_pct >= (
+                self.config.max_daily_loss_pct * 0.8
+            ):
                 logger.warning(
                     f"⚠️  Approaching daily loss limit: "
                     f"${abs(daily_pnl):.2f} ({daily_loss_pct:.2f}%) "
@@ -594,9 +676,9 @@ class AutonomousTrader:
                 return False, "Paper trading engine unavailable"
 
             account = engine.get_account_state()
-            daily_pnl = account.get('daily_pnl', 0.0)
-            total_equity = account.get('total_equity', 10000.0)
-            cash = account.get('cash', 10000.0)
+            daily_pnl = account.get("daily_pnl", 0.0)
+            total_equity = account.get("total_equity", 10000.0)
+            cash = account.get("cash", 10000.0)
 
             if total_equity <= 0:
                 return False, "Invalid account equity"
@@ -604,7 +686,10 @@ class AutonomousTrader:
             # Check 1: Daily loss not already exceeded
             daily_loss_pct = abs(daily_pnl) / total_equity * 100
             if daily_pnl < 0 and daily_loss_pct >= self.config.max_daily_loss_pct:
-                return False, f"Daily loss limit already exceeded: ${abs(daily_pnl):.2f}"
+                return (
+                    False,
+                    f"Daily loss limit already exceeded: ${abs(daily_pnl):.2f}",
+                )
 
             # Check 2: BUY-specific validations
             if side == "BUY":
@@ -612,7 +697,10 @@ class AutonomousTrader:
 
                 # Verify sufficient cash
                 if order_cost > cash:
-                    return False, f"Insufficient cash: need ${order_cost:.2f}, have ${cash:.2f}"
+                    return (
+                        False,
+                        f"Insufficient cash: need ${order_cost:.2f}, have ${cash:.2f}",
+                    )
 
                 # Worst-case loss: order fails and position closes at -2% (stop loss)
                 worst_case_loss = order_cost * 0.02 + (order_cost * 0.001)  # SL + fee
@@ -648,14 +736,14 @@ class AutonomousTrader:
             positions = engine.get_positions()
             prices = await self._get_current_prices()
             account = engine.get_account_state()
-            portfolio_value = account.get('total_equity', 0)
+            portfolio_value = account.get("total_equity", 0)
 
             if not positions or not prices or portfolio_value <= 0:
                 return
 
             # Fetch regime data for all positions
             symbol_regimes = await self._fetch_all_regimes(
-                [p['symbol'] for p in positions]
+                [p["symbol"] for p in positions]
             )
 
             if not symbol_regimes:
@@ -678,12 +766,16 @@ class AutonomousTrader:
                     await self._execute_portfolio_decision(decision, prices)
                 elif decision.urgency >= 6:
                     # Medium urgency: queue for execution
-                    logger.info(f"📋 Queued portfolio decision: {decision.decision_type} "
-                              f"(urgency {decision.urgency}/10)")
+                    logger.info(
+                        f"📋 Queued portfolio decision: {decision.decision_type} "
+                        f"(urgency {decision.urgency}/10)"
+                    )
                 else:
                     # Low urgency: just log
-                    logger.debug(f"📋 Portfolio decision: {decision.decision_type} "
-                               f"(urgency {decision.urgency}/10)")
+                    logger.debug(
+                        f"📋 Portfolio decision: {decision.decision_type} "
+                        f"(urgency {decision.urgency}/10)"
+                    )
 
         except Exception as e:
             logger.error(f"Error checking portfolio decisions: {e}", exc_info=True)
@@ -751,30 +843,36 @@ class AutonomousTrader:
                 if action == "SELL":
                     # Find and close position
                     positions = engine.get_positions()
-                    pos = next((p for p in positions if p['symbol'] == symbol), None)
+                    pos = next((p for p in positions if p["symbol"] == symbol), None)
 
                     if pos:
                         result = await engine.place_order(
                             symbol=symbol,
-                            side='SELL',
-                            quantity=pos['quantity'],
-                            current_price=current_prices.get(symbol, pos['entry_price']),
-                            order_type='MARKET',
-                            strategy_name='portfolio_decision_coordinator'
+                            side="SELL",
+                            quantity=pos["quantity"],
+                            current_price=current_prices.get(
+                                symbol, pos["entry_price"]
+                            ),
+                            order_type="MARKET",
+                            strategy_name="portfolio_decision_coordinator",
                         )
 
-                        if result.get('status') == 'FILLED':
-                            logger.info(f"✅ Sold {pos['quantity']:.6f} {symbol} "
-                                      f"@ {current_prices.get(symbol, 0):.2f}")
+                        if result.get("status") == "FILLED":
+                            logger.info(
+                                f"✅ Sold {pos['quantity']:.6f} {symbol} "
+                                f"@ {current_prices.get(symbol, 0):.2f}"
+                            )
                             executed_count += 1
                         else:
-                            logger.warning(f"❌ Failed to sell {symbol}: {result.get('error')}")
+                            logger.warning(
+                                f"❌ Failed to sell {symbol}: {result.get('error')}"
+                            )
 
                 elif action == "BUY":
                     # Execute BUY for rotation/rebalancing
                     # Use conservative sizing: 5% of portfolio per symbol
                     account = engine.get_account_state()
-                    capital = account['total_equity'] * 0.05
+                    capital = account["total_equity"] * 0.05
                     price = current_prices.get(symbol)
 
                     if price and price > 0:
@@ -782,18 +880,22 @@ class AutonomousTrader:
 
                         result = await engine.place_order(
                             symbol=symbol,
-                            side='BUY',
+                            side="BUY",
                             quantity=quantity,
                             current_price=price,
-                            order_type='MARKET',
-                            strategy_name='portfolio_decision_coordinator'
+                            order_type="MARKET",
+                            strategy_name="portfolio_decision_coordinator",
                         )
 
-                        if result.get('status') == 'FILLED':
-                            logger.info(f"✅ Bought {quantity:.6f} {symbol} @ {price:.2f}")
+                        if result.get("status") == "FILLED":
+                            logger.info(
+                                f"✅ Bought {quantity:.6f} {symbol} @ {price:.2f}"
+                            )
                             executed_count += 1
                         else:
-                            logger.warning(f"❌ Failed to buy {symbol}: {result.get('error')}")
+                            logger.warning(
+                                f"❌ Failed to buy {symbol}: {result.get('error')}"
+                            )
 
             # Mark decision as executed if all actions completed
             if executed_count == len(decision.actions):
@@ -802,7 +904,9 @@ class AutonomousTrader:
                 logger.info(f"✅ Portfolio decision executed: {decision.decision_type}")
                 return True
             else:
-                logger.warning(f"⚠️ Partial execution: {executed_count}/{len(decision.actions)} actions")
+                logger.warning(
+                    f"⚠️ Partial execution: {executed_count}/{len(decision.actions)} actions"
+                )
                 return False
 
         except Exception as e:
@@ -833,10 +937,12 @@ class AutonomousTrader:
             # HARDENING: Pre-order risk validation (Pillar #6: Risk Enforcement Double-Check)
             # Estimate position size to validate risk (will be recalculated below with volatility)
             account = engine.get_account_state()
-            estimated_quantity = (account['total_equity'] * 0.03) / current_price  # Rough estimate
+            estimated_quantity = (
+                account["total_equity"] * 0.03
+            ) / current_price  # Rough estimate
             risk_valid, risk_reason = await self._validate_risk_before_order(
                 symbol=signal.symbol,
-                side='BUY',
+                side="BUY",
                 quantity=estimated_quantity,
                 current_price=current_price,
             )
@@ -846,7 +952,7 @@ class AutonomousTrader:
 
             # Calculate position size with volatility & regime adjustments (Phase 314/316)
             account = engine.get_account_state()
-            capital = account['total_equity']
+            capital = account["total_equity"]
 
             # Get volatility manager and regime detector for dynamic sizing and stops
             vol_mgr = get_volatility_manager()
@@ -854,6 +960,7 @@ class AutonomousTrader:
 
             # Fetch historical data for volatility and regime calculation
             from backend.analytics.historical_data import get_historical_service
+
             hist_service = get_historical_service()
             if hist_service:
                 end = datetime.utcnow()
@@ -867,21 +974,31 @@ class AutonomousTrader:
             regime_adjustment = 1.0
             if ohlcv_hist is not None and len(ohlcv_hist) >= 20:
                 vol_metrics = vol_mgr.calculate_volatility(ohlcv_hist)
-                logger.info(f"   Volatility: {vol_metrics.get('vol_20d', 0):.1f}% ({vol_metrics.get('regime', '?')})")
+                logger.info(
+                    f"   Volatility: {vol_metrics.get('vol_20d', 0):.1f}% ({vol_metrics.get('regime', '?')})"
+                )
 
                 # Get regime-aware position sizing adjustment (Phase 316)
                 if len(ohlcv_hist) >= 200:  # Need 200+ candles for regime detector
                     regime_info = regime_detector.detect_regime(ohlcv_hist)
-                    regime_thresholds = regime_detector.get_adaptive_thresholds(regime_info)
-                    regime_adjustment = regime_thresholds.get("position_size_adjustment", 1.0)
-                    logger.info(f"   Regime: {regime_info.get('regime', 'unknown')} (size multiplier: {regime_adjustment:.2f}x)")
+                    regime_thresholds = regime_detector.get_adaptive_thresholds(
+                        regime_info
+                    )
+                    regime_adjustment = regime_thresholds.get(
+                        "position_size_adjustment", 1.0
+                    )
+                    logger.info(
+                        f"   Regime: {regime_info.get('regime', 'unknown')} (size multiplier: {regime_adjustment:.2f}x)"
+                    )
             else:
                 vol_metrics = {"current_vol": 0.30, "regime": "medium", "vol_20d": None}
-                logger.warning(f"   Insufficient data for volatility, using defaults")
+                logger.warning("   Insufficient data for volatility, using defaults")
 
             # Safety checks (GAP #1: extreme price handling)
             if current_price <= 0 or current_price > 1e10:
-                logger.error(f"{signal.symbol}: Invalid price {current_price}, rejecting order")
+                logger.error(
+                    f"{signal.symbol}: Invalid price {current_price}, rejecting order"
+                )
                 return False
 
             # Dynamic position sizing based on volatility and regime (Phase 314/316)
@@ -895,7 +1012,9 @@ class AutonomousTrader:
             # Apply regime adjustment to position size
             base_position_pct = sizing["position_size_pct"]
             adjusted_position_pct = base_position_pct * regime_adjustment
-            adjusted_position_pct = max(0.01, min(adjusted_position_pct, 0.10))  # Clamp to 1-10%
+            adjusted_position_pct = max(
+                0.01, min(adjusted_position_pct, 0.10)
+            )  # Clamp to 1-10%
 
             adjusted_position_value = capital * adjusted_position_pct
             quantity = adjusted_position_value / current_price
@@ -903,21 +1022,26 @@ class AutonomousTrader:
 
             # Sanity check: quantity should be reasonable
             if quantity > 1_000_000:
-                logger.error(f"{signal.symbol}: Position size unreasonable ({quantity:.0f} units), rejecting")
+                logger.error(
+                    f"{signal.symbol}: Position size unreasonable ({quantity:.0f} units), rejecting"
+                )
                 return False
 
             logger.info(f"   Position: {quantity:.8f} {signal.symbol}")
             logger.info(f"   Cost: €{position_value:.2f}")
-            logger.info(f"   Sizing: {sizing['reason']} | Regime adjustment: {regime_adjustment:.2f}x")
+            logger.info(
+                f"   Sizing: {sizing['reason']} | Regime adjustment: {regime_adjustment:.2f}x"
+            )
 
             # Validate via Smart Gateway using ExecutionContext
             from backend.execution.smart_executor import ExecutionContext
+
             context = ExecutionContext(
                 symbol=signal.symbol,
                 quantity=quantity,
                 current_price=current_price,
                 min_confidence=0.6,
-                max_position_pct=self.config.position_size_pct
+                max_position_pct=self.config.position_size_pct,
             )
             decision = executor.evaluate_entry(context)
 
@@ -925,32 +1049,34 @@ class AutonomousTrader:
             logger.info(f"   Reason: {decision.reason}")
 
             if decision.decision != "EXECUTE":
-                logger.warning(f"❌ ENTRY REJECTED for {signal.symbol}: {decision.reason}")
+                logger.warning(
+                    f"❌ ENTRY REJECTED for {signal.symbol}: {decision.reason}"
+                )
                 return False
 
-            logger.info(f"   ✅ Approval granted - Placing order...")
+            logger.info("   ✅ Approval granted - Placing order...")
 
             # Place order
             result = await engine.place_order(
                 symbol=signal.symbol,
-                side='BUY',
+                side="BUY",
                 quantity=quantity,
                 current_price=current_price,
-                order_type='MARKET',
-                strategy_name='autonomous_trader'
+                order_type="MARKET",
+                strategy_name="autonomous_trader",
             )
 
             logger.info(f"   Order Result: {result}")
 
-            if result.get('status') == 'FILLED':
+            if result.get("status") == "FILLED":
                 trade_log = {
-                    'timestamp': datetime.utcnow().isoformat() + "Z",
-                    'symbol': signal.symbol,
-                    'side': 'BUY',
-                    'quantity': quantity,
-                    'price': current_price,
-                    'reason': signal.reason,
-                    'signal_strength': signal.strength
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "symbol": signal.symbol,
+                    "side": "BUY",
+                    "quantity": quantity,
+                    "price": current_price,
+                    "reason": signal.reason,
+                    "signal_strength": signal.strength,
                 }
                 self.trade_history.append(trade_log)
 
@@ -960,7 +1086,7 @@ class AutonomousTrader:
                     extra={
                         "extra_fields": {
                             "event": "TRADE_EXECUTED",
-                            "order_id": result.get('order_id', 'unknown'),
+                            "order_id": result.get("order_id", "unknown"),
                             "symbol": signal.symbol,
                             "side": "BUY",
                             "quantity": round(quantity, 6),
@@ -969,10 +1095,10 @@ class AutonomousTrader:
                             "strategy": "autonomous_trader",
                             "signal_strength": round(signal.strength, 2),
                             "signal_reason": signal.reason,
-                            "status": result.get('status'),
-                            "timestamp": trade_log['timestamp'],
+                            "status": result.get("status"),
+                            "timestamp": trade_log["timestamp"],
                         }
-                    }
+                    },
                 )
                 # Clear failure count on success
                 self.order_failures[signal.symbol] = 0
@@ -988,32 +1114,38 @@ class AutonomousTrader:
                     extra={
                         "extra_fields": {
                             "event": "ORDER_FAILED",
-                            "order_id": result.get('order_id', 'unknown'),
+                            "order_id": result.get("order_id", "unknown"),
                             "symbol": signal.symbol,
                             "side": "BUY",
                             "quantity": round(quantity, 6),
                             "price": round(current_price, 2),
                             "strategy": "autonomous_trader",
-                            "error_code": result.get('error_code'),
-                            "error_message": result.get('error'),
+                            "error_code": result.get("error_code"),
+                            "error_message": result.get("error"),
                             "consecutive_failures": failures,
                             "timestamp": datetime.utcnow().isoformat() + "Z",
                         }
-                    }
+                    },
                 )
 
                 # Back off if repeated failures
                 if failures > 3:
-                    logger.error(f"{signal.symbol}: {failures} consecutive failures, pausing trading")
+                    logger.error(
+                        f"{signal.symbol}: {failures} consecutive failures, pausing trading"
+                    )
                 return False
 
         except Exception as e:
             failures = self.order_failures.get(signal.symbol, 0) + 1
             self.order_failures[signal.symbol] = failures
-            logger.error(f"Error executing entry for {signal.symbol}: {e} (failure #{failures})")
+            logger.error(
+                f"Error executing entry for {signal.symbol}: {e} (failure #{failures})"
+            )
             return False
 
-    async def _execute_exit(self, symbol: str, current_price: float, reason: str, pnl_pct: float = 0.0) -> bool:
+    async def _execute_exit(
+        self, symbol: str, current_price: float, reason: str, pnl_pct: float = 0.0
+    ) -> bool:
         """Execute a SELL order."""
         try:
             engine = get_paper_trading()
@@ -1022,33 +1154,33 @@ class AutonomousTrader:
 
             # Find position
             positions = engine.get_positions()
-            pos = next((p for p in positions if p['symbol'] == symbol), None)
+            pos = next((p for p in positions if p["symbol"] == symbol), None)
             if not pos:
                 return False
 
-            quantity = pos['quantity']
+            quantity = pos["quantity"]
 
             # Place order
             result = await engine.place_order(
                 symbol=symbol,
-                side='SELL',
+                side="SELL",
                 quantity=quantity,
                 current_price=current_price,
-                order_type='MARKET',
-                strategy_name='autonomous_trader'
+                order_type="MARKET",
+                strategy_name="autonomous_trader",
             )
 
-            if result.get('status') == 'FILLED':
-                pnl = result.get('pnl', 0)
+            if result.get("status") == "FILLED":
+                pnl = result.get("pnl", 0)
                 exit_log = {
-                    'timestamp': datetime.utcnow().isoformat() + "Z",
-                    'symbol': symbol,
-                    'side': 'SELL',
-                    'quantity': quantity,
-                    'price': current_price,
-                    'reason': reason,
-                    'pnl': pnl,
-                    'pnl_pct': pnl_pct,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "symbol": symbol,
+                    "side": "SELL",
+                    "quantity": quantity,
+                    "price": current_price,
+                    "reason": reason,
+                    "pnl": pnl,
+                    "pnl_pct": pnl_pct,
                 }
                 self.trade_history.append(exit_log)
 
@@ -1058,7 +1190,7 @@ class AutonomousTrader:
                     extra={
                         "extra_fields": {
                             "event": "TRADE_EXIT",
-                            "order_id": result.get('order_id', 'unknown'),
+                            "order_id": result.get("order_id", "unknown"),
                             "symbol": symbol,
                             "side": "SELL",
                             "quantity": round(quantity, 6),
@@ -1068,10 +1200,10 @@ class AutonomousTrader:
                             "exit_reason": reason,
                             "pnl": round(pnl, 2),
                             "pnl_pct": round(pnl_pct, 4),
-                            "status": result.get('status'),
-                            "timestamp": exit_log['timestamp'],
+                            "status": result.get("status"),
+                            "timestamp": exit_log["timestamp"],
                         }
-                    }
+                    },
                 )
                 return True
             else:
@@ -1081,18 +1213,18 @@ class AutonomousTrader:
                     extra={
                         "extra_fields": {
                             "event": "EXIT_FAILED",
-                            "order_id": result.get('order_id', 'unknown'),
+                            "order_id": result.get("order_id", "unknown"),
                             "symbol": symbol,
                             "side": "SELL",
                             "quantity": round(quantity, 6),
                             "price": round(current_price, 2),
                             "strategy": "autonomous_trader",
                             "exit_reason": reason,
-                            "error_code": result.get('error_code'),
-                            "error_message": result.get('error'),
+                            "error_code": result.get("error_code"),
+                            "error_message": result.get("error"),
                             "timestamp": datetime.utcnow().isoformat() + "Z",
                         }
-                    }
+                    },
                 )
                 return False
 
@@ -1131,9 +1263,9 @@ class AutonomousTrader:
             # Calculate technical indicators
             # Extract 'Close' prices, handling both flat and multi-level columns
             try:
-                prices = ohlcv['Close']
+                prices = ohlcv["Close"]
                 # If prices is a DataFrame (multi-level), extract the first column as Series
-                if hasattr(prices, 'iloc'):
+                if hasattr(prices, "iloc"):
                     if len(prices.shape) > 1:
                         prices = prices.iloc[:, 0]
             except:
@@ -1141,6 +1273,7 @@ class AutonomousTrader:
 
             # RSI (14-period)
             import pandas as pd
+
             delta = prices.diff()
             gain = delta.where(delta > 0, 0).rolling(window=14).mean()
             loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
@@ -1175,7 +1308,9 @@ class AutonomousTrader:
             upper_val = float(upper_band.iloc[-1])
             lower_val = float(lower_band.iloc[-1])
             band_diff = upper_val - lower_val
-            bb_position = (current_price - lower_val) / band_diff if band_diff > 0.001 else 0.5
+            bb_position = (
+                (current_price - lower_val) / band_diff if band_diff > 0.001 else 0.5
+            )
 
             # Calculate composite signal (0-100)
             signal_score = 50.0  # Neutral baseline
@@ -1224,12 +1359,18 @@ class AutonomousTrader:
 
                         # Blend: weight GARP heavily but allow technical to push over threshold
                         signal_score = (0.6 * garp_score) + (0.4 * technical_score)
-                        logger.debug(f"{symbol} signal: {signal_score:.1f} (GARP={garp_score:.1f}, Technical={technical_score:.1f}, Position={garp_position})")
+                        logger.debug(
+                            f"{symbol} signal: {signal_score:.1f} (GARP={garp_score:.1f}, Technical={technical_score:.1f}, Position={garp_position})"
+                        )
                     else:
                         signal_score = technical_score
-                        logger.debug(f"{symbol} signal: {signal_score:.1f} (technical only, GARP empty)")
+                        logger.debug(
+                            f"{symbol} signal: {signal_score:.1f} (technical only, GARP empty)"
+                        )
                 except Exception as e:
-                    logger.warning(f"{symbol}: GARP calculation failed, using technical only: {e}")
+                    logger.warning(
+                        f"{symbol}: GARP calculation failed, using technical only: {e}"
+                    )
                     signal_score = technical_score
                     garp_score = 0.0
             else:
@@ -1237,7 +1378,9 @@ class AutonomousTrader:
                 garp_score = 0.0  # No GARP for crypto
 
             signal_score = max(0, min(100, signal_score))
-            logger.debug(f"{symbol} signal: {signal_score:.1f} (RSI={rsi_value:.1f}, MACD={macd_value:.4f}, BB={bb_position:.2f})")
+            logger.debug(
+                f"{symbol} signal: {signal_score:.1f} (RSI={rsi_value:.1f}, MACD={macd_value:.4f}, BB={bb_position:.2f})"
+            )
 
             # Return signal score and component scores for explainer
             component_scores = {
@@ -1250,7 +1393,9 @@ class AutonomousTrader:
             logger.error(f"Error calculating signal for {symbol}: {e}")
             return 0.0, {"garp": 0.0, "technical": 0.0}
 
-    async def _get_adaptive_entry_threshold(self, symbol: str, regime_detector) -> tuple:
+    async def _get_adaptive_entry_threshold(
+        self, symbol: str, regime_detector
+    ) -> tuple:
         """
         Get adaptive entry threshold based on market regime.
 
@@ -1260,6 +1405,7 @@ class AutonomousTrader:
         """
         try:
             from backend.analytics.historical_data import get_historical_service
+
             hist_service = get_historical_service()
             regime_info = {"regime": "unknown"}
             adaptive_threshold = self.config.entry_threshold  # Default fallback
@@ -1269,15 +1415,17 @@ class AutonomousTrader:
                 start = end - timedelta(days=90)
                 ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
 
-                if ohlcv is not None and len(ohlcv) >= 200:  # Need 200+ candles for regime detection
+                if (
+                    ohlcv is not None and len(ohlcv) >= 200
+                ):  # Need 200+ candles for regime detection
                     # Run regime detection in thread pool to avoid blocking
                     regime_info = await asyncio.get_event_loop().run_in_executor(
-                        _signal_thread_pool,
-                        regime_detector.detect_regime,
-                        ohlcv
+                        _signal_thread_pool, regime_detector.detect_regime, ohlcv
                     )
                     thresholds = regime_detector.get_adaptive_thresholds(regime_info)
-                    adaptive_threshold = thresholds.get("entry_threshold", self.config.entry_threshold)
+                    adaptive_threshold = thresholds.get(
+                        "entry_threshold", self.config.entry_threshold
+                    )
 
             return regime_info, adaptive_threshold
 
@@ -1293,13 +1441,16 @@ class AutonomousTrader:
         """
         try:
             from backend.exchange.binance_stream import get_stream_client
+
             client = get_stream_client()
             if not client:
                 logger.warning("Price fetch: WebSocket client not initialized")
                 return {}
 
             if not client.is_connected:
-                logger.warning("Price fetch: WebSocket not connected, no fresh data available")
+                logger.warning(
+                    "Price fetch: WebSocket not connected, no fresh data available"
+                )
                 return {}
 
             # HARDENING: Get prices only if fresh (max 5 seconds old) - Pillar #1
@@ -1315,7 +1466,9 @@ class AutonomousTrader:
 
             # HARDENING: Validate prices for poisoning (Pillar #9: Incoming Data Validation)
             validator = get_price_validator()
-            valid_prices, invalid_prices = validator.validate_prices_bulk(prices, datetime.utcnow())
+            valid_prices, invalid_prices = validator.validate_prices_bulk(
+                prices, datetime.utcnow()
+            )
 
             # Log any rejections
             if invalid_prices:
@@ -1390,8 +1543,8 @@ class AutonomousTrader:
         if engine:
             # Get account data
             account = engine.get_account_state()
-            daily_pnl = account.get('daily_pnl', 0.0)
-            total_equity = account.get('total_equity', 10000.0)
+            daily_pnl = account.get("daily_pnl", 0.0)
+            total_equity = account.get("total_equity", 10000.0)
             if total_equity > 0:
                 daily_pnl_pct = (daily_pnl / total_equity) * 100
 
@@ -1402,9 +1555,9 @@ class AutonomousTrader:
             # Calculate unrealized P&L from positions
             unrealized_pnl = 0.0
             for pos in positions:
-                qty = pos.get('quantity', 0)
-                entry = pos.get('entry_price', 0)
-                current = pos.get('current_price', 0)
+                qty = pos.get("quantity", 0)
+                entry = pos.get("entry_price", 0)
+                current = pos.get("current_price", 0)
                 if qty > 0 and entry > 0:
                     unrealized_pnl += qty * (current - entry)
 
@@ -1415,20 +1568,20 @@ class AutonomousTrader:
                     daily_pnl_pct = (daily_pnl / total_equity) * 100
 
         return {
-            'running': self.running,
-            'enabled': self.config.enabled,
-            'active_positions': active_positions,
-            'total_trades': total_trades,
-            'recent_trades': self.trade_history[-10:] if self.trade_history else [],
-            'daily_pnl': round(daily_pnl, 2),
-            'daily_pnl_pct': round(daily_pnl_pct, 2),
-            'config': {
-                'entry_threshold': self.config.entry_threshold,
-                'exit_profit_target': self.config.exit_profit_target,
-                'exit_stop_loss': self.config.exit_stop_loss,
-                'max_positions': self.config.max_positions,
-                'symbols': self.config.symbols
-            }
+            "running": self.running,
+            "enabled": self.config.enabled,
+            "active_positions": active_positions,
+            "total_trades": total_trades,
+            "recent_trades": self.trade_history[-10:] if self.trade_history else [],
+            "daily_pnl": round(daily_pnl, 2),
+            "daily_pnl_pct": round(daily_pnl_pct, 2),
+            "config": {
+                "entry_threshold": self.config.entry_threshold,
+                "exit_profit_target": self.config.exit_profit_target,
+                "exit_stop_loss": self.config.exit_stop_loss,
+                "max_positions": self.config.max_positions,
+                "symbols": self.config.symbols,
+            },
         }
 
 

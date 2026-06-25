@@ -5,7 +5,7 @@ Daily batch job to match recommendations against portfolio outcomes.
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from datetime import datetime, timezone
 from dataclasses import dataclass
 
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PortfolioState:
     """Portfolio state at a point in time."""
+
     timestamp: str  # ISO format
     symbol: str
     quantity: float
@@ -26,6 +27,7 @@ class PortfolioState:
 @dataclass
 class OutcomeCalculation:
     """Calculated outcome from recommendation."""
+
     recommendation_id: str
     symbol: str
     holding_period_days: int
@@ -33,7 +35,9 @@ class OutcomeCalculation:
     exit_price: float
     entry_allocation_pct: float
     exit_allocation_pct: float
-    actual_return_pct: Optional[float]  # (exit - entry) / entry * 100, None if invalid entry price
+    actual_return_pct: Optional[
+        float
+    ]  # (exit - entry) / entry * 100, None if invalid entry price
     recommendation_matched: bool
     error: Optional[str] = None  # Error message if calculation failed
 
@@ -89,7 +93,9 @@ class RecommendationTrackingDaemon:
 
         # Calculate return
         if entry_price <= 0:
-            logger.warning(f"Invalid entry price {entry_price} for {symbol}; skipping return calculation")
+            logger.warning(
+                f"Invalid entry price {entry_price} for {symbol}; skipping return calculation"
+            )
             price_return = None
             actual_return = None
         else:
@@ -157,14 +163,22 @@ class RecommendationTrackingDaemon:
 
             # Prefer matching by recommendation_id if available
             buy_exec = next(
-                (e for e in executions
-                 if (e.get("recommendation_id") == rec_id
-                     or (e.get("symbol") == symbol
-                         and e.get("side") == "BUY"
-                         and self._safe_timestamp_parse(e.get("timestamp", "")) > self._safe_timestamp_parse(entry_time)))
-                 and e.get("side") == "BUY"
-                 and id(e) not in matched_exec_ids),
-                None
+                (
+                    e
+                    for e in executions
+                    if (
+                        e.get("recommendation_id") == rec_id
+                        or (
+                            e.get("symbol") == symbol
+                            and e.get("side") == "BUY"
+                            and self._safe_timestamp_parse(e.get("timestamp", ""))
+                            > self._safe_timestamp_parse(entry_time)
+                        )
+                    )
+                    and e.get("side") == "BUY"
+                    and id(e) not in matched_exec_ids
+                ),
+                None,
             )
 
             if not buy_exec:
@@ -175,14 +189,22 @@ class RecommendationTrackingDaemon:
 
             # Find matching sell execution (after buy)
             sell_exec = next(
-                (e for e in executions
-                 if (e.get("recommendation_id") == rec_id
-                     or (e.get("symbol") == symbol
-                         and e.get("side") == "SELL"
-                         and self._safe_timestamp_parse(e.get("timestamp", "")) > self._safe_timestamp_parse(buy_exec.get("timestamp", ""))))
-                 and e.get("side") == "SELL"
-                 and id(e) not in matched_exec_ids),
-                None
+                (
+                    e
+                    for e in executions
+                    if (
+                        e.get("recommendation_id") == rec_id
+                        or (
+                            e.get("symbol") == symbol
+                            and e.get("side") == "SELL"
+                            and self._safe_timestamp_parse(e.get("timestamp", ""))
+                            > self._safe_timestamp_parse(buy_exec.get("timestamp", ""))
+                        )
+                    )
+                    and e.get("side") == "SELL"
+                    and id(e) not in matched_exec_ids
+                ),
+                None,
             )
 
             if not sell_exec:
@@ -240,7 +262,8 @@ class RecommendationTrackingDaemon:
         # Get pending recommendations (those without outcomes)
         rec_with_outcomes = set(o.recommendation_id for o in tracker.outcomes)
         pending_recs = [
-            r for r in tracker.recommendations
+            r
+            for r in tracker.recommendations
             if r.recommendation_id not in rec_with_outcomes
         ]
 
@@ -275,7 +298,9 @@ class RecommendationTrackingDaemon:
         for outcome in outcomes:
             # Check again if outcome already recorded (idempotency guard)
             if outcome.recommendation_id in rec_with_outcomes:
-                logger.warning(f"Outcome {outcome.recommendation_id} already recorded; skipping duplicate")
+                logger.warning(
+                    f"Outcome {outcome.recommendation_id} already recorded; skipping duplicate"
+                )
                 skipped_duplicates += 1
                 continue
 
@@ -291,10 +316,14 @@ class RecommendationTrackingDaemon:
                     )
                     recorded_count += 1
                 else:
-                    logger.warning(f"Skipped recording outcome {outcome.recommendation_id}: {outcome.error}")
+                    logger.warning(
+                        f"Skipped recording outcome {outcome.recommendation_id}: {outcome.error}"
+                    )
                     errors += 1
             except Exception as e:
-                logger.error(f"Failed to record outcome {outcome.recommendation_id}: {e}")
+                logger.error(
+                    f"Failed to record outcome {outcome.recommendation_id}: {e}"
+                )
                 errors += 1
 
         logger.info(

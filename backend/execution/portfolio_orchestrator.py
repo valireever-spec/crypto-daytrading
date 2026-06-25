@@ -3,12 +3,9 @@
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List
-from datetime import datetime
-import numpy as np
 
-from backend.execution.smart_executor import SmartExecutor, ExecutionContext
+from backend.execution.smart_executor import SmartExecutor
 from backend.execution.exit_manager import ExitManager
-from backend.analytics.regime_detector import get_regime_detector
 from backend.exchange.paper_trading import get_paper_trading
 
 logger = logging.getLogger(__name__)
@@ -17,6 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PortfolioRiskMetrics:
     """Portfolio-level risk metrics."""
+
     total_position_value: float
     total_positions: int
     total_capital: float
@@ -34,6 +32,7 @@ class PortfolioRiskMetrics:
 @dataclass
 class PortfolioAction:
     """Recommended portfolio action."""
+
     action_type: str  # REDUCE, REBALANCE, ENTER, EXIT, HOLD
     symbol: str
     quantity: float
@@ -68,7 +67,9 @@ class PortfolioOrchestrator:
         self.exit_manager = ExitManager()
         self.suggested_actions: List[PortfolioAction] = []
 
-    def get_portfolio_metrics(self, current_prices: Dict[str, float]) -> PortfolioRiskMetrics:
+    def get_portfolio_metrics(
+        self, current_prices: Dict[str, float]
+    ) -> PortfolioRiskMetrics:
         """Calculate portfolio-level risk metrics.
 
         Args:
@@ -231,7 +232,9 @@ class PortfolioOrchestrator:
             logger.error(f"Entry evaluation error: {e}")
             return {"approved": False, "reason": str(e)}
 
-    def check_portfolio_health(self, current_prices: Dict[str, float]) -> List[PortfolioAction]:
+    def check_portfolio_health(
+        self, current_prices: Dict[str, float]
+    ) -> List[PortfolioAction]:
         """Check portfolio health and generate recommended actions.
 
         Args:

@@ -8,7 +8,6 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Union
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
@@ -28,9 +27,16 @@ from backend.analytics.signals import init_signal_generator, get_signal_generato
 from backend.analytics.allocation import init_allocation, get_allocation
 from backend.analytics.strategy_analytics import init_analytics, get_analytics
 from backend.analytics.backtest_engine import BacktestEngine
-from backend.analytics.historical_data import init_historical_service, get_historical_service
+from backend.analytics.historical_data import (
+    init_historical_service,
+    get_historical_service,
+)
 from backend.analytics.regime_detector import get_regime_detector
-from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader, TradingConfig
+from backend.trading.autonomous_trader import (
+    init_autonomous_trader,
+    get_autonomous_trader,
+    TradingConfig,
+)
 from backend.execution.smart_executor import init_smart_executor
 from backend.analytics.tax_calculator import init_tax_calculator, Jurisdiction
 from backend.api.routers.tax import router as tax_router
@@ -43,13 +49,19 @@ from backend.api.routers.stocks import router as stocks_router
 from backend.api.routers.backup_analytics import router as backup_analytics_router
 from backend.analytics.portfolio_analyzer import init_portfolio_analyzer
 from backend.api.routers.risk_metrics import router as risk_metrics_router
-from backend.api.routers.portfolio_allocation import router as portfolio_allocation_router
+from backend.api.routers.portfolio_allocation import (
+    router as portfolio_allocation_router,
+)
 from backend.api.routers.backtest_allocation import router as backtest_allocation_router
 from backend.api.routers.attribution import router as attribution_router
 from backend.api.routers.recommendation import router as recommendation_router
-from backend.api.routers.recommendation_advanced import router as recommendation_advanced_router
+from backend.api.routers.recommendation_advanced import (
+    router as recommendation_advanced_router,
+)
 from backend.api.routers.rebalancing import router as rebalancing_router
-from backend.api.routers.production_hardening import router as production_hardening_router
+from backend.api.routers.production_hardening import (
+    router as production_hardening_router,
+)
 from backend.api.routers.learning_feedback import router as learning_feedback_router
 from backend.api.routers.learning_automation import router as learning_automation_router
 from backend.api.routers.regime import router as regime_router
@@ -103,7 +115,9 @@ async def lifespan(app: FastAPI):
     if primary_url == backup_url:
         logger.error(f"ERROR: PRIMARY and BACKUP URLs are identical: {primary_url}")
         raise ValueError("PRIMARY_API_URL and BACKUP_API_URL must be different")
-    logger.info(f"HA Configuration validated: PRIMARY={primary_url}, BACKUP={backup_url}")
+    logger.info(
+        f"HA Configuration validated: PRIMARY={primary_url}, BACKUP={backup_url}"
+    )
 
     # Initialize paper trading engine
     init_paper_trading(starting_capital=settings.initial_capital)
@@ -200,6 +214,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize price simulator (fallback when Binance doesn't send data)
     from backend.exchange.price_simulator import init_simulator
+
     simulator = init_simulator()
 
     # Start simulator to inject prices if WebSocket doesn't receive them
@@ -211,17 +226,23 @@ async def lifespan(app: FastAPI):
                 stream_client = get_stream_client()
                 if stream_client:
                     # Only inject if WebSocket is connected but hasn't received real prices (timeout)
-                    if stream_client.is_connected and len(stream_client.price_cache) == 0:
+                    if (
+                        stream_client.is_connected
+                        and len(stream_client.price_cache) == 0
+                    ):
                         if not fallback_logged:
-                            logger.warning("Binance WebSocket connected but no price data. Using fallback simulator...")
+                            logger.warning(
+                                "Binance WebSocket connected but no price data. Using fallback simulator..."
+                            )
                             fallback_logged = True
                         simulator.update()
                         prices = simulator.get_prices()
                         from datetime import datetime
+
                         for symbol, price in prices.items():
                             stream_client.price_cache[symbol] = price
                             stream_client.last_update[symbol] = datetime.utcnow()
-                        logger.debug(f"Injected simulated prices (fallback)")
+                        logger.debug("Injected simulated prices (fallback)")
                     elif len(stream_client.price_cache) > 0:
                         # Real Binance data is flowing, reset fallback flag
                         fallback_logged = False
@@ -237,17 +258,19 @@ async def lifespan(app: FastAPI):
     # Load trading configuration from persistent storage (logs/trading_config.json) or .env
     config_dict = ConfigManager.load_config()
     trader_config = TradingConfig(
-        enabled=config_dict.get('enabled', True),
-        entry_threshold=config_dict.get('entry_threshold', 60.0),
-        exit_profit_target=config_dict.get('exit_profit_target', 0.03),
-        exit_stop_loss=config_dict.get('exit_stop_loss', 0.02),
-        position_size_pct=config_dict.get('position_size_pct', 0.02),
-        max_positions=config_dict.get('max_positions', 6),
-        max_daily_loss_pct=config_dict.get('max_daily_loss_pct', 8.0),
-        symbols=config_dict.get('symbols', ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'])
+        enabled=config_dict.get("enabled", True),
+        entry_threshold=config_dict.get("entry_threshold", 60.0),
+        exit_profit_target=config_dict.get("exit_profit_target", 0.03),
+        exit_stop_loss=config_dict.get("exit_stop_loss", 0.02),
+        position_size_pct=config_dict.get("position_size_pct", 0.02),
+        max_positions=config_dict.get("max_positions", 6),
+        max_daily_loss_pct=config_dict.get("max_daily_loss_pct", 8.0),
+        symbols=config_dict.get("symbols", ["BTCUSDT", "ETHUSDT", "BNBUSDT"]),
     )
     autonomous_trader = init_autonomous_trader(trader_config)
-    logger.info(f"Trading config loaded: position_size={trader_config.position_size_pct*100:.1f}%, max_positions={trader_config.max_positions}, max_daily_loss={trader_config.max_daily_loss_pct:.1f}%")
+    logger.info(
+        f"Trading config loaded: position_size={trader_config.position_size_pct*100:.1f}%, max_positions={trader_config.max_positions}, max_daily_loss={trader_config.max_daily_loss_pct:.1f}%"
+    )
     autonomous_trader_task = asyncio.create_task(autonomous_trader.start())
     logger.info("Autonomous trader initialized and started")
 
@@ -272,7 +295,7 @@ async def lifespan(app: FastAPI):
                             "max_positions": trader.config.max_positions,
                             "max_daily_loss_pct": trader.config.max_daily_loss_pct,
                             "symbols": trader.config.symbols,
-                            "enabled": trader.config.enabled
+                            "enabled": trader.config.enabled,
                         }
                         # Attempt sync (with retry logic built in)
                         ConfigManager.sync_to_backup(backup_url, current_config)
@@ -284,7 +307,9 @@ async def lifespan(app: FastAPI):
     global sync_task
     sync_task = asyncio.create_task(ensure_backup_in_sync())
 
-    logger.info("✅ Crypto daytrading platform startup complete: paper_trading, signal_generator, smart_executor, autonomous_trader, regime_detector, historical_data, portfolio_analyzer, tax_calculator, stock_optimizer, binance_streams, failover_monitor all initialized")
+    logger.info(
+        "✅ Crypto daytrading platform startup complete: paper_trading, signal_generator, smart_executor, autonomous_trader, regime_detector, historical_data, portfolio_analyzer, tax_calculator, stock_optimizer, binance_streams, failover_monitor all initialized"
+    )
     yield
 
     # Shutdown
@@ -338,6 +363,7 @@ logger = logging.getLogger(__name__)
 
 # Validate environment configuration
 from backend.core.config_manager import ConfigManager
+
 ConfigManager.validate_env_config()
 
 # Initialize auth manager
@@ -346,7 +372,11 @@ auth_manager = get_auth_manager()
 # Add CORS middleware (restrict to known origins in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
@@ -433,11 +463,15 @@ app.include_router(multi_asset_router)
 app.include_router(stocks_router)
 app.include_router(backup_analytics_router)  # Backup analytics (standby mode)
 app.include_router(risk_metrics_router)  # Risk metrics API (Phase 321)
-app.include_router(portfolio_allocation_router)  # Portfolio allocation optimizer (Phase 322)
+app.include_router(
+    portfolio_allocation_router
+)  # Portfolio allocation optimizer (Phase 322)
 app.include_router(backtest_allocation_router)  # Portfolio backtesting (Phase 323)
 app.include_router(attribution_router)  # Performance attribution (Phase 324)
 app.include_router(recommendation_router)  # Portfolio recommendation engine (Phase 325)
-app.include_router(recommendation_advanced_router)  # Advanced recommendations (Phase 326)
+app.include_router(
+    recommendation_advanced_router
+)  # Advanced recommendations (Phase 326)
 app.include_router(rebalancing_router)  # Constrained rebalancing (Phase 327)
 app.include_router(production_hardening_router)  # Production hardening (Phase 328)
 app.include_router(learning_feedback_router)  # Learning & feedback (Phase 329)
@@ -506,7 +540,9 @@ async def get_paper_account() -> JSONResponse:
     """Get paper trading account state."""
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+        raise HTTPException(
+            status_code=500, detail="Paper trading engine not initialized"
+        )
 
     return JSONResponse(engine.get_account_state())
 
@@ -523,7 +559,9 @@ async def place_paper_order(
     """Place a paper trading order."""
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+        raise HTTPException(
+            status_code=500, detail="Paper trading engine not initialized"
+        )
 
     if side not in ["BUY", "SELL"]:
         raise HTTPException(status_code=400, detail="Side must be BUY or SELL")
@@ -545,7 +583,9 @@ async def get_paper_positions() -> JSONResponse:
     """Get open positions."""
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+        raise HTTPException(
+            status_code=500, detail="Paper trading engine not initialized"
+        )
 
     return JSONResponse({"positions": engine.get_positions()})
 
@@ -555,7 +595,9 @@ async def get_paper_trades(limit: int = 100) -> JSONResponse:
     """Get trade history."""
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+        raise HTTPException(
+            status_code=500, detail="Paper trading engine not initialized"
+        )
 
     return JSONResponse({"trades": engine.get_trades(limit)})
 
@@ -565,7 +607,9 @@ async def reset_paper_trading() -> JSONResponse:
     """Reset paper trading account."""
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+        raise HTTPException(
+            status_code=500, detail="Paper trading engine not initialized"
+        )
 
     engine.reset()
     return JSONResponse({"status": "reset", "account": engine.get_account_state()})
@@ -628,9 +672,7 @@ async def calculate_signal(symbol: str, prices: list[float]) -> JSONResponse:
 
     except Exception as e:
         logger.error(f"Error calculating signal: {e}")
-        return JSONResponse(
-            {"status": "ERROR", "reason": str(e)}, status_code=500
-        )
+        return JSONResponse({"status": "ERROR", "reason": str(e)}, status_code=500)
 
 
 # === Manual Order Endpoints (FR-005) ===
@@ -667,7 +709,9 @@ async def place_manual_order(
 
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+        raise HTTPException(
+            status_code=500, detail="Paper trading engine not initialized"
+        )
 
     if side not in ["BUY", "SELL"]:
         raise HTTPException(status_code=400, detail="Side must be BUY or SELL")
@@ -701,26 +745,28 @@ async def emergency_exit(symbol: str) -> JSONResponse:
     """
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+        raise HTTPException(
+            status_code=500, detail="Paper trading engine not initialized"
+        )
 
     # Find the position
     positions = engine.get_positions()
-    position = next((p for p in positions if p['symbol'] == symbol), None)
+    position = next((p for p in positions if p["symbol"] == symbol), None)
 
     if not position:
         raise HTTPException(
             status_code=404,
-            detail=f"No open position for {symbol}. Open positions: {[p['symbol'] for p in positions]}"
+            detail=f"No open position for {symbol}. Open positions: {[p['symbol'] for p in positions]}",
         )
 
     # Use current market price from position
-    current_price = position['current_price']
+    current_price = position["current_price"]
 
     # Execute SELL to close position
     result = await engine.place_order(
         symbol=symbol.upper(),
         side="SELL",
-        quantity=position['quantity'],
+        quantity=position["quantity"],
         current_price=current_price,
         order_type="MARKET",
         strategy_name="emergency_exit",
@@ -731,20 +777,22 @@ async def emergency_exit(symbol: str) -> JSONResponse:
             f"🚨 EMERGENCY EXIT: {symbol} closed at ${current_price:.2f} - "
             f"Realized P&L: {result.get('realized_pnl', 0):.2f}"
         )
-        return JSONResponse({
-            "status": "EXIT_SUCCESSFUL",
-            "symbol": symbol,
-            "quantity": position['quantity'],
-            "exit_price": current_price,
-            "realized_pnl": result.get('realized_pnl', 0),
-            "order_id": result.get('order_id'),
-            "message": f"Position {symbol} closed successfully"
-        })
+        return JSONResponse(
+            {
+                "status": "EXIT_SUCCESSFUL",
+                "symbol": symbol,
+                "quantity": position["quantity"],
+                "exit_price": current_price,
+                "realized_pnl": result.get("realized_pnl", 0),
+                "order_id": result.get("order_id"),
+                "message": f"Position {symbol} closed successfully",
+            }
+        )
     else:
         logger.error(f"🚨 EMERGENCY EXIT FAILED: {symbol} - {result}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to close position: {result.get('reason', 'Unknown error')}"
+            detail=f"Failed to close position: {result.get('reason', 'Unknown error')}",
         )
 
 
@@ -756,24 +804,28 @@ async def emergency_exit_positions() -> JSONResponse:
     """
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+        raise HTTPException(
+            status_code=500, detail="Paper trading engine not initialized"
+        )
 
     positions = engine.get_positions()
-    return JSONResponse({
-        "count": len(positions),
-        "positions": [
-            {
-                "symbol": p['symbol'],
-                "quantity": p['quantity'],
-                "entry_price": p['entry_price'],
-                "current_price": p['current_price'],
-                "unrealized_pnl": p['unrealized_pnl'],
-                "unrealized_pnl_pct": p['unrealized_pnl_pct'],
-                "emergency_exit_url": f"/api/emergency-exit?symbol={p['symbol']}"
-            }
-            for p in positions
-        ]
-    })
+    return JSONResponse(
+        {
+            "count": len(positions),
+            "positions": [
+                {
+                    "symbol": p["symbol"],
+                    "quantity": p["quantity"],
+                    "entry_price": p["entry_price"],
+                    "current_price": p["current_price"],
+                    "unrealized_pnl": p["unrealized_pnl"],
+                    "unrealized_pnl_pct": p["unrealized_pnl_pct"],
+                    "emergency_exit_url": f"/api/emergency-exit?symbol={p['symbol']}",
+                }
+                for p in positions
+            ],
+        }
+    )
 
 
 # === Trading Control Endpoints (FR-007) ===
@@ -830,9 +882,7 @@ async def get_dashboard() -> JSONResponse:
 
     # Calculate metrics
     total_trades = len(engine.trade_history)
-    winning_trades = len(
-        [t for t in engine.trade_history if t.realized_pnl > 0]
-    )
+    winning_trades = len([t for t in engine.trade_history if t.realized_pnl > 0])
     win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
 
     return JSONResponse(
@@ -845,7 +895,11 @@ async def get_dashboard() -> JSONResponse:
                 "winning_trades": winning_trades,
                 "win_rate_pct": round(win_rate, 1),
                 "avg_win": (
-                    sum(t.realized_pnl for t in engine.trade_history if t.realized_pnl > 0)
+                    sum(
+                        t.realized_pnl
+                        for t in engine.trade_history
+                        if t.realized_pnl > 0
+                    )
                     / winning_trades
                     if winning_trades > 0
                     else 0
@@ -940,7 +994,9 @@ async def get_current_allocation() -> JSONResponse:
     """
     mgr = get_allocation()
     if not mgr:
-        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+        raise HTTPException(
+            status_code=500, detail="Allocation manager not initialized"
+        )
 
     state = mgr.get_allocation()
     return JSONResponse(
@@ -975,7 +1031,9 @@ async def save_allocation(
 
     mgr = get_allocation()
     if not mgr:
-        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+        raise HTTPException(
+            status_code=500, detail="Allocation manager not initialized"
+        )
 
     try:
         allocation = mgr.set_allocation(
@@ -1006,7 +1064,9 @@ async def set_allocation_preset(preset: str) -> JSONResponse:
     """
     mgr = get_allocation()
     if not mgr:
-        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+        raise HTTPException(
+            status_code=500, detail="Allocation manager not initialized"
+        )
 
     try:
         allocation = mgr.set_preset(preset)
@@ -1033,7 +1093,9 @@ async def reset_allocation() -> JSONResponse:
     """
     mgr = get_allocation()
     if not mgr:
-        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+        raise HTTPException(
+            status_code=500, detail="Allocation manager not initialized"
+        )
 
     allocation = mgr.reset_to_default()
     logger.info("Allocation reset to defaults")
@@ -1056,7 +1118,9 @@ async def get_allocation_presets() -> JSONResponse:
     """
     mgr = get_allocation()
     if not mgr:
-        raise HTTPException(status_code=500, detail="Allocation manager not initialized")
+        raise HTTPException(
+            status_code=500, detail="Allocation manager not initialized"
+        )
 
     presets = mgr.get_presets()
     return JSONResponse({"presets": presets})
@@ -1129,11 +1193,13 @@ async def get_strategy_stats(strategy_name: str) -> JSONResponse:
 
     stats = analytics.get_strategy_stats(strategy_name)
     if not stats:
-        raise HTTPException(status_code=404, detail=f"Strategy '{strategy_name}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Strategy '{strategy_name}' not found"
+        )
 
     # Handle infinity in profit_factor (JSON-safe)
     profit_factor = stats.profit_factor
-    if profit_factor == float('inf'):
+    if profit_factor == float("inf"):
         profit_factor_value = 999.9
     else:
         profit_factor_value = round(profit_factor, 2)
@@ -1154,7 +1220,9 @@ async def get_strategy_stats(strategy_name: str) -> JSONResponse:
             "consecutive_losses": stats.consecutive_losses,
             "expectancy": round(stats.expectancy, 2),
             "profit_factor": profit_factor_value,
-            "last_trade_time": stats.last_trade_time.isoformat() if stats.last_trade_time else None,
+            "last_trade_time": stats.last_trade_time.isoformat()
+            if stats.last_trade_time
+            else None,
         }
     )
 
@@ -1176,7 +1244,7 @@ async def get_all_strategy_stats() -> JSONResponse:
     for name, stats in all_stats.items():
         # Handle infinity in profit_factor (JSON-safe)
         profit_factor = stats.profit_factor
-        if profit_factor == float('inf'):
+        if profit_factor == float("inf"):
             profit_factor_value = 999.9
         else:
             profit_factor_value = round(profit_factor, 2)
@@ -1290,7 +1358,9 @@ async def get_strategy_allocation() -> JSONResponse:
 
     return JSONResponse(
         {
-            "allocation": {name: round(pct * 100, 1) for name, pct in allocation.items()},
+            "allocation": {
+                name: round(pct * 100, 1) for name, pct in allocation.items()
+            },
             "total_pct": 100.0,
             "timestamp": pd.Timestamp.utcnow().isoformat(),
         }
@@ -1403,22 +1473,28 @@ async def run_backtest(
         start = datetime.strptime(start_date, "%Y-%m-%d")
         end = datetime.strptime(end_date, "%Y-%m-%d")
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        raise HTTPException(
+            status_code=400, detail="Invalid date format. Use YYYY-MM-DD"
+        )
 
     if start >= end:
-        raise HTTPException(status_code=400, detail="Start date must be before end date")
+        raise HTTPException(
+            status_code=400, detail="Start date must be before end date"
+        )
 
     try:
         # Get historical data
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+            raise HTTPException(
+                status_code=500, detail="Historical data service not initialized"
+            )
 
         ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
         if ohlcv is None or ohlcv.empty:
             raise HTTPException(
                 status_code=404,
-                detail=f"No historical data found for {symbol} in date range"
+                detail=f"No historical data found for {symbol} in date range",
             )
 
         # Define strategy functions for backtesting
@@ -1462,7 +1538,9 @@ async def run_backtest(
         }
 
         if strategy_name.lower() not in strategies:
-            raise HTTPException(status_code=400, detail=f"Unknown strategy: {strategy_name}")
+            raise HTTPException(
+                status_code=400, detail=f"Unknown strategy: {strategy_name}"
+            )
 
         strategy_func = strategies[strategy_name.lower()]
 
@@ -1517,14 +1595,15 @@ async def get_backtest_data_range(symbol: str) -> JSONResponse:
     """
     hist_service = get_historical_service()
     if not hist_service:
-        raise HTTPException(status_code=500, detail="Historical data service not initialized")
+        raise HTTPException(
+            status_code=500, detail="Historical data service not initialized"
+        )
 
     date_range = hist_service.get_data_range(symbol)
 
     if date_range is None:
         raise HTTPException(
-            status_code=404,
-            detail=f"No historical data available for {symbol}"
+            status_code=404, detail=f"No historical data available for {symbol}"
         )
 
     start_date, end_date = date_range
@@ -1564,7 +1643,9 @@ async def compare_strategies(
             start = datetime.strptime(start_date, "%Y-%m-%d")
             end = datetime.strptime(end_date, "%Y-%m-%d")
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid date format. Use YYYY-MM-DD")
+            raise HTTPException(
+                status_code=400, detail="Invalid date format. Use YYYY-MM-DD"
+            )
 
         # Run backtest for each strategy
         strategies = ["momentum", "reversion", "grid"]
@@ -1572,7 +1653,9 @@ async def compare_strategies(
 
         for strategy in strategies:
             try:
-                response = await run_backtest(symbol, strategy, start_date, end_date, initial_capital)
+                response = await run_backtest(
+                    symbol, strategy, start_date, end_date, initial_capital
+                )
                 results[strategy] = response.body
             except HTTPException:
                 results[strategy] = {"error": "Backtest failed"}
@@ -1608,23 +1691,27 @@ async def detect_market_regime(symbol: str) -> JSONResponse:
         # Get historical data
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+            raise HTTPException(
+                status_code=500, detail="Historical data service not initialized"
+            )
 
         from datetime import datetime, timedelta
+
         end = datetime.now()
         start = end - timedelta(days=60)
 
         ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
         if ohlcv is None or ohlcv.empty:
             raise HTTPException(
-                status_code=404,
-                detail=f"No historical data found for {symbol}"
+                status_code=404, detail=f"No historical data found for {symbol}"
             )
 
         # Detect regime
         detector = get_regime_detector()
         if not detector:
-            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+            raise HTTPException(
+                status_code=500, detail="Regime detector not initialized"
+            )
 
         metrics = detector.detect_regime(ohlcv)
 
@@ -1647,7 +1734,9 @@ async def detect_market_regime(symbol: str) -> JSONResponse:
         raise
     except Exception as e:
         logger.error(f"Regime detection error: {e}")
-        raise HTTPException(status_code=500, detail=f"Regime detection failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Regime detection failed: {str(e)}"
+        )
 
 
 @app.get("/api/regime/trading-rules/{regime}")
@@ -1664,13 +1753,15 @@ async def get_regime_trading_rules(regime: str) -> JSONResponse:
     if regime.upper() not in valid_regimes:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid regime. Must be one of: {', '.join(valid_regimes)}"
+            detail=f"Invalid regime. Must be one of: {', '.join(valid_regimes)}",
         )
 
     try:
         detector = get_regime_detector()
         if not detector:
-            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+            raise HTTPException(
+                status_code=500, detail="Regime detector not initialized"
+            )
 
         # Create a sample regime_info dict for the requested regime
         regime_info = {
@@ -1692,7 +1783,9 @@ async def get_regime_trading_rules(regime: str) -> JSONResponse:
         return JSONResponse(
             {
                 "regime": regime.upper(),
-                "position_size_multiplier": thresholds.get("position_size_adjustment", 1.0),
+                "position_size_multiplier": thresholds.get(
+                    "position_size_adjustment", 1.0
+                ),
                 "stop_loss_pct": thresholds.get("stop_loss", 0.02),
                 "take_profit_pct": thresholds.get("profit_target", 0.05),
                 "entry_threshold": thresholds.get("entry_threshold", 55.0),
@@ -1719,22 +1812,26 @@ async def analyze_regime_strategy_impact(symbol: str) -> JSONResponse:
         # Detect current regime
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+            raise HTTPException(
+                status_code=500, detail="Historical data service not initialized"
+            )
 
         from datetime import datetime, timedelta
+
         end = datetime.now()
         start = end - timedelta(days=60)
 
         ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
         if ohlcv is None or ohlcv.empty:
             raise HTTPException(
-                status_code=404,
-                detail=f"No historical data found for {symbol}"
+                status_code=404, detail=f"No historical data found for {symbol}"
             )
 
         detector = get_regime_detector()
         if not detector:
-            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+            raise HTTPException(
+                status_code=500, detail="Regime detector not initialized"
+            )
 
         metrics = detector.detect_regime(ohlcv)
 
@@ -1762,7 +1859,9 @@ async def analyze_regime_strategy_impact(symbol: str) -> JSONResponse:
         raise
     except Exception as e:
         logger.error(f"Strategy impact analysis error: {e}")
-        raise HTTPException(status_code=500, detail=f"Strategy impact analysis failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Strategy impact analysis failed: {str(e)}"
+        )
 
 
 # === Smart Trading Gateway Endpoints (Phase 2 Week 8) ===
@@ -1793,28 +1892,45 @@ async def smart_trading_entry(
         # Detect current regime
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+            raise HTTPException(
+                status_code=500, detail="Historical data service not initialized"
+            )
 
         from datetime import datetime, timedelta
+
         end = datetime.now()
         start = end - timedelta(days=60)
 
         ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
         if ohlcv is None or ohlcv.empty:
             raise HTTPException(
-                status_code=404,
-                detail=f"No historical data found for {symbol}"
+                status_code=404, detail=f"No historical data found for {symbol}"
             )
 
         detector = get_regime_detector()
         if not detector:
-            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+            raise HTTPException(
+                status_code=500, detail="Regime detector not initialized"
+            )
 
         metrics = detector.detect_regime(ohlcv)
 
         # Check regime
         regime = metrics.get("regime", "SIDEWAYS")
         recommendation = metrics.get("recommendation", "No recommendation")
+
+        # Get trading rules from autonomous trader config
+        trader = get_autonomous_trader()
+        rules = {
+            "recommended_strategies": ["momentum", "mean_reversion", "grid"],
+            "position_size_multiplier": trader.config.position_size_pct
+            if trader
+            else 0.02,
+            "stop_loss_pct": trader.config.exit_stop_loss * 100 if trader else 1.5,
+            "take_profit_pct": trader.config.exit_profit_target * 100
+            if trader
+            else 2.5,
+        }
 
         # Calculate adjusted position size based on regime
         position_multipliers = {
@@ -1826,7 +1942,11 @@ async def smart_trading_entry(
         adjusted_quantity = quantity * position_multipliers.get(regime, 1.0)
 
         # Determine best strategy for this regime
-        best_strategy = rules["recommended_strategies"][0] if rules["recommended_strategies"] else "grid"
+        best_strategy = (
+            rules["recommended_strategies"][0]
+            if rules["recommended_strategies"]
+            else "grid"
+        )
 
         return JSONResponse(
             {
@@ -1841,8 +1961,12 @@ async def smart_trading_entry(
                 "stop_loss_pct": rules["stop_loss_pct"],
                 "take_profit_pct": rules["take_profit_pct"],
                 "entry_price": round(current_price, 2),
-                "stop_loss_price": round(current_price * (1 - rules["stop_loss_pct"] / 100), 2),
-                "take_profit_price": round(current_price * (1 + rules["take_profit_pct"] / 100), 2),
+                "stop_loss_price": round(
+                    current_price * (1 - rules["stop_loss_pct"] / 100), 2
+                ),
+                "take_profit_price": round(
+                    current_price * (1 + rules["take_profit_pct"] / 100), 2
+                ),
             }
         )
 
@@ -1867,22 +1991,26 @@ async def get_smart_trading_status(symbol: str = "BTCUSDT") -> JSONResponse:
         # Detect current regime
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+            raise HTTPException(
+                status_code=500, detail="Historical data service not initialized"
+            )
 
         from datetime import datetime, timedelta
+
         end = datetime.now()
         start = end - timedelta(days=60)
 
         ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
         if ohlcv is None or ohlcv.empty:
             raise HTTPException(
-                status_code=404,
-                detail=f"No historical data found for {symbol}"
+                status_code=404, detail=f"No historical data found for {symbol}"
             )
 
         detector = get_regime_detector()
         if not detector:
-            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+            raise HTTPException(
+                status_code=500, detail="Regime detector not initialized"
+            )
 
         metrics = detector.detect_regime(ohlcv)
 
@@ -1911,7 +2039,9 @@ async def get_smart_trading_status(symbol: str = "BTCUSDT") -> JSONResponse:
                 "volatility_pct": metrics.get("volatility_ratio", 1.0),
                 "trend_strength": metrics.get("trend_strength", 0.0),
                 "rsi": metrics.get("rsi_value", 50.0),
-                "recommended_strategies": strategies_by_regime.get(metrics.get("regime", "unknown"), []),
+                "recommended_strategies": strategies_by_regime.get(
+                    metrics.get("regime", "unknown"), []
+                ),
                 "position_multiplier": thresholds.get("position_size_adjustment", 1.0),
                 "risk_settings": {
                     "stop_loss_pct": thresholds.get("stop_loss", 0.02) * 100,
@@ -1949,7 +2079,9 @@ async def start_autonomous_trading():
         return JSONResponse({"status": "already_running"})
     trader.config.enabled = True
     logger.info("Autonomous trading enabled")
-    return JSONResponse({"status": "started", "message": "Autonomous trading is now active"})
+    return JSONResponse(
+        {"status": "started", "message": "Autonomous trading is now active"}
+    )
 
 
 @app.post("/api/autonomous/stop")
@@ -1960,7 +2092,9 @@ async def stop_autonomous_trading():
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
     trader.config.enabled = False
     logger.info("Autonomous trading disabled")
-    return JSONResponse({"status": "stopped", "message": "Autonomous trading is now paused"})
+    return JSONResponse(
+        {"status": "stopped", "message": "Autonomous trading is now paused"}
+    )
 
 
 @app.get("/api/autonomous/config")
@@ -1969,15 +2103,17 @@ async def get_trading_config():
     trader = get_autonomous_trader()
     if not trader:
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
-    return JSONResponse({
-        "entry_threshold": trader.config.entry_threshold,
-        "exit_profit_target": trader.config.exit_profit_target,
-        "exit_stop_loss": trader.config.exit_stop_loss,
-        "position_size_pct": trader.config.position_size_pct,
-        "max_positions": trader.config.max_positions,
-        "symbols": trader.config.symbols,
-        "enabled": trader.config.enabled
-    })
+    return JSONResponse(
+        {
+            "entry_threshold": trader.config.entry_threshold,
+            "exit_profit_target": trader.config.exit_profit_target,
+            "exit_stop_loss": trader.config.exit_stop_loss,
+            "position_size_pct": trader.config.position_size_pct,
+            "max_positions": trader.config.max_positions,
+            "symbols": trader.config.symbols,
+            "enabled": trader.config.enabled,
+        }
+    )
 
 
 @app.get("/api/autonomous/trades")
@@ -1987,11 +2123,13 @@ async def get_trade_history(limit: int = 50):
     if not trader:
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
     trades = trader.trade_history[-limit:] if trader.trade_history else []
-    return JSONResponse({
-        "total": len(trader.trade_history),
-        "recent": trades,
-        "timestamp": __import__('datetime').datetime.utcnow().isoformat()
-    })
+    return JSONResponse(
+        {
+            "total": len(trader.trade_history),
+            "recent": trades,
+            "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+        }
+    )
 
 
 # === Root Endpoint ===
@@ -2001,7 +2139,9 @@ async def get_trade_history(limit: int = 50):
 async def root():
     """Root endpoint - serve unified dashboard."""
     # Try unified dashboard first
-    unified_path = Path(__file__).parent.parent.parent / "frontend" / "unified-dashboard.html"
+    unified_path = (
+        Path(__file__).parent.parent.parent / "frontend" / "unified-dashboard.html"
+    )
     if unified_path.exists():
         return FileResponse(unified_path, media_type="text/html")
 
@@ -2024,7 +2164,9 @@ async def root():
 @app.get("/dashboard")
 async def dashboard():
     """Dashboard endpoint - serve unified dashboard."""
-    unified_path = Path(__file__).parent.parent.parent / "frontend" / "unified-dashboard.html"
+    unified_path = (
+        Path(__file__).parent.parent.parent / "frontend" / "unified-dashboard.html"
+    )
     if unified_path.exists():
         return FileResponse(unified_path, media_type="text/html")
 
@@ -2034,7 +2176,9 @@ async def dashboard():
 @app.get("/transactions.html")
 async def transactions_page():
     """Serve transactions.html page."""
-    transactions_path = Path(__file__).parent.parent.parent / "frontend" / "transactions.html"
+    transactions_path = (
+        Path(__file__).parent.parent.parent / "frontend" / "transactions.html"
+    )
     if transactions_path.exists():
         return FileResponse(transactions_path, media_type="text/html")
     raise HTTPException(status_code=404, detail="Transactions page not found")
@@ -2043,7 +2187,9 @@ async def transactions_page():
 @app.get("/transactions")
 async def transactions_redirect():
     """Redirect /transactions to transactions.html."""
-    transactions_path = Path(__file__).parent.parent.parent / "frontend" / "transactions.html"
+    transactions_path = (
+        Path(__file__).parent.parent.parent / "frontend" / "transactions.html"
+    )
     if transactions_path.exists():
         return FileResponse(transactions_path, media_type="text/html")
     raise HTTPException(status_code=404, detail="Transactions page not found")
@@ -2052,7 +2198,9 @@ async def transactions_redirect():
 @app.get("/monitoring")
 async def monitoring_page():
     """Serve monitoring-dashboard.html page."""
-    monitoring_path = Path(__file__).parent.parent.parent / "frontend" / "monitoring-dashboard.html"
+    monitoring_path = (
+        Path(__file__).parent.parent.parent / "frontend" / "monitoring-dashboard.html"
+    )
     if monitoring_path.exists():
         return FileResponse(monitoring_path, media_type="text/html")
     raise HTTPException(status_code=404, detail="Monitoring page not found")
@@ -2061,7 +2209,9 @@ async def monitoring_page():
 @app.get("/autonomous")
 async def autonomous_page():
     """Serve autonomous-dashboard.html page."""
-    autonomous_path = Path(__file__).parent.parent.parent / "frontend" / "autonomous-dashboard.html"
+    autonomous_path = (
+        Path(__file__).parent.parent.parent / "frontend" / "autonomous-dashboard.html"
+    )
     if autonomous_path.exists():
         return FileResponse(autonomous_path, media_type="text/html")
     raise HTTPException(status_code=404, detail="Autonomous page not found")
@@ -2070,7 +2220,9 @@ async def autonomous_page():
 @app.get("/learning")
 async def learning_page():
     """Serve learning_dashboard.html page."""
-    learning_path = Path(__file__).parent.parent.parent / "frontend" / "learning_dashboard.html"
+    learning_path = (
+        Path(__file__).parent.parent.parent / "frontend" / "learning_dashboard.html"
+    )
     if learning_path.exists():
         return FileResponse(learning_path, media_type="text/html")
     raise HTTPException(status_code=404, detail="Learning page not found")

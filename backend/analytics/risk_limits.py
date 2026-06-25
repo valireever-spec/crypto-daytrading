@@ -11,28 +11,31 @@ logger = logging.getLogger(__name__)
 
 class RiskLevel(str, Enum):
     """Risk levels for position management."""
-    GREEN = "green"      # Normal operations
-    YELLOW = "yellow"    # Caution, reduce position size
-    ORANGE = "orange"    # Warning, reduce positions
-    RED = "red"          # Critical, stop trading
+
+    GREEN = "green"  # Normal operations
+    YELLOW = "yellow"  # Caution, reduce position size
+    ORANGE = "orange"  # Warning, reduce positions
+    RED = "red"  # Critical, stop trading
 
 
 @dataclass
 class RiskLimits:
     """Portfolio risk limits configuration."""
-    max_drawdown_pct: float = 10.0           # Stop trading if down 10%
-    max_daily_loss_pct: float = 5.0          # Stop if lose 5% in one day
-    max_position_size_pct: float = 5.0       # Max per position
-    max_sector_exposure_pct: float = 30.0    # Max per sector
-    max_correlation: float = 0.8             # Warning if correlated >0.8
-    max_var_95: float = 2.0                  # Max daily VaR at 95% confidence
-    min_diversification: float = 0.05        # Minimum HHI (0.05 = well diversified)
-    max_leverage: float = 1.0                # Max leverage ratio
+
+    max_drawdown_pct: float = 10.0  # Stop trading if down 10%
+    max_daily_loss_pct: float = 5.0  # Stop if lose 5% in one day
+    max_position_size_pct: float = 5.0  # Max per position
+    max_sector_exposure_pct: float = 30.0  # Max per sector
+    max_correlation: float = 0.8  # Warning if correlated >0.8
+    max_var_95: float = 2.0  # Max daily VaR at 95% confidence
+    min_diversification: float = 0.05  # Minimum HHI (0.05 = well diversified)
+    max_leverage: float = 1.0  # Max leverage ratio
 
 
 @dataclass
 class RiskMetrics:
     """Current portfolio risk metrics."""
+
     current_drawdown: float
     max_drawdown: float
     daily_loss: float
@@ -85,20 +88,24 @@ class RiskMonitor:
         alerts = []
 
         if current_dd <= -self.limits.max_drawdown_pct / 100:
-            alerts.append({
-                "type": "max_drawdown_exceeded",
-                "limit": self.limits.max_drawdown_pct,
-                "current": current_dd * 100,
-                "severity": "critical"
-            })
+            alerts.append(
+                {
+                    "type": "max_drawdown_exceeded",
+                    "limit": self.limits.max_drawdown_pct,
+                    "current": current_dd * 100,
+                    "severity": "critical",
+                }
+            )
 
         if daily_loss <= -self.limits.max_daily_loss_pct / 100:
-            alerts.append({
-                "type": "daily_loss_exceeded",
-                "limit": self.limits.max_daily_loss_pct,
-                "current": daily_loss * 100,
-                "severity": "critical"
-            })
+            alerts.append(
+                {
+                    "type": "daily_loss_exceeded",
+                    "limit": self.limits.max_daily_loss_pct,
+                    "current": daily_loss * 100,
+                    "severity": "critical",
+                }
+            )
 
         # Determine risk level
         risk_level = self._determine_risk_level(current_dd, daily_loss, len(alerts))
@@ -106,19 +113,22 @@ class RiskMonitor:
         # Log alerts
         for alert in alerts:
             logger.warning(f"Risk alert: {alert}")
-            self.alerts.append({
-                "timestamp": datetime.utcnow().isoformat(),
-                **alert
-            })
+            self.alerts.append({"timestamp": datetime.utcnow().isoformat(), **alert})
 
         return risk_level
 
-    def _determine_risk_level(self, total_dd: float, daily_loss: float, alert_count: int) -> RiskLevel:
+    def _determine_risk_level(
+        self, total_dd: float, daily_loss: float, alert_count: int
+    ) -> RiskLevel:
         """Determine overall risk level."""
         max_dd_limit = self.limits.max_drawdown_pct / 100
         daily_loss_limit = self.limits.max_daily_loss_pct / 100
 
-        if alert_count > 0 or total_dd <= -max_dd_limit or daily_loss <= -daily_loss_limit:
+        if (
+            alert_count > 0
+            or total_dd <= -max_dd_limit
+            or daily_loss <= -daily_loss_limit
+        ):
             return RiskLevel.RED
 
         if total_dd <= -max_dd_limit * 0.8 or daily_loss <= -daily_loss_limit * 0.8:
@@ -129,7 +139,9 @@ class RiskMonitor:
 
         return RiskLevel.GREEN
 
-    def check_position_size(self, position_value: float, portfolio_value: float) -> bool:
+    def check_position_size(
+        self, position_value: float, portfolio_value: float
+    ) -> bool:
         """Check if position size is within limits."""
         if portfolio_value == 0:
             return True
@@ -141,7 +153,7 @@ class RiskMonitor:
                 "type": "position_size_exceeded",
                 "limit": self.limits.max_position_size_pct,
                 "current": position_pct,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
             self.violations.append(violation)
             logger.warning(f"Position size violation: {violation}")
@@ -156,7 +168,7 @@ class RiskMonitor:
                 "type": "high_correlation",
                 "limit": self.limits.max_correlation,
                 "current": correlation,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
             self.violations.append(violation)
             logger.warning(f"Correlation violation: {violation}")
@@ -171,7 +183,7 @@ class RiskMonitor:
                 "type": "low_diversification",
                 "limit": self.limits.min_diversification,
                 "current": hhi,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
             self.violations.append(violation)
             logger.warning(f"Diversification violation: {violation}")
@@ -186,7 +198,7 @@ class RiskMonitor:
                 "type": "var_exceeded",
                 "limit": self.limits.max_var_95,
                 "current": var_95,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
             self.violations.append(violation)
             logger.warning(f"VaR violation: {violation}")
@@ -234,7 +246,9 @@ class RiskMonitor:
         if metrics.max_correlation > self.limits.max_correlation:
             score += 15
         else:
-            score += min((metrics.max_correlation / self.limits.max_correlation) * 15, 15)
+            score += min(
+                (metrics.max_correlation / self.limits.max_correlation) * 15, 15
+            )
 
         return min(score, 100.0)
 
@@ -244,7 +258,7 @@ class RiskMonitor:
             RiskLevel.GREEN: "Continue normal trading operations",
             RiskLevel.YELLOW: "Reduce position sizes by 25%, monitor closely",
             RiskLevel.ORANGE: "Reduce position sizes by 50%, consider liquidating largest positions",
-            RiskLevel.RED: "STOP TRADING, liquidate positions to reduce exposure"
+            RiskLevel.RED: "STOP TRADING, liquidate positions to reduce exposure",
         }
         return actions.get(risk_level, "Unknown risk level")
 
@@ -256,12 +270,12 @@ class RiskMonitor:
                 "max_daily_loss_pct": self.limits.max_daily_loss_pct,
                 "max_position_size_pct": self.limits.max_position_size_pct,
                 "max_var_95": self.limits.max_var_95,
-                "max_correlation": self.limits.max_correlation
+                "max_correlation": self.limits.max_correlation,
             },
             "alerts": self.alerts[-10:],  # Last 10 alerts
             "violations": self.violations[-10:],  # Last 10 violations
             "total_alerts": len(self.alerts),
-            "total_violations": len(self.violations)
+            "total_violations": len(self.violations),
         }
 
 

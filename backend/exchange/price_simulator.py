@@ -7,16 +7,16 @@ from typing import Dict
 
 # Realistic base prices (as of June 23, 2026)
 BASE_PRICES = {
-    'BTCUSDT': 62322.62,
-    'ETHUSDT': 1658.69,
-    'BNBUSDT': 574.64,
+    "BTCUSDT": 62322.62,
+    "ETHUSDT": 1658.69,
+    "BNBUSDT": 574.64,
 }
 
 # Volatility per symbol (% change per tick)
 VOLATILITY = {
-    'BTCUSDT': 0.15,  # Bitcoin: 0.15% per tick
-    'ETHUSDT': 0.12,  # Ethereum: 0.12% per tick
-    'BNBUSDT': 0.10,  # BNB: 0.10% per tick
+    "BTCUSDT": 0.15,  # Bitcoin: 0.15% per tick
+    "ETHUSDT": 0.12,  # Ethereum: 0.12% per tick
+    "BNBUSDT": 0.10,  # BNB: 0.10% per tick
 }
 
 
@@ -85,4 +85,5 @@ def inject_prices_to_stream(stream_client):
     for symbol, price in prices.items():
         stream_client.price_cache[symbol] = price
         from datetime import datetime
+
         stream_client.last_update[symbol] = datetime.utcnow()

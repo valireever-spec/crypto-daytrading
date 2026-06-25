@@ -2,17 +2,17 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional
 from enum import Enum
 
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 
 class Jurisdiction(Enum):
     """Supported tax jurisdictions."""
+
     GERMANY = "DE"
     USA = "US"
     UK = "GB"
@@ -22,6 +22,7 @@ class Jurisdiction(Enum):
 
 class TaxStatus(Enum):
     """Tax classification for gains."""
+
     LONG_TERM = "long_term"  # Held >1 year
     SHORT_TERM = "short_term"  # Held ≤1 year
     UNKNOWN = "unknown"
@@ -30,6 +31,7 @@ class TaxStatus(Enum):
 @dataclass
 class Trade:
     """Single trade record for tax purposes."""
+
     trade_id: str
     symbol: str
     side: str  # BUY or SELL
@@ -42,6 +44,7 @@ class Trade:
 @dataclass
 class TaxableEvent:
     """A complete buy-sell pair (taxable event)."""
+
     buy_trade: Trade
     sell_trade: Trade
     quantity: float
@@ -56,6 +59,7 @@ class TaxableEvent:
 @dataclass
 class TaxLiability:
     """Calculated tax liability."""
+
     jurisdiction: Jurisdiction
     total_realized_gains: float
     total_realized_losses: float
@@ -86,13 +90,13 @@ class TaxCalculator:
         self.tax_rates = {
             Jurisdiction.GERMANY: {
                 "short_term": 0.42,  # 42% ordinary income
-                "long_term": 0.0,   # 0% if held >1 year
+                "long_term": 0.0,  # 0% if held >1 year
                 "holding_period_days": 365,
                 "solidarity_tax": 0.055,  # Additional 5.5%
             },
             Jurisdiction.USA: {
                 "short_term": 0.37,  # Top bracket (varies by income)
-                "long_term": 0.20,   # Top bracket (0%, 15%, or 20%)
+                "long_term": 0.20,  # Top bracket (0%, 15%, or 20%)
                 "holding_period_days": 365,
                 "wash_sale_days": 30,  # Can't claim losses if repurchase within 30 days
             },
@@ -118,7 +122,9 @@ class TaxCalculator:
     def add_trade(self, trade: Trade) -> None:
         """Add a trade to the tracking list."""
         self.trades.append(trade)
-        logger.info(f"Added {trade.side} {trade.quantity} {trade.symbol} @ {trade.price}")
+        logger.info(
+            f"Added {trade.side} {trade.quantity} {trade.symbol} @ {trade.price}"
+        )
 
     def add_trades_from_csv(self, trades_list: List[Dict]) -> None:
         """Import trades from Binance CSV export.
@@ -134,7 +140,7 @@ class TaxCalculator:
                 quantity=float(t["quantity"]),
                 price=float(t["price"]),
                 timestamp=datetime.fromisoformat(t["date"]),
-                fees=float(t.get("fee", 0))
+                fees=float(t.get("fee", 0)),
             )
             self.add_trade(trade)
 
@@ -177,8 +183,12 @@ class TaxCalculator:
                 matched_qty = min(remaining_qty, remaining_buy_qty)
 
                 # Create taxable event
-                cost_basis = matched_qty * buy.price + (matched_qty / buy.quantity) * buy.fees
-                proceeds = matched_qty * sell.price - (matched_qty / sell.quantity) * sell.fees
+                cost_basis = (
+                    matched_qty * buy.price + (matched_qty / buy.quantity) * buy.fees
+                )
+                proceeds = (
+                    matched_qty * sell.price - (matched_qty / sell.quantity) * sell.fees
+                )
                 gain_loss = proceeds - cost_basis
 
                 holding_days = (sell.timestamp - buy.timestamp).days
@@ -193,18 +203,22 @@ class TaxCalculator:
                     gain_loss=gain_loss,
                     holding_period_days=holding_days,
                     tax_status=tax_status,
-                    realized_gain=0.0  # Calculated later
+                    realized_gain=0.0,  # Calculated later
                 )
 
                 self.tax_events.append(event)
-                logger.debug(f"Matched {matched_qty} {sell.symbol}: "
-                           f"P&L={gain_loss:.2f}, holding={holding_days}d, status={tax_status.value}")
+                logger.debug(
+                    f"Matched {matched_qty} {sell.symbol}: "
+                    f"P&L={gain_loss:.2f}, holding={holding_days}d, status={tax_status.value}"
+                )
 
                 # Update quantities
                 remaining_qty -= matched_qty
                 remaining_quantities[buy_index] -= matched_qty
 
-                if remaining_quantities[buy_index] <= 0.0001:  # Floating point tolerance
+                if (
+                    remaining_quantities[buy_index] <= 0.0001
+                ):  # Floating point tolerance
                     buy_index += 1
 
         return self.tax_events
@@ -226,13 +240,19 @@ class TaxCalculator:
             self.match_trades_fifo()
 
         # Separate by holding status
-        long_term_events = [e for e in self.tax_events if e.tax_status == TaxStatus.LONG_TERM]
-        short_term_events = [e for e in self.tax_events if e.tax_status == TaxStatus.SHORT_TERM]
+        long_term_events = [
+            e for e in self.tax_events if e.tax_status == TaxStatus.LONG_TERM
+        ]
+        short_term_events = [
+            e for e in self.tax_events if e.tax_status == TaxStatus.SHORT_TERM
+        ]
 
         long_term_gains = sum(e.gain_loss for e in long_term_events)
         short_term_gains = sum(e.gain_loss for e in short_term_events)
         long_term_losses = sum(e.gain_loss for e in long_term_events if e.gain_loss < 0)
-        short_term_losses = sum(e.gain_loss for e in short_term_events if e.gain_loss < 0)
+        short_term_losses = sum(
+            e.gain_loss for e in short_term_events if e.gain_loss < 0
+        )
 
         total_realized_gains = long_term_gains + short_term_gains
         total_realized_losses = long_term_losses + short_term_losses
@@ -243,22 +263,32 @@ class TaxCalculator:
         # Apply jurisdiction-specific rules
         if self.jurisdiction == Jurisdiction.GERMANY:
             # Germany: long-term is tax-free, short-term is ordinary income
-            taxable_short_term = max(0, short_term_gains + short_term_losses - total_deductible)
-            estimated_tax = taxable_short_term * self.tax_rates[self.jurisdiction]["short_term"]
-            estimated_tax *= (1 + self.tax_rates[self.jurisdiction]["solidarity_tax"])
+            taxable_short_term = max(
+                0, short_term_gains + short_term_losses - total_deductible
+            )
+            estimated_tax = (
+                taxable_short_term * self.tax_rates[self.jurisdiction]["short_term"]
+            )
+            estimated_tax *= 1 + self.tax_rates[self.jurisdiction]["solidarity_tax"]
             tax_rate = self.tax_rates[self.jurisdiction]["short_term"]
 
         elif self.jurisdiction == Jurisdiction.USA:
             # USA: separate rates for short-term and long-term
-            taxable_short_term = max(0, short_term_gains + short_term_losses - total_deductible)
+            taxable_short_term = max(
+                0, short_term_gains + short_term_losses - total_deductible
+            )
             taxable_long_term = max(0, long_term_gains + long_term_losses)
-            estimated_tax = (taxable_short_term * self.tax_rates[self.jurisdiction]["short_term"] +
-                            taxable_long_term * self.tax_rates[self.jurisdiction]["long_term"])
+            estimated_tax = (
+                taxable_short_term * self.tax_rates[self.jurisdiction]["short_term"]
+                + taxable_long_term * self.tax_rates[self.jurisdiction]["long_term"]
+            )
             tax_rate = self.tax_rates[self.jurisdiction]["short_term"]
 
         elif self.jurisdiction == Jurisdiction.UK:
             # UK: annual exemption of £3,000
-            annual_exemption = self.tax_rates[self.jurisdiction].get("annual_exemption", 0)
+            annual_exemption = self.tax_rates[self.jurisdiction].get(
+                "annual_exemption", 0
+            )
             taxable = max(0, net_gain_loss - annual_exemption - total_deductible)
             estimated_tax = taxable * self.tax_rates[self.jurisdiction]["short_term"]
             tax_rate = self.tax_rates[self.jurisdiction]["short_term"]
@@ -284,7 +314,9 @@ class TaxCalculator:
 
         logger.info(f"Tax liability ({self.jurisdiction.value}): €{estimated_tax:.2f}")
         logger.info(f"  Long-term gains: €{long_term_gains:.2f} (0% tax)")
-        logger.info(f"  Short-term gains: €{short_term_gains:.2f} ({tax_rate*100:.0f}% tax)")
+        logger.info(
+            f"  Short-term gains: €{short_term_gains:.2f} ({tax_rate*100:.0f}% tax)"
+        )
         logger.info(f"  Deductible expenses: €{total_deductible:.2f}")
 
         return liability
@@ -314,7 +346,10 @@ class TaxCalculator:
                 "deductible_expenses": round(liability.deductible_expenses, 2),
                 "taxable_income": round(liability.taxable_income, 2),
                 "estimated_tax_liability": round(liability.estimated_tax, 2),
-                "effective_tax_rate": round((liability.estimated_tax / max(liability.taxable_income, 1)) * 100, 2),
+                "effective_tax_rate": round(
+                    (liability.estimated_tax / max(liability.taxable_income, 1)) * 100,
+                    2,
+                ),
             },
             "tax_events": [
                 {
@@ -327,7 +362,9 @@ class TaxCalculator:
                     "gain_loss": round(e.gain_loss, 2),
                     "holding_period_days": e.holding_period_days,
                     "tax_status": e.tax_status.value,
-                    "estimated_tax": round(e.gain_loss * liability.tax_rate, 2) if e.tax_status == TaxStatus.SHORT_TERM else 0,
+                    "estimated_tax": round(e.gain_loss * liability.tax_rate, 2)
+                    if e.tax_status == TaxStatus.SHORT_TERM
+                    else 0,
                 }
                 for e in sorted(self.tax_events, key=lambda x: x.sell_trade.timestamp)
             ],
@@ -358,7 +395,9 @@ class TaxCalculator:
             )
 
         if not recommendations:
-            recommendations.append("Tax situation appears optimized for your jurisdiction")
+            recommendations.append(
+                "Tax situation appears optimized for your jurisdiction"
+            )
 
         return recommendations
 
@@ -375,6 +414,7 @@ class TaxCalculator:
 
         if format == "json":
             import json
+
             return json.dumps(report, indent=2, default=str)
 
         elif format == "csv":
@@ -384,8 +424,17 @@ class TaxCalculator:
             output = StringIO()
             writer = csv.DictWriter(
                 output,
-                fieldnames=["buy_date", "sell_date", "symbol", "quantity", "cost_basis",
-                           "proceeds", "gain_loss", "holding_period_days", "tax_status"]
+                fieldnames=[
+                    "buy_date",
+                    "sell_date",
+                    "symbol",
+                    "quantity",
+                    "cost_basis",
+                    "proceeds",
+                    "gain_loss",
+                    "holding_period_days",
+                    "tax_status",
+                ],
             )
             writer.writeheader()
             for event in report["tax_events"]:
@@ -400,7 +449,9 @@ class TaxCalculator:
 _tax_calculator: Optional[TaxCalculator] = None
 
 
-def init_tax_calculator(jurisdiction: Jurisdiction = Jurisdiction.GERMANY) -> TaxCalculator:
+def init_tax_calculator(
+    jurisdiction: Jurisdiction = Jurisdiction.GERMANY,
+) -> TaxCalculator:
     """Initialize global tax calculator."""
     global _tax_calculator
     _tax_calculator = TaxCalculator(jurisdiction)

@@ -131,9 +131,7 @@ class BinanceWebSocketClient:
             "subscribed_streams": len(self.subscribed_streams),
             "streams": self.subscribed_streams,
             "last_price_update": (
-                self.last_price_update.isoformat()
-                if self.last_price_update
-                else None
+                self.last_price_update.isoformat() if self.last_price_update else None
             ),
         }
 

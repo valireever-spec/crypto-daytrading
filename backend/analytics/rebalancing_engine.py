@@ -8,7 +8,6 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import numpy as np
-import pandas as pd
 
 from backend.analytics.constraint_manager import get_constraint_manager
 
@@ -18,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DriftAnalysis:
     """Portfolio drift analysis."""
+
     total_drift_pct: float
     current_allocation: Dict[str, float]
     target_allocation: Dict[str, float]
@@ -29,6 +29,7 @@ class DriftAnalysis:
 @dataclass
 class RebalancingPlan:
     """Rebalancing execution plan."""
+
     trades: List[Tuple[str, str, float]]  # (symbol, side, amount_pct)
     total_cost_pct: float
     estimated_slippage_pct: float
@@ -41,6 +42,7 @@ class RebalancingPlan:
 @dataclass
 class StressResult:
     """Rebalancing stress test result."""
+
     scenario_name: str
     rebalancing_pct: float
     final_allocation: Dict[str, float]
@@ -86,15 +88,21 @@ class RebalancingEngine:
         max_drift = 0.0
 
         # Guard: validate input data
-        for sym, val in list(current_allocation.items()) + list(target_allocation.items()):
+        for sym, val in list(current_allocation.items()) + list(
+            target_allocation.items()
+        ):
             if not isinstance(val, (int, float)) or np.isnan(val) or np.isinf(val):
-                logger.warning(f"Invalid allocation value for {sym}: {val}, replacing with 0")
+                logger.warning(
+                    f"Invalid allocation value for {sym}: {val}, replacing with 0"
+                )
                 if sym in current_allocation:
                     current_allocation[sym] = 0.0
                 if sym in target_allocation:
                     target_allocation[sym] = 0.0
 
-        for symbol in set(list(current_allocation.keys()) + list(target_allocation.keys())):
+        for symbol in set(
+            list(current_allocation.keys()) + list(target_allocation.keys())
+        ):
             current = current_allocation.get(symbol, 0.0)
             target = target_allocation.get(symbol, 0.0)
             drift = abs(current - target)
@@ -147,7 +155,9 @@ class RebalancingEngine:
         constraint_violations: List[str] = []
 
         # Calculate trades needed
-        for symbol in set(list(current_allocation.keys()) + list(target_allocation.keys())):
+        for symbol in set(
+            list(current_allocation.keys()) + list(target_allocation.keys())
+        ):
             current = current_allocation.get(symbol, 0.0)
             target = target_allocation.get(symbol, 0.0)
             delta = target - current
@@ -189,7 +199,8 @@ class RebalancingEngine:
         return RebalancingPlan(
             trades=trades,
             total_cost_pct=execution_cost,
-            estimated_slippage_pct=(total_trades_pct * 0.05) / 100,  # 0.05% slippage per %
+            estimated_slippage_pct=(total_trades_pct * 0.05)
+            / 100,  # 0.05% slippage per %
             tax_impact_pct=tax_impact,
             feasible=feasible,
             constraint_violations=constraint_violations,
@@ -232,8 +243,7 @@ class RebalancingEngine:
 
         for i in range(num_tranches):
             tranche_trades = [
-                (symbol, side, pct / num_tranches)
-                for symbol, side, pct in plan.trades
+                (symbol, side, pct / num_tranches) for symbol, side, pct in plan.trades
             ]
 
             tranche = RebalancingPlan(
@@ -247,7 +257,9 @@ class RebalancingEngine:
             )
             tranches.append(tranche)
 
-        logger.info(f"Split rebalancing into {num_tranches} tranches of {max_tranche_pct}% each")
+        logger.info(
+            f"Split rebalancing into {num_tranches} tranches of {max_tranche_pct}% each"
+        )
         return tranches
 
     def estimate_cost_breakdown(
@@ -267,9 +279,7 @@ class RebalancingEngine:
         Cost breakdown (execution, slippage, tax, total)
         """
         total_cost = (
-            plan.total_cost_pct +
-            plan.estimated_slippage_pct +
-            plan.tax_impact_pct
+            plan.total_cost_pct + plan.estimated_slippage_pct + plan.tax_impact_pct
         )
 
         return {
@@ -304,18 +314,24 @@ class RebalancingEngine:
         # Check if enough cash for buys
         total_buy = sum(pct for _, side, pct in plan.trades if side == "BUY")
         if total_buy > current_cash_pct:
-            issues.append(f"Insufficient cash: need {total_buy:.1f}%, have {current_cash_pct:.1f}%")
+            issues.append(
+                f"Insufficient cash: need {total_buy:.1f}%, have {current_cash_pct:.1f}%"
+            )
 
         # Check estimated execution time
         if plan.estimated_execution_time_min > 60:
-            issues.append(f"Long execution time: {plan.estimated_execution_time_min:.0f} minutes")
+            issues.append(
+                f"Long execution time: {plan.estimated_execution_time_min:.0f} minutes"
+            )
 
         return len(issues) == 0, issues
 
     def record_rebalancing(self, plan: RebalancingPlan) -> None:
         """Record completed rebalancing in history."""
         self.rebalancing_history.append(plan)
-        logger.info(f"Recorded rebalancing: {len(plan.trades)} trades, cost {plan.total_cost_pct:.2f}%")
+        logger.info(
+            f"Recorded rebalancing: {len(plan.trades)} trades, cost {plan.total_cost_pct:.2f}%"
+        )
 
     def get_rebalancing_history(self, limit: int = 10) -> List[RebalancingPlan]:
         """Get recent rebalancing history."""

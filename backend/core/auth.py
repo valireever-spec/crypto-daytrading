@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class UserRole(str, Enum):
     """User roles for authorization."""
+
     ADMIN = "admin"
     ANALYST = "analyst"
     TRADER = "trader"
@@ -72,25 +73,32 @@ class AuthManager:
     """
 
     def __init__(self) -> None:
-        """Initialize auth manager with demo users."""
-        # Demo users (replace with real auth in production)
+        """Initialize auth manager with demo users from environment."""
+        import os
+
+        # Load demo users from environment (replace with real auth in production)
+        admin_token = os.getenv("AUTH_ADMIN_TOKEN", "admin-token-123")
+        analyst_token = os.getenv("AUTH_ANALYST_TOKEN", "analyst-token-456")
+        trader_token = os.getenv("AUTH_TRADER_TOKEN", "trader-token-789")
+        viewer_token = os.getenv("AUTH_VIEWER_TOKEN", "viewer-token-000")
+
         self.users: Dict[str, User] = {
-            "admin-token-123": User(
+            admin_token: User(
                 user_id="admin-1",
                 username="admin_user",
                 roles=[UserRole.ADMIN, UserRole.ANALYST, UserRole.TRADER],
             ),
-            "analyst-token-456": User(
+            analyst_token: User(
                 user_id="analyst-1",
                 username="analyst_user",
                 roles=[UserRole.ANALYST],
             ),
-            "trader-token-789": User(
+            trader_token: User(
                 user_id="trader-1",
                 username="trader_user",
                 roles=[UserRole.TRADER, UserRole.ANALYST],
             ),
-            "viewer-token-000": User(
+            viewer_token: User(
                 user_id="viewer-1",
                 username="viewer_user",
                 roles=[UserRole.VIEWER],

@@ -6,7 +6,6 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ class ImmutableTransactionLogger:
         self,
         log_dir: str = "logs/immutable",
         max_log_size_mb: int = 100,
-        active_log_name: str = "trades_active.jsonl"
+        active_log_name: str = "trades_active.jsonl",
     ):
         """Initialize immutable logger.
 
@@ -64,12 +63,14 @@ class ImmutableTransactionLogger:
             "timestamp": timestamp,
             "event_type": event_type,
             "data": data,
-            "hash": ""  # Will be calculated
+            "hash": "",  # Will be calculated
         }
 
         # Calculate hash for integrity (hash of everything except hash field)
         record_for_hash = {k: v for k, v in record.items() if k != "hash"}
-        record["hash"] = self._calculate_hash(json.dumps(record_for_hash, sort_keys=True))
+        record["hash"] = self._calculate_hash(
+            json.dumps(record_for_hash, sort_keys=True)
+        )
 
         # Write to active log (append-only)
         try:
@@ -97,7 +98,7 @@ class ImmutableTransactionLogger:
         audit_record = {
             "timestamp": datetime.utcnow().isoformat(),
             "event": event,
-            "details": details
+            "details": details,
         }
 
         try:
@@ -136,10 +137,15 @@ class ImmutableTransactionLogger:
             archive_path.chmod(0o444)
 
             # Log rotation in audit trail
-            self.log_audit("LOG_ROTATION", {
-                "archived_as": archive_name,
-                "size_mb": self.active_log_path.stat().st_size / (1024 * 1024) if self.active_log_path.exists() else 0
-            })
+            self.log_audit(
+                "LOG_ROTATION",
+                {
+                    "archived_as": archive_name,
+                    "size_mb": self.active_log_path.stat().st_size / (1024 * 1024)
+                    if self.active_log_path.exists()
+                    else 0,
+                },
+            )
 
             logger.info(f"Log rotated: {archive_name} (now read-only)")
 
@@ -167,11 +173,17 @@ class ImmutableTransactionLogger:
                     try:
                         record = json.loads(line)
                         stored_hash = record.get("hash", "")
-                        record_for_hash = {k: v for k, v in record.items() if k != "hash"}
-                        calculated_hash = self._calculate_hash(json.dumps(record_for_hash, sort_keys=True))
+                        record_for_hash = {
+                            k: v for k, v in record.items() if k != "hash"
+                        }
+                        calculated_hash = self._calculate_hash(
+                            json.dumps(record_for_hash, sort_keys=True)
+                        )
 
                         if stored_hash != calculated_hash:
-                            logger.error(f"Hash mismatch at line {line_num}: {target_file}")
+                            logger.error(
+                                f"Hash mismatch at line {line_num}: {target_file}"
+                            )
                             return False
 
                     except json.JSONDecodeError as e:
@@ -232,7 +244,8 @@ class ImmutableTransactionLogger:
             "active_log": str(self.active_log_path),
             "active_log_size_mb": (
                 self.active_log_path.stat().st_size / (1024 * 1024)
-                if self.active_log_path.exists() else 0
+                if self.active_log_path.exists()
+                else 0
             ),
             "archived_logs": len(list(self.log_dir.glob("trades_archive_*.jsonl"))),
             "total_transactions": self.get_transaction_count(),

@@ -11,7 +11,9 @@ from fastapi import APIRouter, HTTPException, Body, Query
 from pydantic import BaseModel
 
 from backend.analytics.recommendation_tracker import get_recommendation_tracker
-from backend.analytics.scenario_probability_learner import get_scenario_probability_learner
+from backend.analytics.scenario_probability_learner import (
+    get_scenario_probability_learner,
+)
 from backend.analytics.cost_model_calibrator import get_cost_model_calibrator
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,7 @@ router = APIRouter(prefix="/api/learning", tags=["learning"])
 
 class RecordRecommendationRequest(BaseModel):
     """Request to record recommendation."""
+
     recommendation_id: str
     symbol: str
     recommended_allocation_pct: float
@@ -32,6 +35,7 @@ class RecordRecommendationRequest(BaseModel):
 
 class RecordOutcomeRequest(BaseModel):
     """Request to record outcome."""
+
     recommendation_id: str
     holding_period_days: int
     actual_return_pct: float
@@ -41,6 +45,7 @@ class RecordOutcomeRequest(BaseModel):
 
 class RecordExecutionRequest(BaseModel):
     """Request to record execution."""
+
     symbol: str
     side: str
     planned_cost_pct: float
@@ -50,6 +55,7 @@ class RecordExecutionRequest(BaseModel):
 
 class TradeEstimate(BaseModel):
     """Trade for cost estimation."""
+
     symbol: str
     volume_pct: float
 

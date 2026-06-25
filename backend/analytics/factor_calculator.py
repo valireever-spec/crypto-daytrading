@@ -6,7 +6,7 @@ for factor-based attribution analysis.
 """
 
 import logging
-from typing import Dict, Tuple
+from typing import Dict
 import pandas as pd
 import numpy as np
 
@@ -194,9 +194,15 @@ class FactorCalculator:
         """
         return {
             "momentum": FactorCalculator.calculate_momentum(returns, lookback),
-            "value": FactorCalculator.calculate_value_factor(price, book_value, earnings),
-            "quality": FactorCalculator.calculate_quality_factor(roe, debt_to_equity, current_ratio),
-            "volatility": FactorCalculator.calculate_volatility_factor(returns, lookback),
+            "value": FactorCalculator.calculate_value_factor(
+                price, book_value, earnings
+            ),
+            "quality": FactorCalculator.calculate_quality_factor(
+                roe, debt_to_equity, current_ratio
+            ),
+            "volatility": FactorCalculator.calculate_volatility_factor(
+                returns, lookback
+            ),
             "size": FactorCalculator.calculate_size_factor(market_cap),
         }
 

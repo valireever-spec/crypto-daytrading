@@ -78,7 +78,10 @@ class PriceValidator:
         # Check 6: Data freshness (max 5 seconds old)
         age_seconds = (datetime.utcnow() - timestamp).total_seconds()
         if age_seconds > max_age_seconds:
-            return False, f"{symbol}: Price stale ({age_seconds:.1f}s old, max {max_age_seconds}s)"
+            return (
+                False,
+                f"{symbol}: Price stale ({age_seconds:.1f}s old, max {max_age_seconds}s)",
+            )
 
         # Check 7: Spike detection (>50% change in 1 minute is suspicious)
         if symbol in self.last_prices:
@@ -89,8 +92,13 @@ class PriceValidator:
                 # Alert on large spike (but still allow the trade)
                 if spike_pct > 50:
                     # Check if we recently alerted on this symbol (avoid spam)
-                    if symbol not in self.spike_alerts or \
-                       (datetime.utcnow() - self.spike_alerts[symbol]).total_seconds() > 60:
+                    if (
+                        symbol not in self.spike_alerts
+                        or (
+                            datetime.utcnow() - self.spike_alerts[symbol]
+                        ).total_seconds()
+                        > 60
+                    ):
                         logger.warning(
                             f"⚠️ PRICE SPIKE: {symbol} moved {spike_pct:.1f}% "
                             f"(${last_price:.2f} → ${price:.2f})"

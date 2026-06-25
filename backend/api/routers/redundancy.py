@@ -5,9 +5,9 @@ import httpx
 import os
 import threading
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Dict, List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,9 @@ PRIMARY_API_URL = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
 
 # Backup URLs: try local first (LAN), fallback to remote (internet via firewall port forwarding)
 BACKUP_API_URL_LOCAL = os.getenv("BACKUP_API_URL_LOCAL", "http://192.168.3.25:8002")
-BACKUP_API_URL_REMOTE = os.getenv("BACKUP_API_URL_REMOTE", "http://r33v3r.ddns.net:8443")
+BACKUP_API_URL_REMOTE = os.getenv(
+    "BACKUP_API_URL_REMOTE", "http://r33v3r.ddns.net:8443"
+)
 # For backwards compatibility
 BACKUP_API_URL = os.getenv("BACKUP_API_URL", BACKUP_API_URL_LOCAL)
 
@@ -44,7 +46,7 @@ class FailoverEvent:
         return {
             "timestamp": self.timestamp.isoformat(),
             "type": self.event_type,
-            "details": self.details
+            "details": self.details,
         }
 
 
@@ -74,7 +76,9 @@ class RedundancyMonitor:
         """Check health with retry logic and exponential backoff."""
         for attempt in range(HEALTH_CHECK_RETRIES + 1):
             try:
-                async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=True) as client:
+                async with httpx.AsyncClient(
+                    timeout=HEALTH_CHECK_TIMEOUT, verify=True
+                ) as client:
                     response = await client.get(f"{url}/api/health")
                     if response.status_code == 200:
                         return True, None
@@ -129,7 +133,7 @@ class RedundancyMonitor:
             "healthy": self.primary_healthy,
             "status": status,
             "timestamp": self.last_primary_check.isoformat(),
-            "consecutive_failures": self.consecutive_primary_failures
+            "consecutive_failures": self.consecutive_primary_failures,
         }
 
         self._record_history("primary", result)
@@ -157,7 +161,7 @@ class RedundancyMonitor:
             "healthy": self.backup_healthy,
             "status": status,
             "timestamp": self.last_backup_check.isoformat(),
-            "consecutive_failures": self.consecutive_backup_failures
+            "consecutive_failures": self.consecutive_backup_failures,
         }
 
         self._record_history("backup", result)
@@ -169,9 +173,13 @@ class RedundancyMonitor:
             return -1.0
 
         try:
-            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=True) as client:
+            async with httpx.AsyncClient(
+                timeout=HEALTH_CHECK_TIMEOUT, verify=True
+            ) as client:
                 # Get replication lag from backup machine's PostgreSQL
-                response = await client.get(f"{self.backup_api_url}/api/redundancy/pg-lag")
+                response = await client.get(
+                    f"{self.backup_api_url}/api/redundancy/pg-lag"
+                )
                 if response.status_code == 200:
                     data = response.json()
                     lag = data.get("lag_seconds", -1.0)
@@ -188,12 +196,16 @@ class RedundancyMonitor:
             return -1.0
 
         try:
-            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=True) as client:
+            async with httpx.AsyncClient(
+                timeout=HEALTH_CHECK_TIMEOUT, verify=True
+            ) as client:
                 primary_resp = await client.get(f"{PRIMARY_API_URL}/api/paper/account")
                 if primary_resp.status_code != 200:
                     return -1.0
 
-                backup_resp = await client.get(f"{self.backup_api_url}/api/paper/account")
+                backup_resp = await client.get(
+                    f"{self.backup_api_url}/api/paper/account"
+                )
                 if backup_resp.status_code != 200:
                     return -1.0
 
@@ -219,17 +231,21 @@ class RedundancyMonitor:
             return {
                 "ready": False,
                 "reason": "Backup trader is not responding",
-                "health_status": "DOWN"
+                "health_status": "DOWN",
             }
 
         try:
-            async with httpx.AsyncClient(timeout=HEALTH_CHECK_TIMEOUT, verify=True) as client:
-                response = await client.get(f"{self.backup_api_url}/api/autonomous/config")
+            async with httpx.AsyncClient(
+                timeout=HEALTH_CHECK_TIMEOUT, verify=True
+            ) as client:
+                response = await client.get(
+                    f"{self.backup_api_url}/api/autonomous/config"
+                )
                 if response.status_code != 200:
                     return {
                         "ready": False,
                         "reason": f"Cannot fetch backup config (HTTP {response.status_code})",
-                        "health_status": "DEGRADED"
+                        "health_status": "DEGRADED",
                     }
 
                 config = response.json()
@@ -237,26 +253,29 @@ class RedundancyMonitor:
                     return {
                         "ready": False,
                         "reason": "Backup trader is not in autonomous mode",
-                        "mode": config.get("mode", "unknown")
+                        "mode": config.get("mode", "unknown"),
                     }
 
                 return {
                     "ready": True,
                     "reason": "Backup trader is ready to take over",
                     "mode": config.get("mode", "standby"),
-                    "config_version": config.get("version", "unknown")
+                    "config_version": config.get("version", "unknown"),
                 }
         except Exception as e:
             return {
                 "ready": False,
                 "reason": f"Cannot verify backup readiness: {str(e)}",
-                "error": str(e)
+                "error": str(e),
             }
 
     def _check_failover_condition(self) -> bool:
         """Check if failover should be triggered."""
-        return (not self.primary_healthy and self.backup_healthy and
-                not self.failover_active)
+        return (
+            not self.primary_healthy
+            and self.backup_healthy
+            and not self.failover_active
+        )
 
     async def _trigger_failover(self):
         """Trigger failover event and send alerts."""
@@ -267,31 +286,42 @@ class RedundancyMonitor:
             self.failover_active = True
             self.last_failover_time = datetime.now()
 
-        event = FailoverEvent("FAILOVER_TRIGGERED", {
-            "reason": "Primary trader is down",
-            "timestamp": self.last_failover_time.isoformat()
-        })
+        event = FailoverEvent(
+            "FAILOVER_TRIGGERED",
+            {
+                "reason": "Primary trader is down",
+                "timestamp": self.last_failover_time.isoformat(),
+            },
+        )
         self._record_failover_event(event)
-        await self._send_alert("FAILOVER_ACTIVE",
-                               "Primary is down, backup has taken over")
+        await self._send_alert(
+            "FAILOVER_ACTIVE", "Primary is down, backup has taken over"
+        )
 
     def _check_recovery(self, current_status: str) -> bool:
         """Check if system has recovered from failover (BUG FIX #5).
 
         Returns True if status transitioned from failover to healthy.
         """
-        if (self.previous_overall_status in ["FAILOVER_ACTIVE", "DOWN", "DEGRADED"] and
-                current_status == "HEALTHY"):
+        if (
+            self.previous_overall_status in ["FAILOVER_ACTIVE", "DOWN", "DEGRADED"]
+            and current_status == "HEALTHY"
+        ):
             self.last_recovery_time = datetime.now()
             self.failover_active = False
 
-            event = FailoverEvent("RECOVERY_DETECTED", {
-                "reason": "Primary has recovered, resuming active-passive redundancy",
-                "timestamp": self.last_recovery_time.isoformat(),
-                "previous_status": self.previous_overall_status
-            })
+            event = FailoverEvent(
+                "RECOVERY_DETECTED",
+                {
+                    "reason": "Primary has recovered, resuming active-passive redundancy",
+                    "timestamp": self.last_recovery_time.isoformat(),
+                    "previous_status": self.previous_overall_status,
+                },
+            )
             self._record_failover_event(event)
-            logger.info(f"System recovery detected: {self.previous_overall_status} → {current_status}")
+            logger.info(
+                f"System recovery detected: {self.previous_overall_status} → {current_status}"
+            )
             return True
 
         return False
@@ -313,9 +343,7 @@ class RedundancyMonitor:
             return
 
         try:
-            payload = {
-                "text": f"⚠️ {title}: {message}"
-            }
+            payload = {"text": f"⚠️ {title}: {message}"}
             async with httpx.AsyncClient() as client:
                 await client.post(ALERT_WEBHOOK_URL, json=payload, timeout=5)
         except Exception as e:
@@ -334,7 +362,7 @@ class RedundancyMonitor:
         record = {
             "component": component,
             "timestamp": datetime.now().isoformat(),
-            **status
+            **status,
         }
         with self._lock:
             self.health_check_history.append(record)
@@ -348,7 +376,7 @@ class RedundancyMonitor:
             self.check_primary_health(),
             self.check_backup_health(),
             self.check_replication_lag(),
-            return_exceptions=False
+            return_exceptions=False,
         )
 
         # Check for failover condition
@@ -400,37 +428,43 @@ class RedundancyMonitor:
             "redundancy_level": redundancy_level,
             "primary": {
                 "status": primary_check,
-                "role": "ACTIVE" if self.primary_healthy else "DOWN"
+                "role": "ACTIVE" if self.primary_healthy else "DOWN",
             },
             "backup": {
                 "status": backup_check,
-                "role": ("STANDBY" if self.backup_healthy and not self.failover_active
-                        else "ACTIVE" if self.failover_active else "DOWN"),
-                "ready_for_failover": failover_ready
+                "role": (
+                    "STANDBY"
+                    if self.backup_healthy and not self.failover_active
+                    else "ACTIVE"
+                    if self.failover_active
+                    else "DOWN"
+                ),
+                "ready_for_failover": failover_ready,
             },
             "replication": {
                 "lag_seconds": round(self.replication_lag, 2) if lag >= 0 else None,
                 "status": lag_status,
                 "warning_threshold": REPLICATION_LAG_WARNING_THRESHOLD,
-                "critical_threshold": REPLICATION_LAG_CRITICAL_THRESHOLD
+                "critical_threshold": REPLICATION_LAG_CRITICAL_THRESHOLD,
             },
             "failover": {
                 "active": self.failover_active,
-                "last_failover_time": self.last_failover_time.isoformat() if self.last_failover_time else None,
-                "readiness": failover_ready
+                "last_failover_time": self.last_failover_time.isoformat()
+                if self.last_failover_time
+                else None,
+                "readiness": failover_ready,
             },
             "recovery": {
                 "detected": recovery_detected,
-                "last_recovery_time": self.last_recovery_time.isoformat() if self.last_recovery_time else None
+                "last_recovery_time": self.last_recovery_time.isoformat()
+                if self.last_recovery_time
+                else None,
             },
             "degradation": {
                 "actions": degradation_actions,
-                "active": len(degradation_actions) > 0
+                "active": len(degradation_actions) > 0,
             },
-            "uptime": {
-                "seconds": uptime_seconds,
-                "hours": round(uptime_hours, 2)
-            }
+            "uptime": {"seconds": uptime_seconds, "hours": round(uptime_hours, 2)},
         }
 
 
@@ -454,7 +488,9 @@ def get_redundancy_monitor() -> RedundancyMonitor:
 def _validate_ha_config():
     """Validate HA configuration."""
     if PRIMARY_API_URL == BACKUP_API_URL:
-        logger.error(f"ERROR: PRIMARY and BACKUP API URLs are the same: {PRIMARY_API_URL}")
+        logger.error(
+            f"ERROR: PRIMARY and BACKUP API URLs are the same: {PRIMARY_API_URL}"
+        )
         raise ValueError("PRIMARY_API_URL and BACKUP_API_URL must be different")
 
     logger.info(f"HA Configuration: PRIMARY={PRIMARY_API_URL}, BACKUP={BACKUP_API_URL}")
@@ -464,6 +500,7 @@ _validate_ha_config()
 
 
 # API Endpoints
+
 
 @router.get("/status")
 async def get_redundancy_status():
@@ -496,11 +533,13 @@ async def get_replication_lag():
     lag = await monitor.check_replication_lag()
 
     if lag < 0:
-        return JSONResponse({
-            "lag_seconds": None,
-            "status": "UNKNOWN",
-            "reason": "Unable to calculate lag"
-        })
+        return JSONResponse(
+            {
+                "lag_seconds": None,
+                "status": "UNKNOWN",
+                "reason": "Unable to calculate lag",
+            }
+        )
 
     if lag <= 2:
         status = "HEALTHY"
@@ -509,12 +548,14 @@ async def get_replication_lag():
     else:
         status = "CRITICAL"
 
-    return JSONResponse({
-        "lag_seconds": round(lag, 2),
-        "status": status,
-        "warning_threshold": REPLICATION_LAG_WARNING_THRESHOLD,
-        "critical_threshold": REPLICATION_LAG_CRITICAL_THRESHOLD
-    })
+    return JSONResponse(
+        {
+            "lag_seconds": round(lag, 2),
+            "status": status,
+            "warning_threshold": REPLICATION_LAG_WARNING_THRESHOLD,
+            "critical_threshold": REPLICATION_LAG_CRITICAL_THRESHOLD,
+        }
+    )
 
 
 @router.get("/failover/ready")
@@ -532,53 +573,63 @@ async def simulate_failover():
     status = await monitor.get_redundancy_status()
 
     if not monitor.backup_healthy:
-        return JSONResponse({
-            "simulation": "FAILED",
-            "reason": "Backup is not healthy - cannot failover",
-            "current_status": status
-        }, status_code=400)
+        return JSONResponse(
+            {
+                "simulation": "FAILED",
+                "reason": "Backup is not healthy - cannot failover",
+                "current_status": status,
+            },
+            status_code=400,
+        )
 
     readiness = await monitor.check_failover_readiness()
     if not readiness.get("ready"):
-        return JSONResponse({
-            "simulation": "FAILED",
-            "reason": "Backup is not ready for failover",
-            "readiness": readiness,
-            "current_status": status
-        }, status_code=400)
+        return JSONResponse(
+            {
+                "simulation": "FAILED",
+                "reason": "Backup is not ready for failover",
+                "readiness": readiness,
+                "current_status": status,
+            },
+            status_code=400,
+        )
 
-    return JSONResponse({
-        "simulation": "SUCCESS",
-        "scenario": "Primary is down, backup takes over in 30 seconds",
-        "backup_status": {
-            "ready": True,
-            "will_start_trading": True,
-            "estimated_takeover_time": "30 seconds"
-        },
-        "current_status": status,
-        "readiness_check": readiness
-    })
+    return JSONResponse(
+        {
+            "simulation": "SUCCESS",
+            "scenario": "Primary is down, backup takes over in 30 seconds",
+            "backup_status": {
+                "ready": True,
+                "will_start_trading": True,
+                "estimated_takeover_time": "30 seconds",
+            },
+            "current_status": status,
+            "readiness_check": readiness,
+        }
+    )
 
 
 @router.get("/config")
 async def get_redundancy_config():
     """Get redundancy configuration."""
-    return JSONResponse({
-        "primary_url": PRIMARY_API_URL,
-        "backup_url": BACKUP_API_URL,
-        "health_check_interval": 10,
-        "failover_threshold": 3,
-        "failover_timeout": 30,
-        "replication_lag_warning": REPLICATION_LAG_WARNING_THRESHOLD,
-        "replication_lag_critical": REPLICATION_LAG_CRITICAL_THRESHOLD,
-        "health_check_timeout": HEALTH_CHECK_TIMEOUT,
-        "architecture": "active-passive",
-        "data_consistency": "postgresql_streaming_replication",
-        "retry_config": {
-            "retries": HEALTH_CHECK_RETRIES,
-            "delays_ms": [int(d * 1000) for d in RETRY_DELAYS]
+    return JSONResponse(
+        {
+            "primary_url": PRIMARY_API_URL,
+            "backup_url": BACKUP_API_URL,
+            "health_check_interval": 10,
+            "failover_threshold": 3,
+            "failover_timeout": 30,
+            "replication_lag_warning": REPLICATION_LAG_WARNING_THRESHOLD,
+            "replication_lag_critical": REPLICATION_LAG_CRITICAL_THRESHOLD,
+            "health_check_timeout": HEALTH_CHECK_TIMEOUT,
+            "architecture": "active-passive",
+            "data_consistency": "postgresql_streaming_replication",
+            "retry_config": {
+                "retries": HEALTH_CHECK_RETRIES,
+                "delays_ms": [int(d * 1000) for d in RETRY_DELAYS],
+            },
         }
-    })
+    )
 
 
 @router.get("/events")
@@ -586,10 +637,7 @@ async def get_failover_events(limit: int = 100):
     """Get failover event history for audit trail."""
     monitor = get_redundancy_monitor()
     events = [e.to_dict() for e in monitor.failover_events[-limit:]]
-    return JSONResponse({
-        "count": len(events),
-        "events": events
-    })
+    return JSONResponse({"count": len(events), "events": events})
 
 
 @router.get("/history")
@@ -597,10 +645,7 @@ async def get_health_check_history(limit: int = 100):
     """Get health check history."""
     monitor = get_redundancy_monitor()
     history = monitor.health_check_history[-limit:]
-    return JSONResponse({
-        "count": len(history),
-        "history": history
-    })
+    return JSONResponse({"count": len(history), "history": history})
 
 
 @router.get("/uptime")
@@ -611,14 +656,19 @@ async def get_uptime():
     uptime = status.get("uptime", {})
     failovers = len(monitor.failover_events)
 
-    return JSONResponse({
-        "uptime_seconds": uptime.get("seconds", 0),
-        "uptime_hours": uptime.get("hours", 0),
-        "uptime_days": round(uptime.get("hours", 0) / 24, 2),
-        "failover_count": failovers,
-        "last_failover": (monitor.last_failover_time.isoformat()
-                         if monitor.last_failover_time else None)
-    })
+    return JSONResponse(
+        {
+            "uptime_seconds": uptime.get("seconds", 0),
+            "uptime_hours": uptime.get("hours", 0),
+            "uptime_days": round(uptime.get("hours", 0) / 24, 2),
+            "failover_count": failovers,
+            "last_failover": (
+                monitor.last_failover_time.isoformat()
+                if monitor.last_failover_time
+                else None
+            ),
+        }
+    )
 
 
 @router.post("/alerts/configure")
@@ -626,7 +676,11 @@ async def configure_alerts(webhook_url: str):
     """Configure Slack/webhook alerting."""
     global ALERT_WEBHOOK_URL
     ALERT_WEBHOOK_URL = webhook_url
-    return JSONResponse({
-        "status": "configured",
-        "webhook_url": webhook_url[:50] + "..." if len(webhook_url) > 50 else webhook_url
-    })
+    return JSONResponse(
+        {
+            "status": "configured",
+            "webhook_url": webhook_url[:50] + "..."
+            if len(webhook_url) > 50
+            else webhook_url,
+        }
+    )

@@ -6,7 +6,7 @@ transaction costs, and comprehensive performance metrics.
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import pandas as pd
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BacktestResult:
     """Backtest results for an allocation strategy."""
+
     strategy_name: str
     allocation: Dict[str, float]  # symbol -> weight %
     start_date: datetime
@@ -55,6 +56,7 @@ class BacktestResult:
 @dataclass
 class AllocationComparison:
     """Comparison between multiple allocation strategies."""
+
     results: List[BacktestResult]
     best_sharpe: str  # strategy_name with best Sharpe
     best_return: str
@@ -105,7 +107,9 @@ class PortfolioBacktestEngineV2:
         """
         # Normalize allocation
         total_weight = sum(allocation.values())
-        normalized_allocation = {s: w / total_weight * 100 for s, w in allocation.items()}
+        normalized_allocation = {
+            s: w / total_weight * 100 for s, w in allocation.items()
+        }
 
         # Align returns to common dates
         all_dates = set()
@@ -233,7 +237,9 @@ class PortfolioBacktestEngineV2:
                 window_returns = {}
 
                 for symbol in historical_returns.keys():
-                    sym_data = returns_df[symbol].iloc[window_start:returns_df.index.get_loc(date)]
+                    sym_data = returns_df[symbol].iloc[
+                        window_start : returns_df.index.get_loc(date)
+                    ]
                     if len(sym_data) > 20:
                         window_returns[symbol] = sym_data
 
@@ -357,7 +363,9 @@ class PortfolioBacktestEngineV2:
         # Returns
         total_return = (equity_curve.iloc[-1] - 1) * 100
         years = period_days / 365.25
-        annualized_return = ((equity_curve.iloc[-1]) ** (1 / years) - 1) * 100 if years > 0 else 0
+        annualized_return = (
+            ((equity_curve.iloc[-1]) ** (1 / years) - 1) * 100 if years > 0 else 0
+        )
 
         # Volatility
         daily_vol = daily_returns.std()
@@ -370,7 +378,9 @@ class PortfolioBacktestEngineV2:
         # Sortino ratio (downside volatility)
         downside_returns = daily_returns[daily_returns < 0]
         downside_vol = downside_returns.std() if len(downside_returns) > 0 else 0
-        sortino = (excess_return / downside_vol) * np.sqrt(252) if downside_vol > 0 else 0
+        sortino = (
+            (excess_return / downside_vol) * np.sqrt(252) if downside_vol > 0 else 0
+        )
 
         # Max drawdown
         running_max = equity_curve.expanding().max()
@@ -382,7 +392,9 @@ class PortfolioBacktestEngineV2:
 
         # Win rate
         positive_days = (daily_returns > 0).sum()
-        win_rate = (positive_days / len(daily_returns) * 100) if len(daily_returns) > 0 else 0
+        win_rate = (
+            (positive_days / len(daily_returns) * 100) if len(daily_returns) > 0 else 0
+        )
 
         # Best/worst days
         best_day = daily_returns.max()
@@ -441,14 +453,20 @@ class PortfolioBacktestEngineV2:
             # Last trading day of each quarter
             for date in dates:
                 if date.month in [3, 6, 9, 12]:
-                    if date.month != (date + timedelta(days=1)).month or date == dates[-1]:
+                    if (
+                        date.month != (date + timedelta(days=1)).month
+                        or date == dates[-1]
+                    ):
                         rebalance_dates.add(date)
 
         elif frequency == "annual":
             # Last trading day of year
             for date in dates:
                 if date.month == 12:
-                    if date.month != (date + timedelta(days=1)).month or date == dates[-1]:
+                    if (
+                        date.month != (date + timedelta(days=1)).month
+                        or date == dates[-1]
+                    ):
                         rebalance_dates.add(date)
 
         return rebalance_dates

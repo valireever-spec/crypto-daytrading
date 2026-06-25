@@ -1,7 +1,7 @@
 """API endpoints for multi-asset support (Phase 337: with auth & observability)."""
 
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import JSONResponse
 from typing import Optional
 
@@ -10,11 +10,11 @@ from backend.analytics.asset_classes import (
     AssetClass,
     Region,
     AssetClassWeights,
-    SignalWeights
+    SignalWeights,
 )
 from backend.analytics.currency_risk import CurrencyRiskCalculator, CurrencyExposure
 from backend.analytics.global_optimization import GlobalPortfolioOptimizer
-from backend.core.auth import User, UserRole, verify_token, get_auth_manager
+from backend.core.auth import UserRole, verify_token, get_auth_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/multi-asset", tags=["Multi-Asset"])
@@ -53,10 +53,7 @@ async def list_all_assets(authorization: Optional[str] = Header(None)):
     registry = AssetRegistry()
     assets = registry.get_all()
     logger.info(f"User {user.username} listed {len(assets)} assets")
-    return JSONResponse({
-        "total": len(assets),
-        "assets": [a.to_dict() for a in assets]
-    })
+    return JSONResponse({"total": len(assets), "assets": [a.to_dict() for a in assets]})
 
 
 @router.get("/assets/by-class/{asset_class}")
@@ -67,13 +64,17 @@ async def list_assets_by_class(asset_class: str):
     try:
         ac = AssetClass(asset_class)
         assets = registry.get_by_class(ac)
-        return JSONResponse({
-            "asset_class": asset_class,
-            "count": len(assets),
-            "assets": [a.to_dict() for a in assets]
-        })
+        return JSONResponse(
+            {
+                "asset_class": asset_class,
+                "count": len(assets),
+                "assets": [a.to_dict() for a in assets],
+            }
+        )
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid asset class: {asset_class}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid asset class: {asset_class}"
+        )
 
 
 @router.get("/assets/by-region/{region}")
@@ -84,11 +85,13 @@ async def list_assets_by_region(region: str):
     try:
         reg = Region(region)
         assets = registry.get_by_region(reg)
-        return JSONResponse({
-            "region": region,
-            "count": len(assets),
-            "assets": [a.to_dict() for a in assets]
-        })
+        return JSONResponse(
+            {
+                "region": region,
+                "count": len(assets),
+                "assets": [a.to_dict() for a in assets],
+            }
+        )
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid region: {region}")
 
@@ -112,11 +115,13 @@ async def get_recommended_allocation():
     if not weights.validate():
         logger.warning("Asset allocation weights do not sum to 1.0")
 
-    return JSONResponse({
-        "allocation": weights.get_all_weights(),
-        "valid": weights.validate(),
-        "message": "Recommended global asset allocation"
-    })
+    return JSONResponse(
+        {
+            "allocation": weights.get_all_weights(),
+            "valid": weights.validate(),
+            "message": "Recommended global asset allocation",
+        }
+    )
 
 
 @router.get("/allocation/signal-weights/{asset_class}")
@@ -127,13 +132,17 @@ async def get_signal_weights(asset_class: str):
     try:
         ac = AssetClass(asset_class)
         weights = signal_weights.get_weights(ac)
-        return JSONResponse({
-            "asset_class": asset_class,
-            "signal_weights": weights,
-            "components": list(weights.keys())
-        })
+        return JSONResponse(
+            {
+                "asset_class": asset_class,
+                "signal_weights": weights,
+                "components": list(weights.keys()),
+            }
+        )
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid asset class: {asset_class}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid asset class: {asset_class}"
+        )
 
 
 @router.get("/currency/exposure")
@@ -150,17 +159,19 @@ async def get_currency_exposure(positions: Optional[str] = None):
 
     exposures = calc.calculate_currency_exposure(test_positions)
 
-    return JSONResponse({
-        "exposures": {
-            currency: {
-                "amount_usd": exposure.exposure_amount,
-                "pct": exposure.exposure_pct,
-                "hedged_amount": exposure.hedged_amount,
-                "hedge_ratio": exposure.hedge_ratio
+    return JSONResponse(
+        {
+            "exposures": {
+                currency: {
+                    "amount_usd": exposure.exposure_amount,
+                    "pct": exposure.exposure_pct,
+                    "hedged_amount": exposure.hedged_amount,
+                    "hedge_ratio": exposure.hedge_ratio,
+                }
+                for currency, exposure in exposures.items()
             }
-            for currency, exposure in exposures.items()
         }
-    })
+    )
 
 
 @router.get("/currency/var")
@@ -173,13 +184,15 @@ async def get_currency_var(currency: str = "EUR", confidence: float = 0.95):
 
     var = calc.calculate_currency_var(total_exposure, currency, confidence)
 
-    return JSONResponse({
-        "currency": currency,
-        "exposure_usd": total_exposure,
-        "var_usd": var,
-        "var_pct": (var / total_exposure * 100) if total_exposure > 0 else 0,
-        "confidence": confidence
-    })
+    return JSONResponse(
+        {
+            "currency": currency,
+            "exposure_usd": total_exposure,
+            "var_usd": var,
+            "var_pct": (var / total_exposure * 100) if total_exposure > 0 else 0,
+            "confidence": confidence,
+        }
+    )
 
 
 @router.get("/currency/hedge-suggestions")
@@ -196,10 +209,7 @@ async def get_hedge_suggestions():
 
     suggestions = calc.suggest_hedges(exposures)
 
-    return JSONResponse({
-        "count": len(suggestions),
-        "suggestions": suggestions
-    })
+    return JSONResponse({"count": len(suggestions), "suggestions": suggestions})
 
 
 @router.get("/optimization/efficient-frontier")
@@ -208,75 +218,80 @@ async def get_efficient_frontier(num_points: int = 30):
     optimizer = GlobalPortfolioOptimizer()
 
     # Set up mock returns and risks for asset classes
-    optimizer.set_expected_returns({
-        "crypto": 0.25,
-        "us_equity": 0.10,
-        "eu_equity": 0.08,
-        "bond_gov": 0.03,
-        "commodity": 0.05,
-    })
+    optimizer.set_expected_returns(
+        {
+            "crypto": 0.25,
+            "us_equity": 0.10,
+            "eu_equity": 0.08,
+            "bond_gov": 0.03,
+            "commodity": 0.05,
+        }
+    )
 
-    optimizer.set_volatilities({
-        "crypto": 0.70,
-        "us_equity": 0.15,
-        "eu_equity": 0.18,
-        "bond_gov": 0.05,
-        "commodity": 0.20,
-    })
+    optimizer.set_volatilities(
+        {
+            "crypto": 0.70,
+            "us_equity": 0.15,
+            "eu_equity": 0.18,
+            "bond_gov": 0.05,
+            "commodity": 0.20,
+        }
+    )
 
     frontier = optimizer.calculate_efficient_frontier(num_points)
 
-    return JSONResponse({
-        "points": len(frontier),
-        "frontier": frontier
-    })
+    return JSONResponse({"points": len(frontier), "frontier": frontier})
 
 
 @router.get("/optimization/optimal-portfolio")
-async def get_optimal_portfolio(target_return: Optional[float] = None, risk_aversion: float = 1.0):
+async def get_optimal_portfolio(
+    target_return: Optional[float] = None, risk_aversion: float = 1.0
+):
     """Get optimal portfolio allocation."""
     optimizer = GlobalPortfolioOptimizer()
 
     # Set up mock data
-    optimizer.set_expected_returns({
-        "crypto": 0.25,
-        "us_equity": 0.10,
-        "eu_equity": 0.08,
-        "bond_gov": 0.03,
-        "commodity": 0.05,
-    })
+    optimizer.set_expected_returns(
+        {
+            "crypto": 0.25,
+            "us_equity": 0.10,
+            "eu_equity": 0.08,
+            "bond_gov": 0.03,
+            "commodity": 0.05,
+        }
+    )
 
-    optimizer.set_volatilities({
-        "crypto": 0.70,
-        "us_equity": 0.15,
-        "eu_equity": 0.18,
-        "bond_gov": 0.05,
-        "commodity": 0.20,
-    })
+    optimizer.set_volatilities(
+        {
+            "crypto": 0.70,
+            "us_equity": 0.15,
+            "eu_equity": 0.18,
+            "bond_gov": 0.05,
+            "commodity": 0.20,
+        }
+    )
 
     result = optimizer.find_optimal_portfolio(target_return, risk_aversion)
 
-    return JSONResponse({
-        "weights": result["weights"],
-        "expected_return": result["expected_return"],
-        "risk": result["risk"],
-        "sharpe_ratio": result["sharpe_ratio"]
-    })
+    return JSONResponse(
+        {
+            "weights": result["weights"],
+            "expected_return": result["expected_return"],
+            "risk": result["risk"],
+            "sharpe_ratio": result["sharpe_ratio"],
+        }
+    )
 
 
 @router.post("/optimization/rebalancing-plan")
 async def calculate_rebalancing_plan(
-    current_weights: dict,
-    target_weights: dict,
-    portfolio_value: float
+    current_weights: dict, target_weights: dict, portfolio_value: float
 ):
     """Calculate rebalancing plan."""
     optimizer = GlobalPortfolioOptimizer()
 
     plan = optimizer.calculate_rebalancing_plan(
-        current_weights,
-        target_weights,
-        portfolio_value
+        current_weights, target_weights, portfolio_value
     )
 
     return JSONResponse(plan)
@@ -298,10 +313,12 @@ async def get_portfolio_summary():
         assets = registry.get_by_region(region)
         summary_by_region[region.value] = len(assets)
 
-    return JSONResponse({
-        "total_assets": len(all_assets),
-        "by_class": summary_by_class,
-        "by_region": summary_by_region,
-        "asset_classes": [ac.value for ac in AssetClass],
-        "regions": [r.value for r in Region]
-    })
+    return JSONResponse(
+        {
+            "total_assets": len(all_assets),
+            "by_class": summary_by_class,
+            "by_region": summary_by_region,
+            "asset_classes": [ac.value for ac in AssetClass],
+            "regions": [r.value for r in Region],
+        }
+    )

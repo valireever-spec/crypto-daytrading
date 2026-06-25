@@ -7,10 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from backend.trading.autonomous_trader import (
-    get_autonomous_trader,
-    TradingConfig
-)
+from backend.trading.autonomous_trader import get_autonomous_trader
 from backend.core.config_manager import ConfigManager
 from backend.core.immutable_logger import get_immutable_logger
 
@@ -20,6 +17,7 @@ router = APIRouter(tags=["Autonomous Trading"])
 
 class ConfigUpdateRequest(BaseModel):
     """Request model for config updates."""
+
     enabled: Optional[bool] = None
     entry_threshold: Optional[float] = None
     exit_profit_target: Optional[float] = None
@@ -52,10 +50,9 @@ async def start_autonomous_trading():
 
     trader.config.enabled = True
     logger.info("Autonomous trading enabled")
-    return JSONResponse({
-        "status": "started",
-        "message": "Autonomous trading is now active"
-    })
+    return JSONResponse(
+        {"status": "started", "message": "Autonomous trading is now active"}
+    )
 
 
 @router.post("/api/autonomous/stop")
@@ -67,10 +64,9 @@ async def stop_autonomous_trading():
 
     trader.config.enabled = False
     logger.info("Autonomous trading disabled")
-    return JSONResponse({
-        "status": "stopped",
-        "message": "Autonomous trading is now paused"
-    })
+    return JSONResponse(
+        {"status": "stopped", "message": "Autonomous trading is now paused"}
+    )
 
 
 @router.get("/api/autonomous/config")
@@ -80,16 +76,18 @@ async def get_trading_config():
     if not trader:
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
 
-    return JSONResponse({
-        "entry_threshold": trader.config.entry_threshold,
-        "exit_profit_target": trader.config.exit_profit_target,
-        "exit_stop_loss": trader.config.exit_stop_loss,
-        "position_size_pct": trader.config.position_size_pct,
-        "max_positions": trader.config.max_positions,
-        "max_daily_loss_pct": trader.config.max_daily_loss_pct,
-        "symbols": trader.config.symbols,
-        "enabled": trader.config.enabled
-    })
+    return JSONResponse(
+        {
+            "entry_threshold": trader.config.entry_threshold,
+            "exit_profit_target": trader.config.exit_profit_target,
+            "exit_stop_loss": trader.config.exit_stop_loss,
+            "position_size_pct": trader.config.position_size_pct,
+            "max_positions": trader.config.max_positions,
+            "max_daily_loss_pct": trader.config.max_daily_loss_pct,
+            "symbols": trader.config.symbols,
+            "enabled": trader.config.enabled,
+        }
+    )
 
 
 @router.post("/api/autonomous/config/update")
@@ -125,7 +123,7 @@ async def update_trading_config(request: ConfigUpdateRequest):
         "max_positions": trader.config.max_positions,
         "max_daily_loss_pct": trader.config.max_daily_loss_pct,
         "symbols": trader.config.symbols,
-        "enabled": trader.config.enabled
+        "enabled": trader.config.enabled,
     }
 
     # Save to persistent storage
@@ -138,12 +136,14 @@ async def update_trading_config(request: ConfigUpdateRequest):
         ConfigManager.sync_to_backup(backup_url, config_dict)
 
     logger.info(f"Updated and persisted trading config: {config_dict}")
-    return JSONResponse({
-        "status": "updated",
-        "persisted": True,
-        "synced": machine_id == "main",
-        "config": config_dict
-    })
+    return JSONResponse(
+        {
+            "status": "updated",
+            "persisted": True,
+            "synced": machine_id == "main",
+            "config": config_dict,
+        }
+    )
 
 
 @router.post("/api/autonomous/config/sync")
@@ -180,19 +180,21 @@ async def sync_config_from_backup(request: ConfigUpdateRequest):
         "max_positions": trader.config.max_positions,
         "max_daily_loss_pct": trader.config.max_daily_loss_pct,
         "symbols": trader.config.symbols,
-        "enabled": trader.config.enabled
+        "enabled": trader.config.enabled,
     }
 
     # PERSIST synced config to disk
     ConfigManager.save_config(config_dict)
 
     logger.info(f"Synced config from primary: {config_dict}")
-    return JSONResponse({
-        "status": "synced",
-        "message": "Config synced and persisted",
-        "persisted": True,
-        "config": config_dict
-    })
+    return JSONResponse(
+        {
+            "status": "synced",
+            "message": "Config synced and persisted",
+            "persisted": True,
+            "config": config_dict,
+        }
+    )
 
 
 @router.get("/api/autonomous/trades")
@@ -203,11 +205,13 @@ async def get_trade_history(limit: int = 50):
         raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
 
     trades = trader.trade_history[-limit:] if trader.trade_history else []
-    return JSONResponse({
-        "total": len(trader.trade_history),
-        "recent": trades,
-        "timestamp": __import__('datetime').datetime.utcnow().isoformat()
-    })
+    return JSONResponse(
+        {
+            "total": len(trader.trade_history),
+            "recent": trades,
+            "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+        }
+    )
 
 
 @router.get("/api/immutable-log/status")
@@ -216,11 +220,13 @@ async def get_immutable_log_status():
     try:
         logger = get_immutable_logger()
         status = logger.get_log_status()
-        return JSONResponse({
-            "status": "ok",
-            "immutable_log": status,
-            "message": "Write-once, append-only transaction logging active"
-        })
+        return JSONResponse(
+            {
+                "status": "ok",
+                "immutable_log": status,
+                "message": "Write-once, append-only transaction logging active",
+            }
+        )
     except Exception as e:
         logger.error(f"Failed to get immutable log status: {e}")
         raise HTTPException(status_code=500, detail=f"Immutable log error: {str(e)}")

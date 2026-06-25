@@ -2,8 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, List, Tuple
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,7 +16,7 @@ class VaRCalculator:
         returns: np.ndarray,
         confidence: float = 0.95,
         time_horizon_days: int = 1,
-        simulations: int = 10000
+        simulations: int = 10000,
     ) -> float:
         """
         Calculate VaR using Monte Carlo simulation.
@@ -44,9 +43,7 @@ class VaRCalculator:
 
         # Run Monte Carlo simulation
         simulated_returns = np.random.normal(
-            loc=scaled_mean,
-            scale=scaled_std,
-            size=simulations
+            loc=scaled_mean, scale=scaled_std, size=simulations
         )
 
         # Calculate percentile (VaR)
@@ -56,10 +53,7 @@ class VaRCalculator:
         return float(var)
 
     @staticmethod
-    def historical_var(
-        returns: np.ndarray,
-        confidence: float = 0.95
-    ) -> float:
+    def historical_var(returns: np.ndarray, confidence: float = 0.95) -> float:
         """
         Calculate VaR using historical method.
 
@@ -78,10 +72,7 @@ class VaRCalculator:
         return float(var)
 
     @staticmethod
-    def cvar(
-        returns: np.ndarray,
-        confidence: float = 0.95
-    ) -> float:
+    def cvar(returns: np.ndarray, confidence: float = 0.95) -> float:
         """
         Calculate Conditional Value at Risk (Expected Shortfall).
         Average of losses beyond VaR.
@@ -147,12 +138,16 @@ class DrawdownCalculator:
 
         # Find consecutive days below 0
         in_drawdown = drawdown < 0
-        drawdown_runs = np.diff(np.where(np.diff(np.concatenate(([0], in_drawdown, [0]))) != 0)[0])
+        drawdown_runs = np.diff(
+            np.where(np.diff(np.concatenate(([0], in_drawdown, [0]))) != 0)[0]
+        )
 
         if len(drawdown_runs) == 0:
             return 0
 
-        return int(np.max(drawdown_runs[1::2]))  # Every other element is drawdown duration
+        return int(
+            np.max(drawdown_runs[1::2])
+        )  # Every other element is drawdown duration
 
 
 class CorrelationAnalyzer:
@@ -195,14 +190,13 @@ class CorrelationAnalyzer:
             return 0.0
 
         normalized = np.array([w / total for w in weights.values()])
-        hhi = np.sum(normalized ** 2)
+        hhi = np.sum(normalized**2)
 
         return float(hhi)
 
     @staticmethod
     def systemic_risk(
-        returns_df: pd.DataFrame,
-        portfolio_returns: np.ndarray
+        returns_df: pd.DataFrame, portfolio_returns: np.ndarray
     ) -> Dict[str, float]:
         """
         Calculate systemic (beta) and idiosyncratic risk for each asset.
@@ -236,7 +230,7 @@ class CorrelationAnalyzer:
             results[symbol] = {
                 "beta": float(beta),
                 "idiosyncratic_volatility": float(idiosyncratic_vol),
-                "systematic_risk": abs(float(beta))
+                "systematic_risk": abs(float(beta)),
             }
 
         return results
@@ -292,7 +286,7 @@ class VolatilityCalculator:
 
         # Calculate conditional variance
         for ret in returns[-20:]:  # Use recent returns
-            h = omega + alpha * (ret ** 2) + beta * h
+            h = omega + alpha * (ret**2) + beta * h
 
         return float(np.sqrt(h))
 
@@ -311,7 +305,7 @@ class VolatilityCalculator:
         if len(returns) < 2:
             return 0.0
 
-        squared_returns = returns ** 2
+        squared_returns = returns**2
         ewma = pd.Series(squared_returns).ewm(span=span).mean()
 
         vol = np.sqrt(ewma.iloc[-1])
@@ -330,7 +324,7 @@ class PortfolioRiskCalculator:
         self.positions[symbol] = {
             "quantity": quantity,
             "entry_price": entry_price,
-            "current_price": entry_price
+            "current_price": entry_price,
         }
 
     def update_price(self, symbol: str, price: float):
@@ -407,12 +401,14 @@ class PortfolioRiskCalculator:
             return {"current": 0.0, "max": 0.0, "duration_days": 0}
 
         portfolio_prices = np.sum(prices, axis=0)
-        current, max_dd, duration = DrawdownCalculator.calculate_drawdown(portfolio_prices)
+        current, max_dd, duration = DrawdownCalculator.calculate_drawdown(
+            portfolio_prices
+        )
 
         return {
             "current": float(current),
             "max": float(max_dd),
-            "duration_days": int(duration)
+            "duration_days": int(duration),
         }
 
     def calculate_concentration_risk(self) -> float:
@@ -451,5 +447,5 @@ class PortfolioRiskCalculator:
             "cvar_95": self.calculate_portfolio_cvar(0.95),
             "drawdown": self.calculate_drawdown(),
             "concentration": self.calculate_concentration_risk(),
-            "positions": self.get_position_values()
+            "positions": self.get_position_values(),
         }

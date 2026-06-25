@@ -44,11 +44,9 @@ async def get_health_history(service_name: str, limit: int = 50):
         raise HTTPException(status_code=500, detail="Health checker not initialized")
 
     history = health_checker.get_history(service_name)
-    return JSONResponse({
-        "service": service_name,
-        "history": history[-limit:],
-        "total": len(history)
-    })
+    return JSONResponse(
+        {"service": service_name, "history": history[-limit:], "total": len(history)}
+    )
 
 
 @router.get("/alerts")
@@ -65,11 +63,13 @@ async def get_alerts(status: str = "all", limit: int = 100):
     else:  # all
         alerts = alert_manager.get_alert_history(limit)
 
-    return JSONResponse({
-        "count": len(alerts),
-        "status": status,
-        "alerts": [a.to_dict() for a in alerts]
-    })
+    return JSONResponse(
+        {
+            "count": len(alerts),
+            "status": status,
+            "alerts": [a.to_dict() for a in alerts],
+        }
+    )
 
 
 @router.get("/alerts/active")
@@ -80,10 +80,7 @@ async def get_active_alerts():
         alert_manager = init_alert_manager()
 
     alerts = alert_manager.get_active_alerts()
-    return JSONResponse({
-        "count": len(alerts),
-        "alerts": [a.to_dict() for a in alerts]
-    })
+    return JSONResponse({"count": len(alerts), "alerts": [a.to_dict() for a in alerts]})
 
 
 @router.get("/alerts/service/{service_name}")
@@ -94,11 +91,13 @@ async def get_service_alerts(service_name: str):
         alert_manager = init_alert_manager()
 
     alerts = alert_manager.get_alerts_by_service(service_name)
-    return JSONResponse({
-        "service": service_name,
-        "count": len(alerts),
-        "alerts": [a.to_dict() for a in alerts]
-    })
+    return JSONResponse(
+        {
+            "service": service_name,
+            "count": len(alerts),
+            "alerts": [a.to_dict() for a in alerts],
+        }
+    )
 
 
 @router.get("/alerts/severity/{severity}")
@@ -111,25 +110,22 @@ async def get_alerts_by_severity(severity: str):
     try:
         sev = AlertSeverity(severity.lower())
         alerts = alert_manager.get_alerts_by_severity(sev)
-        return JSONResponse({
-            "severity": severity,
-            "count": len(alerts),
-            "alerts": [a.to_dict() for a in alerts]
-        })
+        return JSONResponse(
+            {
+                "severity": severity,
+                "count": len(alerts),
+                "alerts": [a.to_dict() for a in alerts],
+            }
+        )
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid severity: {severity}. Must be one of: {', '.join([s.value for s in AlertSeverity])}"
+            detail=f"Invalid severity: {severity}. Must be one of: {', '.join([s.value for s in AlertSeverity])}",
         )
 
 
 @router.post("/alerts/create")
-async def create_alert(
-    severity: str,
-    title: str,
-    message: str,
-    service: str
-):
+async def create_alert(severity: str, title: str, message: str, service: str):
     """Create a manual alert."""
     alert_manager = get_alert_manager()
     if not alert_manager:
@@ -138,15 +134,9 @@ async def create_alert(
     try:
         sev = AlertSeverity(severity.lower())
         alert = await alert_manager.create_alert(sev, title, message, service)
-        return JSONResponse({
-            "status": "created",
-            "alert": alert.to_dict()
-        })
+        return JSONResponse({"status": "created", "alert": alert.to_dict()})
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid severity: {severity}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid severity: {severity}")
 
 
 @router.post("/alerts/{alert_id}/resolve")
@@ -158,10 +148,7 @@ async def resolve_alert(alert_id: str):
 
     resolved = await alert_manager.resolve_alert(alert_id)
     if resolved:
-        return JSONResponse({
-            "status": "resolved",
-            "alert_id": alert_id
-        })
+        return JSONResponse({"status": "resolved", "alert_id": alert_id})
     else:
         raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
 
@@ -180,15 +167,21 @@ async def get_system_status():
     health = await health_checker.check_all()
     active_alerts = alert_manager.get_active_alerts()
 
-    return JSONResponse({
-        "timestamp": health["timestamp"],
-        "health": health,
-        "alerts": {
-            "active": len(active_alerts),
-            "critical": len([a for a in active_alerts if a.severity.value == "critical"]),
-            "warning": len([a for a in active_alerts if a.severity.value == "warning"])
+    return JSONResponse(
+        {
+            "timestamp": health["timestamp"],
+            "health": health,
+            "alerts": {
+                "active": len(active_alerts),
+                "critical": len(
+                    [a for a in active_alerts if a.severity.value == "critical"]
+                ),
+                "warning": len(
+                    [a for a in active_alerts if a.severity.value == "warning"]
+                ),
+            },
         }
-    })
+    )
 
 
 @router.get("/metrics")
@@ -196,19 +189,21 @@ async def get_metrics():
     """Get system metrics."""
     import psutil
 
-    return JSONResponse({
-        "cpu": {
-            "percent": psutil.cpu_percent(interval=1),
-            "count": psutil.cpu_count()
-        },
-        "memory": {
-            "used_mb": psutil.virtual_memory().used / 1024 / 1024,
-            "available_mb": psutil.virtual_memory().available / 1024 / 1024,
-            "percent": psutil.virtual_memory().percent
-        },
-        "disk": {
-            "used_gb": psutil.disk_usage('/').used / 1024 / 1024 / 1024,
-            "free_gb": psutil.disk_usage('/').free / 1024 / 1024 / 1024,
-            "percent": psutil.disk_usage('/').percent
+    return JSONResponse(
+        {
+            "cpu": {
+                "percent": psutil.cpu_percent(interval=1),
+                "count": psutil.cpu_count(),
+            },
+            "memory": {
+                "used_mb": psutil.virtual_memory().used / 1024 / 1024,
+                "available_mb": psutil.virtual_memory().available / 1024 / 1024,
+                "percent": psutil.virtual_memory().percent,
+            },
+            "disk": {
+                "used_gb": psutil.disk_usage("/").used / 1024 / 1024 / 1024,
+                "free_gb": psutil.disk_usage("/").free / 1024 / 1024 / 1024,
+                "percent": psutil.disk_usage("/").percent,
+            },
         }
-    })
+    )

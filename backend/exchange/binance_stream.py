@@ -48,9 +48,11 @@ class BinanceStreamClient:
             )
             return
 
-        wait_time = 2 ** self.reconnect_attempts  # 1, 2, 4, 8, 16 seconds
+        wait_time = 2**self.reconnect_attempts  # 1, 2, 4, 8, 16 seconds
         self.reconnect_attempts += 1
-        logger.info(f"Reconnecting in {wait_time} seconds (attempt {self.reconnect_attempts})")
+        logger.info(
+            f"Reconnecting in {wait_time} seconds (attempt {self.reconnect_attempts})"
+        )
         await asyncio.sleep(wait_time)
         await self.connect()
 
@@ -205,12 +207,12 @@ class BinanceStreamClient:
             Dict mapping symbol -> price (only for symbols with cached data)
         """
         return {
-            sym: self.price_cache[sym]
-            for sym in symbols
-            if sym in self.price_cache
+            sym: self.price_cache[sym] for sym in symbols if sym in self.price_cache
         }
 
-    def get_prices_fresh(self, symbols: list, max_age_seconds: int = 5) -> Dict[str, float]:
+    def get_prices_fresh(
+        self, symbols: list, max_age_seconds: int = 5
+    ) -> Dict[str, float]:
         """Get cached prices only if fresh (HARDENING: Data freshness gate G-011).
 
         Args:
@@ -244,7 +246,9 @@ class BinanceStreamClient:
                 stale_symbols.append(f"{sym}({age_seconds:.1f}s)")
 
         if stale_symbols:
-            logger.warning(f"Stale prices rejected: {', '.join(stale_symbols)} max_age={max_age_seconds}s")
+            logger.warning(
+                f"Stale prices rejected: {', '.join(stale_symbols)} max_age={max_age_seconds}s"
+            )
 
         return fresh_prices
 

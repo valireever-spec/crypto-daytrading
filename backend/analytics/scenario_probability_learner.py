@@ -87,9 +87,7 @@ class ScenarioProbabilityLearner:
             confidence = 0.5
 
         # Weight by accuracy: higher accuracy = higher weight
-        accuracy_sum = sum(
-            max(0.1, acc) for acc in scenario_accuracy.values()
-        )
+        accuracy_sum = sum(max(0.1, acc) for acc in scenario_accuracy.values())
 
         new_weights = {}
         for scenario, accuracy in scenario_accuracy.items():
@@ -106,8 +104,7 @@ class ScenarioProbabilityLearner:
             effective_rate = self.learning_rate * confidence
 
             blended[scenario] = (
-                old_weight * (1 - effective_rate) +
-                new_weight * effective_rate
+                old_weight * (1 - effective_rate) + new_weight * effective_rate
             )
 
         # Normalize to ensure sum = 1.0
@@ -163,8 +160,12 @@ class ScenarioProbabilityLearner:
             # Increase best, decrease worst
             improvement_pct = accuracy_spread / 100
 
-            suggested[best_scenario] = min(0.6, current_weights[best_scenario] * (1 + improvement_pct))
-            suggested[worst_scenario] = max(0.1, current_weights[worst_scenario] * (1 - improvement_pct))
+            suggested[best_scenario] = min(
+                0.6, current_weights[best_scenario] * (1 + improvement_pct)
+            )
+            suggested[worst_scenario] = max(
+                0.1, current_weights[worst_scenario] * (1 - improvement_pct)
+            )
 
             # Rebalance middle
             remaining = 1.0 - suggested[best_scenario] - suggested[worst_scenario]
@@ -178,7 +179,9 @@ class ScenarioProbabilityLearner:
 
             recommendation = f"Strong signal: {best_scenario} accuracy {best_accuracy:.0f}% vs {worst_scenario} {worst_accuracy:.0f}%. Recommend increasing {best_scenario} weight."
         else:
-            recommendation = "Accuracy spread insufficient for reweighting recommendation."
+            recommendation = (
+                "Accuracy spread insufficient for reweighting recommendation."
+            )
 
         return suggested, recommendation
 
@@ -209,9 +212,8 @@ class ScenarioProbabilityLearner:
             current = self.weights.get(scenario, uniform.get(scenario, 0.33))
             uniform_weight = uniform.get(scenario, 0.33)
 
-            decayed[scenario] = (
-                current * decay_factor +
-                uniform_weight * (1 - decay_factor)
+            decayed[scenario] = current * decay_factor + uniform_weight * (
+                1 - decay_factor
             )
 
         # Normalize and apply minimum floor (prevent degenerate weights)

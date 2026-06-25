@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class MarketRegime(Enum):
     """Market regime classification."""
+
     BULL = "bull"
     BEAR = "bear"
     SIDEWAYS = "sideways"
@@ -63,7 +64,9 @@ class RegimeDetector:
 
             # Calculate volatility
             returns = closes.pct_change().dropna()
-            vol_recent = returns.iloc[-20:].std() if len(returns) >= 20 else returns.std()
+            vol_recent = (
+                returns.iloc[-20:].std() if len(returns) >= 20 else returns.std()
+            )
             vol_historical = returns.std()
             vol_ratio = vol_recent / vol_historical if vol_historical > 0 else 1.0
 
@@ -85,7 +88,9 @@ class RegimeDetector:
             # Determine regime
             if volatility_level == "extreme":
                 regime = "volatile"
-                recommendation = "⚠️ Extreme volatility: reduce position size, tighten stops"
+                recommendation = (
+                    "⚠️ Extreme volatility: reduce position size, tighten stops"
+                )
             elif trend_strength > 0.3 and volatility_level in ["low", "medium"]:
                 regime = "bull"
                 recommendation = "✅ Bull market: aggressive entry, wider stops"
@@ -121,7 +126,9 @@ class RegimeDetector:
                 "recommendation": "Error during calculation",
             }
 
-    def get_adaptive_thresholds(self, regime_info: Dict[str, Any], base_entry: float = 55.0) -> Dict[str, float]:
+    def get_adaptive_thresholds(
+        self, regime_info: Dict[str, Any], base_entry: float = 55.0
+    ) -> Dict[str, float]:
         """Get regime-aware entry and exit thresholds."""
         regime = regime_info.get("regime", "sideways")
         vol_level = regime_info.get("volatility_level", "medium")
@@ -135,10 +142,30 @@ class RegimeDetector:
         }
 
         regime_adjustments = {
-            "bull": {"entry_threshold": base_entry - 5, "profit_target": 0.08, "stop_loss": 0.03, "position_size_adjustment": 1.2},
-            "bear": {"entry_threshold": base_entry + 10, "profit_target": 0.03, "stop_loss": 0.015, "position_size_adjustment": 0.6},
-            "sideways": {"entry_threshold": base_entry, "profit_target": 0.04, "stop_loss": 0.02, "position_size_adjustment": 1.0},
-            "volatile": {"entry_threshold": base_entry + 5, "profit_target": 0.06, "stop_loss": 0.025, "position_size_adjustment": 0.7},
+            "bull": {
+                "entry_threshold": base_entry - 5,
+                "profit_target": 0.08,
+                "stop_loss": 0.03,
+                "position_size_adjustment": 1.2,
+            },
+            "bear": {
+                "entry_threshold": base_entry + 10,
+                "profit_target": 0.03,
+                "stop_loss": 0.015,
+                "position_size_adjustment": 0.6,
+            },
+            "sideways": {
+                "entry_threshold": base_entry,
+                "profit_target": 0.04,
+                "stop_loss": 0.02,
+                "position_size_adjustment": 1.0,
+            },
+            "volatile": {
+                "entry_threshold": base_entry + 5,
+                "profit_target": 0.06,
+                "stop_loss": 0.025,
+                "position_size_adjustment": 0.7,
+            },
         }
 
         regime_adj = regime_adjustments.get(regime, {})
@@ -157,13 +184,17 @@ class RegimeDetector:
             thresholds["position_size_adjustment"] *= 1.2
 
         thresholds["entry_threshold"] = max(40, min(80, thresholds["entry_threshold"]))
-        thresholds["position_size_adjustment"] = max(0.5, min(1.5, thresholds["position_size_adjustment"]))
+        thresholds["position_size_adjustment"] = max(
+            0.5, min(1.5, thresholds["position_size_adjustment"])
+        )
 
         return {
             "entry_threshold": round(thresholds["entry_threshold"], 1),
             "profit_target": round(thresholds["profit_target"], 4),
             "stop_loss": round(thresholds["stop_loss"], 4),
-            "position_size_adjustment": round(thresholds["position_size_adjustment"], 2),
+            "position_size_adjustment": round(
+                thresholds["position_size_adjustment"], 2
+            ),
             "regime": regime,
             "vol_level": vol_level,
         }
@@ -186,7 +217,9 @@ class RegimeDetector:
             logger.debug(f"RSI calculation failed: {e}")
             return 50.0
 
-    def _calculate_support_resistance(self, df: pd.DataFrame, window: int = 20) -> Tuple[float, float]:
+    def _calculate_support_resistance(
+        self, df: pd.DataFrame, window: int = 20
+    ) -> Tuple[float, float]:
         """Calculate support and resistance levels."""
         if len(df) < window:
             return None, None

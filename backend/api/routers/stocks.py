@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -11,7 +11,6 @@ from backend.analytics.stock_analyzer import (
     init_stock_optimizer,
     get_stock_optimizer,
     StockPosition,
-    StockExitOptimizer,
 )
 from backend.exchange.paper_trading import get_paper_trading
 
@@ -21,8 +20,10 @@ router = APIRouter(prefix="/api/stocks", tags=["Stock Trading"])
 
 # ==================== Pydantic Models ====================
 
+
 class StockOrderInput(BaseModel):
     """Input model for stock order."""
+
     symbol: str  # EQ_AAPL, EQ_MSFT, etc.
     side: str  # BUY or SELL
     quantity: float
@@ -32,6 +33,7 @@ class StockOrderInput(BaseModel):
 
 class PositionAnalysisInput(BaseModel):
     """Input model for exit analysis."""
+
     symbol: str
     quantity: float
     entry_price: float
@@ -42,6 +44,7 @@ class PositionAnalysisInput(BaseModel):
 
 class BreakevenAnalysisInput(BaseModel):
     """Input model for breakeven analysis."""
+
     symbol: str
     quantity: float
     entry_price: float
@@ -50,6 +53,7 @@ class BreakevenAnalysisInput(BaseModel):
 
 
 # ==================== API Endpoints ====================
+
 
 @router.post("/initialize")
 async def initialize_stock_trading(jurisdiction: str = "DE") -> Dict:
@@ -91,7 +95,9 @@ async def buy_stock(order: StockOrderInput) -> Dict:
     try:
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=400, detail="Paper trading engine not initialized")
+            raise HTTPException(
+                status_code=400, detail="Paper trading engine not initialized"
+            )
 
         # Validate stock symbol format
         if not order.symbol.startswith("EQ_"):
@@ -142,7 +148,9 @@ async def sell_stock(order: StockOrderInput) -> Dict:
     try:
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=400, detail="Paper trading engine not initialized")
+            raise HTTPException(
+                status_code=400, detail="Paper trading engine not initialized"
+            )
 
         # Validate stock symbol
         if not order.symbol.startswith("EQ_"):
@@ -158,7 +166,9 @@ async def sell_stock(order: StockOrderInput) -> Dict:
         matching_pos = next((p for p in positions if p["symbol"] == order.symbol), None)
 
         if not matching_pos:
-            raise HTTPException(status_code=400, detail=f"No position found for {order.symbol}")
+            raise HTTPException(
+                status_code=400, detail=f"No position found for {order.symbol}"
+            )
 
         # Calculate P&L
         cost_basis = matching_pos["quantity"] * matching_pos["entry_price"]
@@ -251,17 +261,23 @@ async def analyze_exit(analysis: PositionAnalysisInput) -> Dict:
                 },
             },
             "financial_comparison": {
-                "additional_profit_if_hold": round(exit_analysis.additional_profit_if_hold, 2),
+                "additional_profit_if_hold": round(
+                    exit_analysis.additional_profit_if_hold, 2
+                ),
                 "additional_profit_pct": round(exit_analysis.additional_profit_pct, 2),
                 "eur_per_day_to_hold": round(exit_analysis.time_value, 2),
             },
             "recommendation": {
                 "action": exit_analysis.recommendation.value,
                 "reason": exit_analysis.reason,
-                "confidence": "high" if exit_analysis.recommendation.value == "hold_long_term" else "medium",
+                "confidence": "high"
+                if exit_analysis.recommendation.value == "hold_long_term"
+                else "medium",
             },
             "risk_metrics": {
-                "estimated_daily_loss_risk": round(exit_analysis.estimated_daily_loss_risk, 2),
+                "estimated_daily_loss_risk": round(
+                    exit_analysis.estimated_daily_loss_risk, 2
+                ),
                 "volatility_pct": exit_analysis.volatility_pct,
             },
         }
@@ -295,7 +311,9 @@ async def calculate_breakeven(analysis: BreakevenAnalysisInput) -> Dict:
             current_price=analysis.entry_price,  # Use entry price as baseline
         )
 
-        breakeven = optimizer.calculate_breakeven_hold_period(position, analysis.target_profit_pct)
+        breakeven = optimizer.calculate_breakeven_hold_period(
+            position, analysis.target_profit_pct
+        )
 
         return {
             "symbol": breakeven["symbol"],
@@ -345,7 +363,11 @@ async def get_supported_stocks() -> Dict:
             {"symbol": "EQ_DB1", "name": "Deutsche Börse", "sector": "Finance"},
         ],
         "ASIAN": [
-            {"symbol": "EQ_TSM", "name": "Taiwan Semiconductor", "sector": "Technology"},
+            {
+                "symbol": "EQ_TSM",
+                "name": "Taiwan Semiconductor",
+                "sector": "Technology",
+            },
             {"symbol": "EQ_9618", "name": "JD.com", "sector": "E-Commerce"},
         ],
     }
@@ -373,10 +395,14 @@ async def get_stock_tax_summary() -> Dict:
     try:
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=400, detail="Paper trading engine not initialized")
+            raise HTTPException(
+                status_code=400, detail="Paper trading engine not initialized"
+            )
 
         positions = engine.get_positions()
-        stock_positions = [p for p in positions if p.get("symbol", "").startswith("EQ_")]
+        stock_positions = [
+            p for p in positions if p.get("symbol", "").startswith("EQ_")
+        ]
 
         if not stock_positions:
             return {
@@ -408,20 +434,28 @@ async def get_stock_tax_summary() -> Dict:
             total_gain += gain
             total_tax += tax
 
-            details.append({
-                "symbol": pos.get("symbol"),
-                "quantity": pos.get("quantity"),
-                "entry_price": pos.get("entry_price"),
-                "current_price": pos.get("current_price"),
-                "gain": round(gain, 2),
-                "days_held": days_held,
-                "tax_status": status,
-                "estimated_tax": round(tax, 2),
-            })
+            details.append(
+                {
+                    "symbol": pos.get("symbol"),
+                    "quantity": pos.get("quantity"),
+                    "entry_price": pos.get("entry_price"),
+                    "current_price": pos.get("current_price"),
+                    "gain": round(gain, 2),
+                    "days_held": days_held,
+                    "tax_status": status,
+                    "estimated_tax": round(tax, 2),
+                }
+            )
 
         return {
             "total_positions": len(stock_positions),
-            "total_value": round(sum(p.get("quantity", 0) * p.get("current_price", 0) for p in stock_positions), 2),
+            "total_value": round(
+                sum(
+                    p.get("quantity", 0) * p.get("current_price", 0)
+                    for p in stock_positions
+                ),
+                2,
+            ),
             "unrealized_gain": round(total_gain, 2),
             "estimated_tax": round(total_tax, 2),
             "net_after_tax": round(total_gain - total_tax, 2),

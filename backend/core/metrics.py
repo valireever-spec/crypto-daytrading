@@ -1,12 +1,12 @@
 """Prometheus metrics for observability (request count, latency, error rate)."""
 
-import time
 from enum import Enum
 from typing import Dict, Optional
 
 
 class MetricType(str, Enum):
     """Prometheus metric types."""
+
     COUNTER = "counter"
     GAUGE = "gauge"
     HISTOGRAM = "histogram"
@@ -110,8 +110,10 @@ class MetricsCollector:
         )
 
         avg_latency = (
-            (self.histogram_buckets.get("request_latency_ms", {}).get("sum", 0.0)
-             / self.histogram_buckets.get("request_latency_ms", {}).get("count", 1))
+            (
+                self.histogram_buckets.get("request_latency_ms", {}).get("sum", 0.0)
+                / self.histogram_buckets.get("request_latency_ms", {}).get("count", 1)
+            )
             if self.request_count > 0
             else 0.0
         )
@@ -121,9 +123,15 @@ class MetricsCollector:
             "errors_total": self.error_count,
             "error_rate_percent": error_rate,
             "avg_latency_ms": avg_latency,
-            "p50_latency_ms": self.histogram_buckets.get("request_latency_ms", {}).get("p50", 0.0),
-            "p95_latency_ms": self.histogram_buckets.get("request_latency_ms", {}).get("p95", 0.0),
-            "p99_latency_ms": self.histogram_buckets.get("request_latency_ms", {}).get("p99", 0.0),
+            "p50_latency_ms": self.histogram_buckets.get("request_latency_ms", {}).get(
+                "p50", 0.0
+            ),
+            "p95_latency_ms": self.histogram_buckets.get("request_latency_ms", {}).get(
+                "p95", 0.0
+            ),
+            "p99_latency_ms": self.histogram_buckets.get("request_latency_ms", {}).get(
+                "p99", 0.0
+            ),
         }
 
 

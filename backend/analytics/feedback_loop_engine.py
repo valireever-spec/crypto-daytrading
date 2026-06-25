@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CalibrationReport:
     """Calibration analysis report."""
+
     scenario_accuracy_pct: Dict[str, float]  # {scenario: accuracy %}
     recommendation_quality_score: float  # 0-100
     constraint_effectiveness: float  # How well constraints worked
@@ -130,8 +131,12 @@ class FeedbackLoopEngine:
         quality_score = overall_acc
 
         # Constraint effectiveness: how many plans were feasible?
-        feasible_count = sum(1 for rec in recommendations if getattr(rec, "feasible", True))
-        constraint_effectiveness = (feasible_count / len(recommendations) * 100) if recommendations else 100
+        feasible_count = sum(
+            1 for rec in recommendations if getattr(rec, "feasible", True)
+        )
+        constraint_effectiveness = (
+            (feasible_count / len(recommendations) * 100) if recommendations else 100
+        )
 
         # Generate suggestions
         suggestions = {}
@@ -182,14 +187,18 @@ class FeedbackLoopEngine:
             for key in adjusted:
                 if "max" in key.lower():
                     adjusted[key] *= 0.8  # Reduce max positions by 20%
-                    logger.info(f"Suggesting {key} reduction: {current_constraints[key]:.1f}% → {adjusted[key]:.1f}%")
+                    logger.info(
+                        f"Suggesting {key} reduction: {current_constraints[key]:.1f}% → {adjusted[key]:.1f}%"
+                    )
 
         # If recommendations are too conservative, loosen constraints
         elif performance_report.recommendation_quality_score > 80:
             for key in adjusted:
                 if "max" in key.lower():
                     adjusted[key] *= 1.1  # Increase max positions by 10%
-                    logger.info(f"Suggesting {key} increase: {current_constraints[key]:.1f}% → {adjusted[key]:.1f}%")
+                    logger.info(
+                        f"Suggesting {key} increase: {current_constraints[key]:.1f}% → {adjusted[key]:.1f}%"
+                    )
 
         return adjusted
 
@@ -217,8 +226,7 @@ class FeedbackLoopEngine:
         # Weight by accuracy
         total = sum(max(0.1, acc) for acc in scenario_acc.values())  # Min 0.1 weight
         weights = {
-            scenario: max(0.1, acc) / total
-            for scenario, acc in scenario_acc.items()
+            scenario: max(0.1, acc) / total for scenario, acc in scenario_acc.items()
         }
 
         # Normalize

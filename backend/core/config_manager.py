@@ -38,7 +38,9 @@ class ConfigManager:
         for var in CRITICAL_ENV_VARS:
             if var not in os.environ:
                 missing.append(var)
-                logger.warning(f"Critical env var not set: {var} (using hardcoded default)")
+                logger.warning(
+                    f"Critical env var not set: {var} (using hardcoded default)"
+                )
 
         if missing:
             logger.warning(
@@ -75,6 +77,7 @@ class ConfigManager:
     def env_to_config() -> Dict[str, Any]:
         """Convert .env variables to config dict."""
         import os
+
         # Parse symbols from comma-separated env var
         symbols_str = os.getenv("TRADING_SYMBOLS", "BTCUSDT,ETHUSDT,BNBUSDT")
         symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
@@ -114,7 +117,6 @@ class ConfigManager:
     def sync_to_backup(backup_url: str, config: Dict[str, Any]) -> bool:
         """Sync config to backup machine via API with retry logic."""
         import httpx
-        import asyncio
 
         max_retries = 3
         retry_delays = [1, 2, 4]  # exponential backoff: 1s, 2s, 4s
@@ -128,15 +130,20 @@ class ConfigManager:
                     logger.info(f"Synced config to backup: {backup_url}")
                     return True
                 else:
-                    logger.warning(f"Backup sync attempt {attempt + 1}/{max_retries} failed: HTTP {response.status_code}")
+                    logger.warning(
+                        f"Backup sync attempt {attempt + 1}/{max_retries} failed: HTTP {response.status_code}"
+                    )
             except Exception as e:
-                logger.warning(f"Backup sync attempt {attempt + 1}/{max_retries} failed: {e}")
+                logger.warning(
+                    f"Backup sync attempt {attempt + 1}/{max_retries} failed: {e}"
+                )
 
             # Retry with exponential backoff (except on last attempt)
             if attempt < max_retries - 1:
                 delay = retry_delays[attempt]
                 logger.info(f"Retrying backup sync in {delay}s...")
                 import time
+
                 time.sleep(delay)
             else:
                 logger.error(f"Backup sync failed after {max_retries} attempts")
@@ -157,7 +164,9 @@ class ConfigManager:
                 logger.info(f"Loaded config from backup: {backup_url}")
                 return response.json()
             else:
-                logger.warning(f"Could not get config from backup: HTTP {response.status_code}")
+                logger.warning(
+                    f"Could not get config from backup: HTTP {response.status_code}"
+                )
                 return None
         except Exception as e:
             logger.warning(f"Could not reach backup: {e}")

@@ -6,7 +6,7 @@ Used by Phase 330 for scenario probability updates.
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MonteCarloResult:
     """Monte Carlo simulation result."""
+
     scenario: str = "base"
     simulations: int = 10000
     mean_return_pct: float = 0.0
@@ -42,6 +43,7 @@ class MonteCarloResult:
 @dataclass
 class ScenarioResult:
     """Scenario analysis result."""
+
     scenario_name: str
     expected_return_pct: float
     volatility_pct: float
@@ -129,7 +131,7 @@ class ScenarioAnalyzer:
         allocation: Optional[Dict] = None,
         time_horizon_days: int = 252,
         n_simulations: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> MonteCarloResult:
         """
         Run Monte Carlo simulation for a scenario.
@@ -192,7 +194,7 @@ class ScenarioAnalyzer:
 
             all_returns = []
             for symbol, returns_series in historical_returns.items():
-                if hasattr(returns_series, 'values'):
+                if hasattr(returns_series, "values"):
                     all_returns.extend(returns_series.values)
                 elif isinstance(returns_series, (list, np.ndarray)):
                     all_returns.extend(returns_series)
@@ -209,7 +211,11 @@ class ScenarioAnalyzer:
 
         # Calculate expected shortfall (CVaR - Conditional Value at Risk): average of worst 5%
         worst_5_pct = returns[returns <= np.percentile(returns, 5)]
-        expected_shortfall = float(np.mean(worst_5_pct)) if len(worst_5_pct) > 0 else float(np.percentile(returns, 5))
+        expected_shortfall = (
+            float(np.mean(worst_5_pct))
+            if len(worst_5_pct) > 0
+            else float(np.percentile(returns, 5))
+        )
 
         return MonteCarloResult(
             scenario=scenario,
@@ -226,7 +232,9 @@ class ScenarioAnalyzer:
             percentile_75th_pct=float(np.percentile(returns, 75)),
             percentile_95=float(np.percentile(returns, 95)),
             percentile_95th_pct=float(np.percentile(returns, 95)),
-            sharpe_ratio=float((mean_return - self.risk_free_rate) / volatility) if volatility > 0 else 0.0,
+            sharpe_ratio=float((mean_return - self.risk_free_rate) / volatility)
+            if volatility > 0
+            else 0.0,
             expected_return_pct=float(np.mean(returns)),
             volatility_pct=float(np.std(returns)),
             probability_positive_pct=float(prob_positive),
@@ -236,17 +244,14 @@ class ScenarioAnalyzer:
         )
 
     def analyze_upside_scenario(
-        self,
-        historical_returns: Dict,
-        allocation: Dict,
-        **kwargs
+        self, historical_returns: Dict, allocation: Dict, **kwargs
     ) -> ScenarioResult:
         """Analyze upside scenario (upper percentile returns)."""
         import numpy as np
 
         all_returns = []
         for symbol, returns_series in historical_returns.items():
-            if hasattr(returns_series, 'values'):
+            if hasattr(returns_series, "values"):
                 all_returns.extend(returns_series.values)
             elif isinstance(returns_series, (list, np.ndarray)):
                 all_returns.extend(returns_series)
@@ -263,23 +268,22 @@ class ScenarioAnalyzer:
             expected_return_pct=float(upside_return),
             volatility_pct=float(std_dev),
             probability_pct=25.0,
-            sharpe_ratio=float((upside_return - self.risk_free_rate) / std_dev) if std_dev > 0 else 0.0,
+            sharpe_ratio=float((upside_return - self.risk_free_rate) / std_dev)
+            if std_dev > 0
+            else 0.0,
             best_case_pct=float(upside_return * 1.5),
             worst_case_pct=float(upside_return * 0.5),
         )
 
     def analyze_downside_scenario(
-        self,
-        historical_returns: Dict,
-        allocation: Dict,
-        **kwargs
+        self, historical_returns: Dict, allocation: Dict, **kwargs
     ) -> ScenarioResult:
         """Analyze downside scenario (lower percentile returns)."""
         import numpy as np
 
         all_returns = []
         for symbol, returns_series in historical_returns.items():
-            if hasattr(returns_series, 'values'):
+            if hasattr(returns_series, "values"):
                 all_returns.extend(returns_series.values)
             elif isinstance(returns_series, (list, np.ndarray)):
                 all_returns.extend(returns_series)
@@ -296,23 +300,22 @@ class ScenarioAnalyzer:
             expected_return_pct=float(downside_return),
             volatility_pct=float(std_dev),
             probability_pct=25.0,
-            sharpe_ratio=float((downside_return - self.risk_free_rate) / std_dev) if std_dev > 0 else 0.0,
+            sharpe_ratio=float((downside_return - self.risk_free_rate) / std_dev)
+            if std_dev > 0
+            else 0.0,
             best_case_pct=float(downside_return * 0.5),
             worst_case_pct=float(downside_return * 1.5),
         )
 
     def base_case_scenario(
-        self,
-        historical_returns: Dict,
-        allocation: Dict,
-        **kwargs
+        self, historical_returns: Dict, allocation: Dict, **kwargs
     ) -> ScenarioResult:
         """Analyze base case scenario (median returns)."""
         import numpy as np
 
         all_returns = []
         for symbol, returns_series in historical_returns.items():
-            if hasattr(returns_series, 'values'):
+            if hasattr(returns_series, "values"):
                 all_returns.extend(returns_series.values)
             elif isinstance(returns_series, (list, np.ndarray)):
                 all_returns.extend(returns_series)
@@ -329,7 +332,9 @@ class ScenarioAnalyzer:
             expected_return_pct=float(base_return),
             volatility_pct=float(std_dev),
             probability_pct=50.0,
-            sharpe_ratio=float((base_return - self.risk_free_rate) / std_dev) if std_dev > 0 else 0.0,
+            sharpe_ratio=float((base_return - self.risk_free_rate) / std_dev)
+            if std_dev > 0
+            else 0.0,
             best_case_pct=float(base_return + (std_dev * 1.65)),
             worst_case_pct=float(base_return - (std_dev * 1.65)),
         )

@@ -6,9 +6,8 @@ Implements automated sector rotation strategy.
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SectorRotationRecommendation:
     """Recommendation to rotate between sectors."""
+
     from_sector: str
     to_sector: str
     confidence: float  # 0-1
@@ -28,6 +28,7 @@ class SectorRotationRecommendation:
 @dataclass
 class SectorAllocationTarget:
     """Target allocation for a sector given current regime."""
+
     sector: str
     target_pct: float  # 0-100
     current_pct: float
@@ -44,42 +45,36 @@ class SectorRotationAdvisor:
         # Symbol to sector mapping (can be extended)
         self.symbol_sectors = {
             # Crypto
-            'BTCUSDT': 'cryptocurrency',
-            'ETHUSDT': 'cryptocurrency',
-            'BNBUSDT': 'cryptocurrency',
-
+            "BTCUSDT": "cryptocurrency",
+            "ETHUSDT": "cryptocurrency",
+            "BNBUSDT": "cryptocurrency",
             # Technology
-            'EQ_AAPL': 'technology',
-            'EQ_MSFT': 'technology',
-            'EQ_NVDA': 'technology',
-            'EQ_TSLA': 'technology',
-
+            "EQ_AAPL": "technology",
+            "EQ_MSFT": "technology",
+            "EQ_NVDA": "technology",
+            "EQ_TSLA": "technology",
             # Healthcare
-            'EQ_JNJ': 'healthcare',
-            'EQ_UNH': 'healthcare',
-
+            "EQ_JNJ": "healthcare",
+            "EQ_UNH": "healthcare",
             # Finance
-            'EQ_JPM': 'finance',
-            'EQ_BAC': 'finance',
-
+            "EQ_JPM": "finance",
+            "EQ_BAC": "finance",
             # Energy
-            'EQ_XOM': 'energy',
-            'EQ_CVX': 'energy',
-
+            "EQ_XOM": "energy",
+            "EQ_CVX": "energy",
             # Utilities
-            'EQ_NEE': 'utilities',
-            'EQ_DUK': 'utilities',
-
+            "EQ_NEE": "utilities",
+            "EQ_DUK": "utilities",
             # Consumer
-            'EQ_AMZN': 'consumer',
-            'EQ_WMT': 'consumer',
+            "EQ_AMZN": "consumer",
+            "EQ_WMT": "consumer",
         }
 
         # Regime-based sector allocations (target %)
         self.regime_allocations = {
             "bull": {
-                "technology": 30,      # Overweight growth
-                "cryptocurrency": 15,   # Overweight risk assets
+                "technology": 30,  # Overweight growth
+                "cryptocurrency": 15,  # Overweight risk assets
                 "consumer": 20,
                 "finance": 15,
                 "healthcare": 10,
@@ -87,7 +82,7 @@ class SectorRotationAdvisor:
                 "utilities": 5,
             },
             "sideways": {
-                "technology": 20,      # Balanced
+                "technology": 20,  # Balanced
                 "cryptocurrency": 10,
                 "consumer": 20,
                 "finance": 20,
@@ -96,16 +91,16 @@ class SectorRotationAdvisor:
                 "utilities": 5,
             },
             "bear": {
-                "technology": 10,      # Underweight risk
+                "technology": 10,  # Underweight risk
                 "cryptocurrency": 5,
                 "consumer": 10,
                 "finance": 15,
-                "healthcare": 25,      # Overweight defensive
+                "healthcare": 25,  # Overweight defensive
                 "energy": 15,
-                "utilities": 20,       # Overweight defensive
+                "utilities": 20,  # Overweight defensive
             },
             "volatile": {
-                "technology": 15,      # Reduce risk
+                "technology": 15,  # Reduce risk
                 "cryptocurrency": 5,
                 "consumer": 15,
                 "finance": 15,
@@ -192,7 +187,7 @@ class SectorRotationAdvisor:
             confidence=confidence,
             expected_outperformance=expected_outperformance,
             rationale=f"Rotate from {from_sector} (overweight) to {to_sector} "
-                     f"(underweight) for {portfolio_regime} market",
+            f"(underweight) for {portfolio_regime} market",
             action_symbols=action_symbols,
             urgency=min(int(max_drift / 5), 10),  # 1-10 scale
         )
@@ -227,14 +222,16 @@ class SectorRotationAdvisor:
                 action = "HOLD"
                 rationale = f"Allocation in line with {portfolio_regime} target"
 
-            targets.append(SectorAllocationTarget(
-                sector=sector,
-                target_pct=target_pct,
-                current_pct=current_pct,
-                drift=drift,
-                action=action,
-                rationale=rationale,
-            ))
+            targets.append(
+                SectorAllocationTarget(
+                    sector=sector,
+                    target_pct=target_pct,
+                    current_pct=current_pct,
+                    drift=drift,
+                    action=action,
+                    rationale=rationale,
+                )
+            )
 
         return targets
 
@@ -252,11 +249,13 @@ class SectorRotationAdvisor:
           - To sector is consistently in bull
         """
         from_regimes = [
-            r.get("regime") for s, r in symbol_regimes.items()
+            r.get("regime")
+            for s, r in symbol_regimes.items()
             if self.symbol_sectors.get(s) == from_sector
         ]
         to_regimes = [
-            r.get("regime") for s, r in symbol_regimes.items()
+            r.get("regime")
+            for s, r in symbol_regimes.items()
             if self.symbol_sectors.get(s) == to_sector
         ]
 
@@ -264,8 +263,12 @@ class SectorRotationAdvisor:
             return 0.5
 
         # Strength of divergence
-        from_bear_ratio = sum(1 for r in from_regimes if r in ["bear", "volatile"]) / len(from_regimes)
-        to_bull_ratio = sum(1 for r in to_regimes if r in ["bull", "sideways"]) / len(to_regimes)
+        from_bear_ratio = sum(
+            1 for r in from_regimes if r in ["bear", "volatile"]
+        ) / len(from_regimes)
+        to_bull_ratio = sum(1 for r in to_regimes if r in ["bull", "sideways"]) / len(
+            to_regimes
+        )
 
         confidence = (from_bear_ratio + to_bull_ratio) / 2
         return min(confidence, 1.0)
@@ -400,7 +403,9 @@ class SectorRotationAdvisor:
         allocations = self.regime_allocations[portfolio_regime]
         summary = f"📊 {portfolio_regime.upper()} regime sector targets:\n"
 
-        for sector, target in sorted(allocations.items(), key=lambda x: x[1], reverse=True)[:5]:
+        for sector, target in sorted(
+            allocations.items(), key=lambda x: x[1], reverse=True
+        )[:5]:
             summary += f"  • {sector}: {target}%\n"
 
         return summary

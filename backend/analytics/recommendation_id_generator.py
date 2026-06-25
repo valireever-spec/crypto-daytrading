@@ -64,13 +64,18 @@ def ensure_recommendation_has_id(recommendation: dict) -> dict:
     --------
     Recommendation with recommendation_id guaranteed
     """
-    if "recommendation_id" not in recommendation or not recommendation["recommendation_id"]:
+    if (
+        "recommendation_id" not in recommendation
+        or not recommendation["recommendation_id"]
+    ):
         generator = RecommendationIDGenerator()
         recommendation["recommendation_id"] = generator.generate_recommendation_id(
             symbol=recommendation.get("symbol", ""),
             scenario=recommendation.get("scenario", ""),
         )
-        logger.info(f"Generated missing recommendation_id: {recommendation['recommendation_id']}")
+        logger.info(
+            f"Generated missing recommendation_id: {recommendation['recommendation_id']}"
+        )
 
     return recommendation
 

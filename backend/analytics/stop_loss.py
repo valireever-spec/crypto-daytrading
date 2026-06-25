@@ -2,8 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Optional, Dict
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +10,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StopLossLevel:
     """Stop-loss trigger level."""
+
     symbol: str
     entry_price: float
     stop_loss_pct: float  # e.g., 2.0 for 2% stop
@@ -200,7 +200,9 @@ class StopLossManager:
                 "days_remaining": 365 - days_held,
                 "tax_at_long_term": 0,
                 "net_if_hold_and_sell": round(current_value, 2),
-                "additional_profit_vs_now": round(gain_tax_free - (current_value - tax), 2),
+                "additional_profit_vs_now": round(
+                    gain_tax_free - (current_value - tax), 2
+                ),
             }
 
         return scenarios

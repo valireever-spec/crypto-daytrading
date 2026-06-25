@@ -1,7 +1,7 @@
 """Pillar #14: Circuit Breaker - Auto-stop trading on system anomalies (CRITICAL)."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
@@ -11,10 +11,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CircuitBreakerState:
     """Current state of circuit breaker."""
+
     is_broken: bool  # True = trading stopped, False = trading allowed
     reason: str  # Why it broke (empty if not broken)
     triggered_at: Optional[datetime]  # When it broke
-    break_duration: Optional[int]  # How long to stay broken (seconds, None = manual reset)
+    break_duration: Optional[
+        int
+    ]  # How long to stay broken (seconds, None = manual reset)
 
 
 class CircuitBreaker:
@@ -71,7 +74,11 @@ class CircuitBreaker:
             break_duration: Seconds until auto-recovery, None = manual reset
         """
         if not self.is_broken:  # Only log if not already broken
-            recovery_msg = f"(auto-recover in {break_duration}s)" if break_duration else "(manual reset required)"
+            recovery_msg = (
+                f"(auto-recover in {break_duration}s)"
+                if break_duration
+                else "(manual reset required)"
+            )
             logger.critical(f"🚨 CIRCUIT BREAKER TRIPPED: {reason} {recovery_msg}")
 
         self.is_broken = True
@@ -116,7 +123,9 @@ class CircuitBreaker:
 
         return True
 
-    def check_websocket_health(self, is_connected: bool, last_update_seconds: float) -> bool:
+    def check_websocket_health(
+        self, is_connected: bool, last_update_seconds: float
+    ) -> bool:
         """Check WebSocket connection health (Pillar #14 Trigger #2)."""
         if not is_connected or last_update_seconds > 120:
             self.trip(
@@ -153,7 +162,9 @@ class CircuitBreaker:
 
         return True
 
-    def check_position_reconciliation(self, positions_match: bool, mismatch_reason: str = "") -> bool:
+    def check_position_reconciliation(
+        self, positions_match: bool, mismatch_reason: str = ""
+    ) -> bool:
         """Check position reconciliation (Pillar #14 Trigger #5)."""
         if not positions_match:
             self.trip(
@@ -176,7 +187,9 @@ class CircuitBreaker:
             return {
                 "status": "OPEN (trading stopped)",
                 "reason": state.reason,
-                "triggered_at": state.triggered_at.isoformat() if state.triggered_at else None,
+                "triggered_at": state.triggered_at.isoformat()
+                if state.triggered_at
+                else None,
                 "elapsed_seconds": elapsed,
                 "auto_recovery_in_seconds": (
                     state.break_duration - elapsed if state.break_duration else None

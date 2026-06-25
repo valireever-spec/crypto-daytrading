@@ -10,8 +10,12 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Body, Query
 from pydantic import BaseModel
 
-from backend.analytics.recommendation_tracking_daemon import get_recommendation_tracking_daemon
-from backend.analytics.scenario_auto_reweighting_scheduler import get_scenario_auto_reweighting_scheduler
+from backend.analytics.recommendation_tracking_daemon import (
+    get_recommendation_tracking_daemon,
+)
+from backend.analytics.scenario_auto_reweighting_scheduler import (
+    get_scenario_auto_reweighting_scheduler,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +24,7 @@ router = APIRouter(prefix="/api/automation", tags=["automation"])
 
 class ExecutionRecord(BaseModel):
     """Execution record for outcome matching."""
+
     symbol: str
     side: str  # BUY or SELL
     timestamp: str
@@ -30,8 +35,13 @@ class ExecutionRecord(BaseModel):
 
 @router.post("/daemon/sync-recommendations")
 async def sync_recommendations_to_outcomes(
-    executions: List[ExecutionRecord] = Body(default=[], description="Execution records (optional; auto-loads from audit log if empty)"),
-    auto_load: bool = Query(True, description="Auto-load from audit log if no executions provided"),
+    executions: List[ExecutionRecord] = Body(
+        default=[],
+        description="Execution records (optional; auto-loads from audit log if empty)",
+    ),
+    auto_load: bool = Query(
+        True, description="Auto-load from audit log if no executions provided"
+    ),
 ) -> Dict[str, Any]:
     """
     Run recommendation tracking daemon: match recommendations to portfolio outcomes.
@@ -241,7 +251,9 @@ async def get_reweighting_history(
 
 @router.get("/costs/learned-estimates")
 async def get_learned_cost_estimates(
-    symbols: List[str] = Query(default=[], description="Symbols to estimate costs for (empty = all)"),
+    symbols: List[str] = Query(
+        default=[], description="Symbols to estimate costs for (empty = all)"
+    ),
 ) -> Dict[str, Any]:
     """
     Get learned cost estimates from calibration data.
@@ -269,7 +281,10 @@ async def get_learned_cost_estimates(
     }
     """
     try:
-        from backend.analytics.cost_model_calibrator import get_cost_model_calibrator, get_learned_costs_for_trade
+        from backend.analytics.cost_model_calibrator import (
+            get_cost_model_calibrator,
+            get_learned_costs_for_trade,
+        )
 
         calibrator = get_cost_model_calibrator()
         profiles = calibrator.get_all_profiles()
@@ -380,14 +395,17 @@ async def get_dashboard_scenario_heatmap() -> Dict[str, Any]:
         # Build heatmap matrix
         matrix = []
         for scenario, metrics in perf.items():
-            matrix.append({
-                "scenario": scenario,
-                "count": metrics.get("count", 0),
-                "avg_expected": metrics.get("avg_expected_return", 0),
-                "avg_actual": metrics.get("avg_actual_return", 0),
-                "delta": metrics.get("avg_actual_return", 0) - metrics.get("avg_expected_return", 0),
-                "accuracy": metrics.get("accuracy_pct", 0),
-            })
+            matrix.append(
+                {
+                    "scenario": scenario,
+                    "count": metrics.get("count", 0),
+                    "avg_expected": metrics.get("avg_expected_return", 0),
+                    "avg_actual": metrics.get("avg_actual_return", 0),
+                    "delta": metrics.get("avg_actual_return", 0)
+                    - metrics.get("avg_expected_return", 0),
+                    "accuracy": metrics.get("accuracy_pct", 0),
+                }
+            )
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -476,7 +494,9 @@ async def get_learning_pipeline_health() -> Dict[str, Any]:
     """
     try:
         from backend.analytics.recommendation_tracker import get_recommendation_tracker
-        from backend.analytics.scenario_probability_learner import get_scenario_probability_learner
+        from backend.analytics.scenario_probability_learner import (
+            get_scenario_probability_learner,
+        )
         from backend.analytics.cost_model_calibrator import get_cost_model_calibrator
         from datetime import timedelta
 
@@ -495,13 +515,15 @@ async def get_learning_pipeline_health() -> Dict[str, Any]:
         if tracker.recommendations:
             latest_rec = max(
                 (datetime.fromisoformat(r.timestamp) for r in tracker.recommendations),
-                default=now
+                default=now,
             )
             if now - latest_rec > timedelta(days=30):
                 tracker_status = "stale"
 
         learner_status = "operational"
-        calibrator_status = "learning" if len(calibrator.executions) < 20 else "confident"
+        calibrator_status = (
+            "learning" if len(calibrator.executions) < 20 else "confident"
+        )
 
         daemon_status = "ready"
         if daemon.last_run:
@@ -518,7 +540,13 @@ async def get_learning_pipeline_health() -> Dict[str, Any]:
                 scheduler_status = "stale"
 
         # Overall status
-        all_statuses = [tracker_status, learner_status, calibrator_status, daemon_status, scheduler_status]
+        all_statuses = [
+            tracker_status,
+            learner_status,
+            calibrator_status,
+            daemon_status,
+            scheduler_status,
+        ]
         if all(s in ["operational", "ready", "confident"] for s in all_statuses):
             overall = "healthy"
         elif any(s == "stale" for s in all_statuses):

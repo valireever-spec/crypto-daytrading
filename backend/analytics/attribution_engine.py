@@ -6,7 +6,7 @@ Analyze drift vs benchmark and identify return drivers.
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from datetime import datetime
 import pandas as pd
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PositionContribution:
     """Contribution of a single position to portfolio return."""
+
     symbol: str
     weight_pct: float
     period_return_pct: float
@@ -28,6 +29,7 @@ class PositionContribution:
 @dataclass
 class FactorAttribution:
     """Factor-based return attribution."""
+
     factor_name: str
     factor_exposure: float  # exposure to this factor
     factor_return_pct: float  # factor's return during period
@@ -38,6 +40,7 @@ class FactorAttribution:
 @dataclass
 class AttributionResult:
     """Complete attribution analysis."""
+
     period_start: datetime
     period_end: datetime
     total_return_pct: float
@@ -62,6 +65,7 @@ class AttributionResult:
 @dataclass
 class DriftAnalysis:
     """Drift analysis vs benchmark."""
+
     benchmark_weight_pct: Dict[str, float]
     portfolio_weight_pct: Dict[str, float]
     active_weight_pct: Dict[str, float]  # portfolio - benchmark
@@ -276,7 +280,9 @@ class PerformanceAttributionEngine:
         # Calculate total drift metrics
         total_active_return = sum(active_contributions.values())
         tracking_error = np.sqrt(sum(w**2 for w in active_weights.values())) / 100
-        information_ratio = total_active_return / tracking_error if tracking_error > 0 else 0
+        information_ratio = (
+            total_active_return / tracking_error if tracking_error > 0 else 0
+        )
 
         return DriftAnalysis(
             benchmark_weight_pct=benchmark_weights,
@@ -305,11 +311,23 @@ class PerformanceAttributionEngine:
         AttributionResult with all attribution details
         """
         # Find top contributors
-        positive_contribs = [c for c in position_contributions if c.contribution_pct > 0]
-        negative_contribs = [c for c in position_contributions if c.contribution_pct < 0]
+        positive_contribs = [
+            c for c in position_contributions if c.contribution_pct > 0
+        ]
+        negative_contribs = [
+            c for c in position_contributions if c.contribution_pct < 0
+        ]
 
-        top_positive = max(positive_contribs, key=lambda c: c.contribution_pct).symbol if positive_contribs else None
-        top_negative = min(negative_contribs, key=lambda c: c.contribution_pct).symbol if negative_contribs else None
+        top_positive = (
+            max(positive_contribs, key=lambda c: c.contribution_pct).symbol
+            if positive_contribs
+            else None
+        )
+        top_negative = (
+            min(negative_contribs, key=lambda c: c.contribution_pct).symbol
+            if negative_contribs
+            else None
+        )
 
         return AttributionResult(
             period_start=datetime.utcnow() - pd.Timedelta(days=252),
@@ -323,7 +341,7 @@ class PerformanceAttributionEngine:
             regime_return_pct=regime_return,
             drift_vs_benchmark_pct=drift.total_drift_pct,
             drift_explanation=f"Active return: {drift.total_drift_pct:.2f}%, "
-                            f"Information Ratio: {drift.information_ratio:.2f}",
+            f"Information Ratio: {drift.information_ratio:.2f}",
         )
 
 

@@ -1,9 +1,9 @@
 """Historical backtesting engine for strategy performance analysis (Phase 2 Week 6)."""
 
 import logging
-from typing import Dict, List, Tuple, Optional
+from typing import List
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import numpy as np
 
@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BacktestTrade:
     """A completed trade from backtesting."""
+
     entry_date: datetime
     exit_date: datetime
     symbol: str
@@ -27,6 +28,7 @@ class BacktestTrade:
 @dataclass
 class BacktestMetrics:
     """Comprehensive backtest performance metrics."""
+
     strategy_name: str
     symbol: str
     start_date: datetime
@@ -107,7 +109,9 @@ class BacktestEngine:
 
         try:
             # Apply strategy to get positions
-            df["position"] = df.apply(lambda row: strategy_func(df.loc[:row.name]), axis=1)
+            df["position"] = df.apply(
+                lambda row: strategy_func(df.loc[: row.name]), axis=1
+            )
         except Exception as e:
             logger.error(f"Error applying strategy: {e}")
             return self._empty_metrics(symbol, strategy_name)
@@ -115,7 +119,7 @@ class BacktestEngine:
         # Detect entry/exit signals
         df["position_change"] = df["position"].diff()
         df["entry"] = df["position_change"] > 0.1  # New position
-        df["exit"] = df["position_change"] < -0.1   # Exit position
+        df["exit"] = df["position_change"] < -0.1  # Exit position
 
         # Run simulation
         trades = self._simulate_trades(df)
@@ -311,11 +315,15 @@ class BacktestEngine:
             if trade.pnl > 0:
                 consecutive_wins += 1
                 consecutive_losses = 0
-                metrics.consecutive_wins = max(metrics.consecutive_wins, consecutive_wins)
+                metrics.consecutive_wins = max(
+                    metrics.consecutive_wins, consecutive_wins
+                )
             else:
                 consecutive_losses += 1
                 consecutive_wins = 0
-                metrics.max_consecutive_losses = max(metrics.max_consecutive_losses, consecutive_losses)
+                metrics.max_consecutive_losses = max(
+                    metrics.max_consecutive_losses, consecutive_losses
+                )
 
         # Holding period
         if trades:
@@ -331,7 +339,9 @@ class BacktestEngine:
 
         return metrics
 
-    def _calculate_sharpe_ratio(self, pnls: List[float], risk_free_rate: float = 0.02) -> float:
+    def _calculate_sharpe_ratio(
+        self, pnls: List[float], risk_free_rate: float = 0.02
+    ) -> float:
         """Calculate Sharpe ratio.
 
         Args:
@@ -355,7 +365,9 @@ class BacktestEngine:
         sharpe = ((mean_return - risk_free_rate / 252) / std_return) * np.sqrt(252)
         return float(sharpe)
 
-    def _calculate_sortino_ratio(self, pnls: List[float], risk_free_rate: float = 0.02) -> float:
+    def _calculate_sortino_ratio(
+        self, pnls: List[float], risk_free_rate: float = 0.02
+    ) -> float:
         """Calculate Sortino ratio (focuses on downside volatility).
 
         Args:
@@ -374,7 +386,7 @@ class BacktestEngine:
         # Downside deviation (only losses)
         downside = returns[returns < 0]
         if len(downside) == 0:
-            return float('inf')
+            return float("inf")
 
         downside_std = np.std(downside)
         if downside_std == 0:

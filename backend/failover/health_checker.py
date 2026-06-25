@@ -11,7 +11,7 @@ import logging
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 import aiohttp
 
 logger = logging.getLogger(__name__)
@@ -126,13 +126,17 @@ class FailoverHealthChecker:
         try:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
                 # Get primary config
-                async with session.get(f"{self.primary_url}/api/autonomous/config") as resp:
+                async with session.get(
+                    f"{self.primary_url}/api/autonomous/config"
+                ) as resp:
                     if resp.status != 200:
                         return False, "Could not fetch primary config"
                     primary_config = await resp.json()
 
                 # Get backup config
-                async with session.get(f"{self.backup_url}/api/autonomous/config") as resp:
+                async with session.get(
+                    f"{self.backup_url}/api/autonomous/config"
+                ) as resp:
                     if resp.status != 200:
                         return False, "Could not fetch backup config"
                     backup_config = await resp.json()
@@ -170,12 +174,16 @@ class FailoverHealthChecker:
         # Check 1: Primary health
         primary_healthy, primary_reason = await self.check_primary_health()
         reasons.append(f"Primary: {primary_reason}")
-        logger.info(f"Primary health check: {'✅' if primary_healthy else '❌'} {primary_reason}")
+        logger.info(
+            f"Primary health check: {'✅' if primary_healthy else '❌'} {primary_reason}"
+        )
 
         # Check 2: Backup readiness
         backup_ready, backup_reason = await self.check_backup_readiness()
         reasons.append(f"Backup: {backup_reason}")
-        logger.info(f"Backup readiness check: {'✅' if backup_ready else '❌'} {backup_reason}")
+        logger.info(
+            f"Backup readiness check: {'✅' if backup_ready else '❌'} {backup_reason}"
+        )
 
         # Check 3: Config sync (only check if primary is healthy, skip if primary down)
         configs_synced = True
@@ -183,11 +191,15 @@ class FailoverHealthChecker:
         if primary_healthy:
             configs_synced, config_reason = await self.check_config_sync()
             reasons.append(f"Config: {config_reason}")
-            logger.info(f"Config sync check: {'✅' if configs_synced else '❌'} {config_reason}")
+            logger.info(
+                f"Config sync check: {'✅' if configs_synced else '❌'} {config_reason}"
+            )
 
         # Determine if we can failover
-        ready_to_failover = (not primary_healthy) and backup_ready and (
-            not primary_healthy or configs_synced
+        ready_to_failover = (
+            (not primary_healthy)
+            and backup_ready
+            and (not primary_healthy or configs_synced)
         )
 
         if ready_to_failover:
@@ -196,7 +208,9 @@ class FailoverHealthChecker:
             )
         elif not primary_healthy:
             if not backup_ready:
-                logger.critical(f"❌ CANNOT FAILOVER: Backup not ready ({backup_reason})")
+                logger.critical(
+                    f"❌ CANNOT FAILOVER: Backup not ready ({backup_reason})"
+                )
             if not configs_synced and primary_healthy:
                 logger.critical(f"❌ CANNOT FAILOVER: Config mismatch ({config_reason})")
 

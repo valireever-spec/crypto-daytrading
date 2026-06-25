@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -12,7 +12,6 @@ from backend.analytics.tax_calculator import (
     get_tax_calculator,
     Jurisdiction,
     Trade,
-    TaxCalculator,
 )
 from backend.exchange.paper_trading import get_paper_trading
 
@@ -22,8 +21,10 @@ router = APIRouter(prefix="/api/tax", tags=["Tax Tracking"])
 
 # ==================== Pydantic Models ====================
 
+
 class TradeInput(BaseModel):
     """Input model for adding a trade."""
+
     symbol: str
     side: str  # BUY or SELL
     quantity: float
@@ -34,6 +35,7 @@ class TradeInput(BaseModel):
 
 class ExpenseInput(BaseModel):
     """Input model for deductible expense."""
+
     category: str  # trading_fees, software, hardware, etc.
     amount: float
     description: str = ""
@@ -41,6 +43,7 @@ class ExpenseInput(BaseModel):
 
 class TaxReportResponse(BaseModel):
     """Tax report response."""
+
     jurisdiction: str
     report_date: str
     summary: Dict
@@ -50,6 +53,7 @@ class TaxReportResponse(BaseModel):
 
 
 # ==================== API Endpoints ====================
+
 
 @router.post("/initialize")
 async def initialize_tax_tracking(jurisdiction: str = "DE") -> Dict:
@@ -80,7 +84,9 @@ async def initialize_tax_tracking(jurisdiction: str = "DE") -> Dict:
             "message": f"Tax tracker initialized for {juris.value}",
         }
     except KeyError:
-        raise HTTPException(status_code=400, detail=f"Unknown jurisdiction: {jurisdiction}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown jurisdiction: {jurisdiction}"
+        )
     except Exception as e:
         logger.error(f"Error initializing tax tracker: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -99,7 +105,10 @@ async def add_trade(trade: TradeInput) -> Dict:
     try:
         calc = get_tax_calculator()
         if not calc:
-            raise HTTPException(status_code=400, detail="Tax tracker not initialized. Call /tax/initialize first.")
+            raise HTTPException(
+                status_code=400,
+                detail="Tax tracker not initialized. Call /tax/initialize first.",
+            )
 
         trade_obj = Trade(
             trade_id=f"{trade.symbol}-{datetime.fromisoformat(trade.timestamp).timestamp()}",
@@ -170,7 +179,9 @@ async def sync_from_paper_trading() -> Dict:
 
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=400, detail="Paper trading engine not initialized.")
+            raise HTTPException(
+                status_code=400, detail="Paper trading engine not initialized."
+            )
 
         # Get all trades from paper trading
         trades_data = engine.get_trades()
@@ -229,7 +240,9 @@ async def get_tax_liability() -> Dict:
             "deductible_expenses": round(liability.deductible_expenses, 2),
             "taxable_income": round(liability.taxable_income, 2),
             "estimated_tax": round(liability.estimated_tax, 2),
-            "effective_tax_rate_pct": round((liability.estimated_tax / max(liability.taxable_income, 1)) * 100, 2),
+            "effective_tax_rate_pct": round(
+                (liability.estimated_tax / max(liability.taxable_income, 1)) * 100, 2
+            ),
             "tax_rate": round(liability.tax_rate * 100, 1),
         }
     except Exception as e:
@@ -268,7 +281,9 @@ async def export_tax_data(format: str = "json") -> Dict:
     """
     try:
         if format not in ["json", "csv"]:
-            raise HTTPException(status_code=400, detail="Format must be 'json' or 'csv'")
+            raise HTTPException(
+                status_code=400, detail="Format must be 'json' or 'csv'"
+            )
 
         calc = get_tax_calculator()
         if not calc:
@@ -317,8 +332,12 @@ async def get_tax_summary() -> Dict:
             "jurisdiction": jurisdiction,
             "net_position": round(liability.net_gain_loss, 2),
             "estimated_tax": round(liability.estimated_tax, 2),
-            "net_after_tax": round(liability.net_gain_loss - liability.estimated_tax, 2),
-            "effective_tax_rate_pct": round((liability.estimated_tax / max(liability.net_gain_loss, 1)) * 100, 2),
+            "net_after_tax": round(
+                liability.net_gain_loss - liability.estimated_tax, 2
+            ),
+            "effective_tax_rate_pct": round(
+                (liability.estimated_tax / max(liability.net_gain_loss, 1)) * 100, 2
+            ),
             "trades_analyzed": len(calc.tax_events),
             "long_term_gains": round(liability.long_term_gains, 2),
             "short_term_gains": round(liability.short_term_gains, 2),

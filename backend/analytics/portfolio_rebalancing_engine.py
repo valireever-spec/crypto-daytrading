@@ -6,7 +6,7 @@ Calculates optimal allocation changes and generates execution plan.
 """
 
 import logging
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RebalancingAction:
     """Single rebalancing trade."""
+
     symbol: str
     action: str  # BUY or SELL
     current_allocation_pct: float
@@ -29,6 +30,7 @@ class RebalancingAction:
 @dataclass
 class RebalancingPlan:
     """Complete rebalancing plan."""
+
     timestamp: datetime
     total_rebalancing_cost: float  # Total transaction cost estimate
     total_drift: float  # Sum of absolute drifts
@@ -77,9 +79,11 @@ class PortfolioRebalancingEngine:
             current_amount = 0
             if symbol in current_positions:
                 pos = current_positions[symbol]
-                current_amount = pos.get('value_eur', 0)
+                current_amount = pos.get("value_eur", 0)
 
-            current_pct = (current_amount / portfolio_value * 100) if portfolio_value > 0 else 0
+            current_pct = (
+                (current_amount / portfolio_value * 100) if portfolio_value > 0 else 0
+            )
             drift = current_pct - target_pct
             drifts[symbol] = drift
 
@@ -140,7 +144,9 @@ class PortfolioRebalancingEngine:
         --------
         RebalancingPlan or None if no rebalancing needed
         """
-        drifts = self.analyze_drift(current_positions, portfolio_value, target_allocation)
+        drifts = self.analyze_drift(
+            current_positions, portfolio_value, target_allocation
+        )
 
         if not self.should_rebalance(drifts):
             logger.debug("Portfolio drift within tolerance, no rebalancing needed")
@@ -158,8 +164,15 @@ class PortfolioRebalancingEngine:
             if abs(drift) < 0.5:
                 continue
 
-            current_pct = (current_positions.get(symbol, {}).get('value_eur', 0) / portfolio_value * 100) \
-                         if portfolio_value > 0 else 0
+            current_pct = (
+                (
+                    current_positions.get(symbol, {}).get("value_eur", 0)
+                    / portfolio_value
+                    * 100
+                )
+                if portfolio_value > 0
+                else 0
+            )
 
             if drift > 0:
                 # Overweight: SELL
@@ -172,8 +185,12 @@ class PortfolioRebalancingEngine:
 
             # Estimate cost
             target_value = portfolio_value * (target_pct / 100)
-            estimated_cost = abs(target_value - current_positions.get(symbol, {}).get('value_eur', 0)) \
-                           * transaction_costs_pct
+            estimated_cost = (
+                abs(
+                    target_value - current_positions.get(symbol, {}).get("value_eur", 0)
+                )
+                * transaction_costs_pct
+            )
 
             # Priority: higher in bull (buy dips), higher in bear (raise cash)
             base_priority = int(abs(drift) / 2) + 1  # 1-10
@@ -184,16 +201,18 @@ class PortfolioRebalancingEngine:
 
             total_cost += estimated_cost
 
-            actions.append(RebalancingAction(
-                symbol=symbol,
-                action=action_type,
-                current_allocation_pct=current_pct,
-                target_allocation_pct=target_pct,
-                adjustment_pct=adjustment_pct,
-                estimated_cost_eur=estimated_cost,
-                priority=base_priority,
-                rationale=f"{action_type} {adjustment_pct:.1f}% to reach {target_pct}% target"
-            ))
+            actions.append(
+                RebalancingAction(
+                    symbol=symbol,
+                    action=action_type,
+                    current_allocation_pct=current_pct,
+                    target_allocation_pct=target_pct,
+                    adjustment_pct=adjustment_pct,
+                    estimated_cost_eur=estimated_cost,
+                    priority=base_priority,
+                    rationale=f"{action_type} {adjustment_pct:.1f}% to reach {target_pct}% target",
+                )
+            )
 
         # Sort actions by priority (higher first)
         actions.sort(key=lambda a: a.priority, reverse=True)
@@ -296,25 +315,25 @@ class PortfolioRebalancingEngine:
     def _get_sector(self, symbol: str) -> str:
         """Get sector for a symbol (hardcoded for now)."""
         sector_map = {
-            'BTCUSDT': 'cryptocurrency',
-            'ETHUSDT': 'cryptocurrency',
-            'BNBUSDT': 'cryptocurrency',
-            'EQ_AAPL': 'technology',
-            'EQ_MSFT': 'technology',
-            'EQ_NVDA': 'technology',
-            'EQ_TSLA': 'technology',
-            'EQ_JNJ': 'healthcare',
-            'EQ_UNH': 'healthcare',
-            'EQ_JPM': 'finance',
-            'EQ_BAC': 'finance',
-            'EQ_XOM': 'energy',
-            'EQ_CVX': 'energy',
-            'EQ_NEE': 'utilities',
-            'EQ_DUK': 'utilities',
-            'EQ_AMZN': 'consumer',
-            'EQ_WMT': 'consumer',
+            "BTCUSDT": "cryptocurrency",
+            "ETHUSDT": "cryptocurrency",
+            "BNBUSDT": "cryptocurrency",
+            "EQ_AAPL": "technology",
+            "EQ_MSFT": "technology",
+            "EQ_NVDA": "technology",
+            "EQ_TSLA": "technology",
+            "EQ_JNJ": "healthcare",
+            "EQ_UNH": "healthcare",
+            "EQ_JPM": "finance",
+            "EQ_BAC": "finance",
+            "EQ_XOM": "energy",
+            "EQ_CVX": "energy",
+            "EQ_NEE": "utilities",
+            "EQ_DUK": "utilities",
+            "EQ_AMZN": "consumer",
+            "EQ_WMT": "consumer",
         }
-        return sector_map.get(symbol, 'other')
+        return sector_map.get(symbol, "other")
 
     def estimate_rebalancing_impact(
         self,
@@ -330,12 +349,17 @@ class PortfolioRebalancingEngine:
             return {}
 
         # Cost metrics
-        cost_pct_of_portfolio = (plan.total_rebalancing_cost / portfolio_value * 100) \
-                               if portfolio_value > 0 else 0
+        cost_pct_of_portfolio = (
+            (plan.total_rebalancing_cost / portfolio_value * 100)
+            if portfolio_value > 0
+            else 0
+        )
 
         # Drift reduction (before/after)
         pre_drift = plan.total_drift
-        post_drift = sum(abs(a.adjustment_pct / 2) for a in plan.actions)  # Rough estimate
+        post_drift = sum(
+            abs(a.adjustment_pct / 2) for a in plan.actions
+        )  # Rough estimate
 
         return {
             "cost_eur": plan.total_rebalancing_cost,
@@ -352,12 +376,12 @@ class PortfolioRebalancingEngine:
     ) -> float:
         """Estimate days until rebalancing pays for itself through better positioning."""
         if improvement_pct <= 0:
-            return float('inf')
+            return float("inf")
 
         # Assume improvement reduces risk by 0.5bps per drift percentage point
         annualized_benefit = drift_reduction * 0.005 * 100  # In basis points
         daily_benefit = annualized_benefit / 252
-        breakeven = 1.0 / daily_benefit if daily_benefit > 0 else float('inf')
+        breakeven = 1.0 / daily_benefit if daily_benefit > 0 else float("inf")
 
         return min(breakeven, 365)  # Cap at 1 year
 

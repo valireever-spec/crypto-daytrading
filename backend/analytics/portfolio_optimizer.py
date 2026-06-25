@@ -6,9 +6,8 @@ for different risk levels, rebalancing recommendations.
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from datetime import datetime
 import pandas as pd
 import numpy as np
 from scipy.optimize import minimize
@@ -19,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AllocationTarget:
     """Target allocation for a risk level."""
+
     risk_level: str  # conservative/moderate/balanced/aggressive/extreme
     target_return_pct: float
     target_volatility_pct: float
@@ -30,6 +30,7 @@ class AllocationTarget:
 @dataclass
 class EfficientFrontierPoint:
     """Point on efficient frontier."""
+
     volatility_pct: float
     expected_return_pct: float
     sharpe_ratio: float
@@ -39,9 +40,12 @@ class EfficientFrontierPoint:
 @dataclass
 class RebalancingPlan:
     """Recommended rebalancing trades."""
+
     current_allocation: Dict[str, float]
     target_allocation: Dict[str, float]
-    trades: List[Dict[str, Any]]  # [{symbol, current_weight, target_weight, action, amount_eur}]
+    trades: List[
+        Dict[str, Any]
+    ]  # [{symbol, current_weight, target_weight, action, amount_eur}]
     total_trade_volume_eur: float
     estimated_cost_eur: float
     tax_impact_eur: float
@@ -134,13 +138,19 @@ class PortfolioOptimizer:
         if np.isnan(portfolio_vol) or np.isinf(portfolio_vol):
             portfolio_vol = 0.01
 
-        sharpe = (portfolio_return - self.risk_free_rate) / portfolio_vol if portfolio_vol > 0 else 0
+        sharpe = (
+            (portfolio_return - self.risk_free_rate) / portfolio_vol
+            if portfolio_vol > 0
+            else 0
+        )
         if np.isnan(sharpe) or np.isinf(sharpe):
             sharpe = 0
 
         # Diversification ratio: sum of vol / portfolio vol
         asset_vols = np.sqrt(np.diag(cov_matrix))
-        div_ratio = np.sum(weights * asset_vols) / portfolio_vol if portfolio_vol > 0 else 1.0
+        div_ratio = (
+            np.sum(weights * asset_vols) / portfolio_vol if portfolio_vol > 0 else 1.0
+        )
 
         allocation = {s: float(w) * 100 for s, w in zip(symbols, weights)}
 
@@ -336,23 +346,29 @@ class PortfolioOptimizer:
 
             action = "BUY" if trade_value > 0 else "SELL"
             cost = abs(trade_value) * execution_cost_pct
-            tax = max(0, (target_value - current_value) * tax_rate) if action == "SELL" else 0
+            tax = (
+                max(0, (target_value - current_value) * tax_rate)
+                if action == "SELL"
+                else 0
+            )
 
             total_volume += abs(trade_value)
             total_cost += cost
             total_tax += tax
 
-            trades.append({
-                "symbol": symbol,
-                "action": action,
-                "current_value_eur": round(current_value, 2),
-                "target_value_eur": round(target_value, 2),
-                "trade_amount_eur": round(trade_value, 2),
-                "current_weight_pct": round(current_pct, 2),
-                "target_weight_pct": round(target_pct, 2),
-                "execution_cost_eur": round(cost, 2),
-                "tax_impact_eur": round(tax, 2),
-            })
+            trades.append(
+                {
+                    "symbol": symbol,
+                    "action": action,
+                    "current_value_eur": round(current_value, 2),
+                    "target_value_eur": round(target_value, 2),
+                    "trade_amount_eur": round(trade_value, 2),
+                    "current_weight_pct": round(current_pct, 2),
+                    "target_weight_pct": round(target_pct, 2),
+                    "execution_cost_eur": round(cost, 2),
+                    "tax_impact_eur": round(tax, 2),
+                }
+            )
 
         # Sort by volume (largest trades first)
         trades.sort(key=lambda t: abs(t["trade_amount_eur"]), reverse=True)
@@ -387,8 +403,22 @@ class PortfolioOptimizer:
 
         return AllocationTarget(
             risk_level=risk_level,
-            target_return_pct=8.0 + {"conservative": 0, "moderate": 3, "balanced": 6, "aggressive": 10, "extreme": 15}.get(risk_level, 6),
-            target_volatility_pct=5.0 + {"conservative": 0, "moderate": 5, "balanced": 10, "aggressive": 20, "extreme": 30}.get(risk_level, 10),
+            target_return_pct=8.0
+            + {
+                "conservative": 0,
+                "moderate": 3,
+                "balanced": 6,
+                "aggressive": 10,
+                "extreme": 15,
+            }.get(risk_level, 6),
+            target_volatility_pct=5.0
+            + {
+                "conservative": 0,
+                "moderate": 5,
+                "balanced": 10,
+                "aggressive": 20,
+                "extreme": 30,
+            }.get(risk_level, 10),
             allocation=allocation,
             sharpe_ratio=0.8,
             diversification_ratio=1.5,

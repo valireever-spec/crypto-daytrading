@@ -102,9 +102,7 @@ class SignalGenerator:
 
         return upper_band, sma, lower_band
 
-    async def generate_signal(
-        self, symbol: str, prices: pd.Series
-    ) -> Dict:
+    async def generate_signal(self, symbol: str, prices: pd.Series) -> Dict:
         """Generate composite signal for a symbol.
 
         Args:
@@ -138,9 +136,7 @@ class SignalGenerator:
             # Bollinger Bands position (0 = lower, 1 = upper)
             bb_range = upper_bb.iloc[-1] - lower_bb.iloc[-1]
             if bb_range > 0:
-                bb_position = (
-                    current_price - lower_bb.iloc[-1]
-                ) / bb_range
+                bb_position = (current_price - lower_bb.iloc[-1]) / bb_range
             else:
                 bb_position = 0.5
 
@@ -149,8 +145,10 @@ class SignalGenerator:
             rsi_score = (rsi - 50) * 2  # Convert 0-100 to -100 to +100
 
             # MACD: positive = bullish, negative = bearish
-            macd_score = 50 if pd.isna(macd_hist) else (
-                np.tanh(macd_hist * 100) * 100  # Normalize to -100 to +100
+            macd_score = (
+                50
+                if pd.isna(macd_hist)
+                else (np.tanh(macd_hist * 100) * 100)  # Normalize to -100 to +100
             )
 
             # Bollinger Bands: <0.3 = near lower (buy), >0.7 = near upper (sell)
@@ -169,7 +167,9 @@ class SignalGenerator:
                 )
             else:
                 # Fallback: default weights (RSI 40%, MACD 35%, BB 25%)
-                composite_score = (rsi_score * 0.4) + (macd_score * 0.35) + (bb_score * 0.25)
+                composite_score = (
+                    (rsi_score * 0.4) + (macd_score * 0.35) + (bb_score * 0.25)
+                )
 
             # Validate signal score is not NaN (GAP-5 fix)
             if pd.isna(composite_score) or np.isnan(composite_score):
@@ -218,7 +218,9 @@ class SignalGenerator:
                 "grade": grade,
                 "reason": reason,
                 "rsi": round(rsi, 1),
-                "macd_histogram": round(macd_hist, 6) if not pd.isna(macd_hist) else None,
+                "macd_histogram": round(macd_hist, 6)
+                if not pd.isna(macd_hist)
+                else None,
                 "bb_position": round(bb_position, 2),
                 "current_price": round(current_price, 2),
                 "timestamp": pd.Timestamp.now().isoformat(),

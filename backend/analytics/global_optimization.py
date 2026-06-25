@@ -12,11 +12,13 @@ logger = logging.getLogger(__name__)
 
 class OptimizationError(ValueError):
     """Raised when optimization fails."""
+
     pass
 
 
 class InvalidConstraintError(ValueError):
     """Raised when constraint is invalid."""
+
     pass
 
 
@@ -30,6 +32,7 @@ class OptimizationConstraint:
         max_weight: Maximum allocation weight (0-1)
         target_weight: Target allocation (optional)
     """
+
     asset_class: str
     min_weight: float = 0.0
     max_weight: float = 1.0
@@ -52,16 +55,22 @@ class OptimizationConstraint:
         if not self.asset_class or not isinstance(self.asset_class, str):
             raise InvalidConstraintError(f"Invalid asset_class: {self.asset_class}")
         if not 0 <= self.min_weight <= 1:
-            raise InvalidConstraintError(f"min_weight must be 0-1, got {self.min_weight}")
+            raise InvalidConstraintError(
+                f"min_weight must be 0-1, got {self.min_weight}"
+            )
         if not 0 <= self.max_weight <= 1:
-            raise InvalidConstraintError(f"max_weight must be 0-1, got {self.max_weight}")
+            raise InvalidConstraintError(
+                f"max_weight must be 0-1, got {self.max_weight}"
+            )
         if self.min_weight > self.max_weight:
             raise InvalidConstraintError(
                 f"min_weight {self.min_weight} > max_weight {self.max_weight}"
             )
         if self.target_weight is not None:
             if not 0 <= self.target_weight <= 1:
-                raise InvalidConstraintError(f"target_weight must be 0-1, got {self.target_weight}")
+                raise InvalidConstraintError(
+                    f"target_weight must be 0-1, got {self.target_weight}"
+                )
 
 
 class GlobalPortfolioOptimizer:
@@ -90,13 +99,23 @@ class GlobalPortfolioOptimizer:
         Raises:
             ValueError: If rates are invalid
         """
-        self.risk_free_rate = risk_free_rate if risk_free_rate is not None else PortfolioOptimizationConfig.RISK_FREE_RATE
-        self.transaction_cost_pct = transaction_cost_pct if transaction_cost_pct is not None else PortfolioOptimizationConfig.TRANSACTION_COST_PCT
+        self.risk_free_rate = (
+            risk_free_rate
+            if risk_free_rate is not None
+            else PortfolioOptimizationConfig.RISK_FREE_RATE
+        )
+        self.transaction_cost_pct = (
+            transaction_cost_pct
+            if transaction_cost_pct is not None
+            else PortfolioOptimizationConfig.TRANSACTION_COST_PCT
+        )
 
         if not 0 <= self.risk_free_rate <= 1:
             raise ValueError(f"Risk-free rate must be 0-1, got {self.risk_free_rate}")
         if not 0 <= self.transaction_cost_pct <= 1:
-            raise ValueError(f"Transaction cost must be 0-1, got {self.transaction_cost_pct}")
+            raise ValueError(
+                f"Transaction cost must be 0-1, got {self.transaction_cost_pct}"
+            )
 
         self.constraints: List[OptimizationConstraint] = []
         self.expected_returns: Dict[str, float] = {}
@@ -113,7 +132,9 @@ class GlobalPortfolioOptimizer:
             InvalidConstraintError: If constraint is invalid
         """
         if not isinstance(constraint, OptimizationConstraint):
-            raise InvalidConstraintError(f"Expected OptimizationConstraint, got {type(constraint)}")
+            raise InvalidConstraintError(
+                f"Expected OptimizationConstraint, got {type(constraint)}"
+            )
         constraint.validate()
         self.constraints.append(constraint)
 
@@ -162,12 +183,13 @@ class GlobalPortfolioOptimizer:
             raise ValueError(f"Correlations must be dict, got {type(corr)}")
         for pair, corr_val in corr.items():
             if not -1 <= corr_val <= 1:
-                raise ValueError(f"Correlation for {pair} must be -1 to 1, got {corr_val}")
+                raise ValueError(
+                    f"Correlation for {pair} must be -1 to 1, got {corr_val}"
+                )
         self.correlations = corr
 
     def calculate_efficient_frontier(
-        self,
-        num_points: int = 50
+        self, num_points: int = 50
     ) -> List[Dict[str, Any]]:
         """Calculate efficient frontier.
 
@@ -197,19 +219,19 @@ class GlobalPortfolioOptimizer:
             if weights is not None:
                 risk = self._calculate_portfolio_risk(weights)
                 sharpe = self._calculate_sharpe_ratio(weights)
-                frontier.append({
-                    "return": float(target_ret),
-                    "risk": risk,
-                    "sharpe_ratio": sharpe,
-                    "weights": weights
-                })
+                frontier.append(
+                    {
+                        "return": float(target_ret),
+                        "risk": risk,
+                        "sharpe_ratio": sharpe,
+                        "weights": weights,
+                    }
+                )
 
         return frontier
 
     def find_optimal_portfolio(
-        self,
-        target_return: Optional[float] = None,
-        risk_aversion: float = 1.0
+        self, target_return: Optional[float] = None, risk_aversion: float = 1.0
     ) -> Dict[str, Any]:
         """Find optimal portfolio weights.
 
@@ -242,7 +264,7 @@ class GlobalPortfolioOptimizer:
             "weights": weights,
             "expected_return": self._calculate_portfolio_return(weights),
             "risk": self._calculate_portfolio_risk(weights),
-            "sharpe_ratio": self._calculate_sharpe_ratio(weights)
+            "sharpe_ratio": self._calculate_sharpe_ratio(weights),
         }
 
     def _optimize_for_return(self, target_return: float) -> Optional[Dict[str, float]]:
@@ -269,7 +291,7 @@ class GlobalPortfolioOptimizer:
 
             if vol > 0:
                 excess_ret = expected_ret - self.risk_free_rate
-                weight = max(0, excess_ret / (vol ** 2)) if excess_ret > 0 else 0.01
+                weight = max(0, excess_ret / (vol**2)) if excess_ret > 0 else 0.01
             else:
                 weight = 0.01
 
@@ -331,8 +353,7 @@ class GlobalPortfolioOptimizer:
 
             if asset in weights:
                 weights[asset] = max(
-                    constraint.min_weight,
-                    min(weights[asset], constraint.max_weight)
+                    constraint.min_weight, min(weights[asset], constraint.max_weight)
                 )
 
                 if constraint.target_weight is not None:
@@ -354,7 +375,8 @@ class GlobalPortfolioOptimizer:
             Expected portfolio return
         """
         return sum(
-            weights.get(asset, 0) * self.expected_returns.get(asset, self.risk_free_rate)
+            weights.get(asset, 0)
+            * self.expected_returns.get(asset, self.risk_free_rate)
             for asset in self.expected_returns.keys()
         )
 
@@ -381,7 +403,7 @@ class GlobalPortfolioOptimizer:
                 vol_j = self.volatilities.get(asset_j, 0.2)
 
                 if i == j:
-                    cov_matrix[i, j] = vol_i ** 2
+                    cov_matrix[i, j] = vol_i**2
                 else:
                     corr_key = (asset_i, asset_j)
                     corr = self.correlations.get(corr_key, 0.5)
@@ -417,7 +439,7 @@ class GlobalPortfolioOptimizer:
         current_weights: Dict[str, float],
         target_weights: Dict[str, float],
         portfolio_value: float,
-        max_transaction_cost_pct: float = 0.1
+        max_transaction_cost_pct: float = 0.1,
     ) -> Dict[str, Any]:
         """Calculate rebalancing transactions needed.
 
@@ -433,12 +455,16 @@ class GlobalPortfolioOptimizer:
         Raises:
             ValueError: If inputs are invalid
         """
-        if not isinstance(current_weights, dict) or not isinstance(target_weights, dict):
+        if not isinstance(current_weights, dict) or not isinstance(
+            target_weights, dict
+        ):
             raise ValueError("Weights must be dicts")
         if portfolio_value <= 0:
             raise ValueError(f"Portfolio value must be positive, got {portfolio_value}")
         if not 0 <= max_transaction_cost_pct <= 100:
-            raise ValueError(f"Max cost % must be 0-100, got {max_transaction_cost_pct}")
+            raise ValueError(
+                f"Max cost % must be 0-100, got {max_transaction_cost_pct}"
+            )
 
         trades = []
         total_transaction_cost = 0.0
@@ -456,26 +482,36 @@ class GlobalPortfolioOptimizer:
 
             transaction_cost = abs(value_change) * self.transaction_cost_pct
 
-            trades.append({
-                "asset": asset,
-                "current_weight": current_wt,
-                "target_weight": target_wt,
-                "weight_change": target_wt - current_wt,
-                "current_value": current_value,
-                "target_value": target_value,
-                "trade_amount": value_change,
-                "trade_direction": "BUY" if value_change > 0 else "SELL",
-                "transaction_cost": transaction_cost
-            })
+            trades.append(
+                {
+                    "asset": asset,
+                    "current_weight": current_wt,
+                    "target_weight": target_wt,
+                    "weight_change": target_wt - current_wt,
+                    "current_value": current_value,
+                    "target_value": target_value,
+                    "trade_amount": value_change,
+                    "trade_direction": "BUY" if value_change > 0 else "SELL",
+                    "transaction_cost": transaction_cost,
+                }
+            )
 
             total_transaction_cost += transaction_cost
 
-        total_cost_pct = (total_transaction_cost / portfolio_value * 100) if portfolio_value > 0 else 0
+        total_cost_pct = (
+            (total_transaction_cost / portfolio_value * 100)
+            if portfolio_value > 0
+            else 0
+        )
 
         return {
-            "trades": sorted(trades, key=lambda x: abs(x["trade_amount"]), reverse=True),
+            "trades": sorted(
+                trades, key=lambda x: abs(x["trade_amount"]), reverse=True
+            ),
             "total_transaction_cost": total_transaction_cost,
             "total_cost_pct": total_cost_pct,
             "recommended": total_cost_pct <= max_transaction_cost_pct,
-            "message": "Rebalancing recommended" if total_cost_pct <= max_transaction_cost_pct else f"Rebalancing cost {total_cost_pct:.2f}% exceeds limit"
+            "message": "Rebalancing recommended"
+            if total_cost_pct <= max_transaction_cost_pct
+            else f"Rebalancing cost {total_cost_pct:.2f}% exceeds limit",
         }

@@ -2,10 +2,8 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, Dict, List
-from datetime import datetime
+from typing import Optional, Dict
 
-import pandas as pd
 
 from backend.analytics.regime_detector import get_regime_detector
 from backend.exchange.paper_trading import get_paper_trading
@@ -16,6 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ExecutionDecision:
     """Result of smart entry execution decision."""
+
     decision: str  # EXECUTE, WAIT, REJECT
     symbol: str
     quantity: float
@@ -32,6 +31,7 @@ class ExecutionDecision:
 @dataclass
 class ExecutionContext:
     """Context for execution decision."""
+
     symbol: str
     quantity: float
     current_price: float
@@ -142,7 +142,9 @@ class SmartExecutor:
                             regime_confidence = regime_metrics.get("confidence", 0.5)
                         except Exception as regime_error:
                             # Regime detection failed but that's OK - use defaults
-                            logger.warning(f"Regime detection issue ({regime_error}), using default")
+                            logger.warning(
+                                f"Regime detection issue ({regime_error}), using default"
+                            )
                             regime_name = "SIDEWAYS"
                             regime_confidence = 0.5
             except Exception as e:
@@ -178,9 +180,7 @@ class SmartExecutor:
                 reason=f"Evaluation error: {str(e)}",
             )
 
-    async def execute_smart_entry(
-        self, context: ExecutionContext
-    ) -> ExecutionDecision:
+    async def execute_smart_entry(self, context: ExecutionContext) -> ExecutionDecision:
         """Execute smart entry with full validation.
 
         Args:
@@ -221,7 +221,9 @@ class SmartExecutor:
 
             if order_result.get("status") == "filled":
                 order_id = order_result.get("order_id")
-                logger.info(f"Smart entry executed: {context.symbol} {context.quantity} @ {context.current_price}")
+                logger.info(
+                    f"Smart entry executed: {context.symbol} {context.quantity} @ {context.current_price}"
+                )
 
                 return ExecutionDecision(
                     decision="EXECUTE",
@@ -257,9 +259,7 @@ class SmartExecutor:
                 reason=f"Execution failed: {str(e)}",
             )
 
-    def validate_position_fit(
-        self, symbol: str, quantity: float, price: float
-    ) -> bool:
+    def validate_position_fit(self, symbol: str, quantity: float, price: float) -> bool:
         """Check if position fits within risk limits.
 
         Args:
@@ -278,7 +278,9 @@ class SmartExecutor:
             account = engine.get_account_state()
             position_value = quantity * price
             available_cash = account.get("cash") or account.get("available_cash", 0)
-            total_capital = account.get("total_equity") or account.get("total_capital", 100000)
+            total_capital = account.get("total_equity") or account.get(
+                "total_capital", 100000
+            )
 
             # Check cash available
             if position_value > available_cash:
@@ -329,11 +331,15 @@ class SmartExecutor:
                 return {"error": "Trading engine not initialized"}
 
             account = engine.get_account_state()
-            total_capital = account.get("total_equity") or account.get("total_capital", 100000)
+            total_capital = account.get("total_equity") or account.get(
+                "total_capital", 100000
+            )
             available_cash = account.get("cash") or account.get("available_cash", 0)
 
             position_value = quantity * price
-            position_pct = (position_value / total_capital * 100) if total_capital > 0 else 0
+            position_pct = (
+                (position_value / total_capital * 100) if total_capital > 0 else 0
+            )
             cash_after = available_cash - position_value
 
             detector = get_regime_detector()
@@ -350,7 +356,9 @@ class SmartExecutor:
                 stop_price = price * 0.98
                 target_price = price * 1.02
 
-            cash_util = (position_value / available_cash * 100) if available_cash > 0 else 0
+            cash_util = (
+                (position_value / available_cash * 100) if available_cash > 0 else 0
+            )
 
             return {
                 "symbol": symbol,

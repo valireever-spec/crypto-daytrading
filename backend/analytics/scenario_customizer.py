@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MarketScenario:
     """Custom market scenario specification."""
+
     name: str
     return_multiplier: float = 1.0  # Multiply expected returns by this
     volatility_multiplier: float = 1.0  # Multiply volatility by this
@@ -27,6 +28,7 @@ class MarketScenario:
 @dataclass
 class CustomScenarioResult:
     """Result of custom scenario analysis."""
+
     scenario_name: str
     expected_return_pct: float
     volatility_pct: float
@@ -164,7 +166,9 @@ class ScenarioCustomizer:
             description=description,
         )
 
-        logger.info(f"Created custom scenario: {name} (return x{return_multiplier}, vol x{volatility_multiplier})")
+        logger.info(
+            f"Created custom scenario: {name} (return x{return_multiplier}, vol x{volatility_multiplier})"
+        )
         return scenario
 
     def apply_scenario_to_returns(
@@ -208,7 +212,9 @@ class ScenarioCustomizer:
 
             adjusted_returns[symbol] = adjusted
 
-        logger.debug(f"Applied scenario {scenario.name} to {len(adjusted_returns)} symbols")
+        logger.debug(
+            f"Applied scenario {scenario.name} to {len(adjusted_returns)} symbols"
+        )
         return adjusted_returns
 
     def adjust_correlation_matrix(

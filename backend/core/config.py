@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     # Binance Configuration
     binance_api_key: str = ""
     binance_api_secret: str = ""
-    binance_testnet: bool = False  # Use real mainnet prices for accurate paper trading simulation
+    binance_testnet: bool = (
+        False  # Use real mainnet prices for accurate paper trading simulation
+    )
 
     # Machine HA Configuration
     machine_id: Literal["main", "backup"] = "main"

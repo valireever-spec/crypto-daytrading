@@ -1,9 +1,8 @@
 """Health check system for production monitoring."""
 
-import asyncio
 import logging
 from typing import Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 import psutil
 
 logger = logging.getLogger(__name__)
@@ -12,7 +11,9 @@ logger = logging.getLogger(__name__)
 class HealthStatus:
     """Health check result."""
 
-    def __init__(self, name: str, healthy: bool, message: str = "", details: Dict = None):
+    def __init__(
+        self, name: str, healthy: bool, message: str = "", details: Dict = None
+    ):
         self.name = name
         self.healthy = healthy
         self.message = message
@@ -25,7 +26,7 @@ class HealthStatus:
             "healthy": self.healthy,
             "message": self.message,
             "details": self.details,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
 
@@ -62,7 +63,7 @@ class HealthChecker:
             "timestamp": datetime.utcnow().isoformat(),
             "overall_healthy": all(s.healthy for s in checks.values()),
             "checks": {k: v.to_dict() for k, v in checks.items()},
-            "summary": self._generate_summary(checks)
+            "summary": self._generate_summary(checks),
         }
 
     async def _check_api(self) -> HealthStatus:
@@ -71,17 +72,10 @@ class HealthChecker:
             # Would normally make a request to itself, but in this context
             # we just check if the service is initialized
             return HealthStatus(
-                "api",
-                True,
-                "API is responsive",
-                {"response_time_ms": 0}
+                "api", True, "API is responsive", {"response_time_ms": 0}
             )
         except Exception as e:
-            return HealthStatus(
-                "api",
-                False,
-                f"API check failed: {str(e)}"
-            )
+            return HealthStatus("api", False, f"API check failed: {str(e)}")
 
     async def _check_database(self) -> HealthStatus:
         """Check database connectivity."""
@@ -89,17 +83,10 @@ class HealthChecker:
             # Check if we can connect to database
             # This would normally test actual DB connection
             return HealthStatus(
-                "database",
-                True,
-                "Database is connected",
-                {"response_time_ms": 10}
+                "database", True, "Database is connected", {"response_time_ms": 10}
             )
         except Exception as e:
-            return HealthStatus(
-                "database",
-                False,
-                f"Database check failed: {str(e)}"
-            )
+            return HealthStatus("database", False, f"Database check failed: {str(e)}")
 
     async def _check_memory(self) -> HealthStatus:
         """Check memory usage."""
@@ -122,20 +109,16 @@ class HealthChecker:
                     "used_mb": mem.used / 1024 / 1024,
                     "available_mb": mem.available / 1024 / 1024,
                     "percent": percent,
-                    "threshold_percent": 85
-                }
+                    "threshold_percent": 85,
+                },
             )
         except Exception as e:
-            return HealthStatus(
-                "memory",
-                False,
-                f"Memory check failed: {str(e)}"
-            )
+            return HealthStatus("memory", False, f"Memory check failed: {str(e)}")
 
     async def _check_disk(self) -> HealthStatus:
         """Check disk usage."""
         try:
-            disk = psutil.disk_usage('/')
+            disk = psutil.disk_usage("/")
             percent = disk.percent
 
             healthy = percent < 85
@@ -153,15 +136,11 @@ class HealthChecker:
                     "used_gb": disk.used / 1024 / 1024 / 1024,
                     "free_gb": disk.free / 1024 / 1024 / 1024,
                     "percent": percent,
-                    "threshold_percent": 85
-                }
+                    "threshold_percent": 85,
+                },
             )
         except Exception as e:
-            return HealthStatus(
-                "disk",
-                False,
-                f"Disk check failed: {str(e)}"
-            )
+            return HealthStatus("disk", False, f"Disk check failed: {str(e)}")
 
     async def _check_cpu(self) -> HealthStatus:
         """Check CPU usage."""
@@ -182,15 +161,11 @@ class HealthChecker:
                 {
                     "percent": percent,
                     "cores": psutil.cpu_count(),
-                    "threshold_percent": 80
-                }
+                    "threshold_percent": 80,
+                },
             )
         except Exception as e:
-            return HealthStatus(
-                "cpu",
-                False,
-                f"CPU check failed: {str(e)}"
-            )
+            return HealthStatus("cpu", False, f"CPU check failed: {str(e)}")
 
     async def _check_ml_model(self) -> HealthStatus:
         """Check ML model availability (Ollama)."""
@@ -201,14 +176,10 @@ class HealthChecker:
                 "ml_model",
                 True,
                 "ML model is available",
-                {"model": "default", "response_time_ms": 0}
+                {"model": "default", "response_time_ms": 0},
             )
         except Exception as e:
-            return HealthStatus(
-                "ml_model",
-                False,
-                f"ML model check failed: {str(e)}"
-            )
+            return HealthStatus("ml_model", False, f"ML model check failed: {str(e)}")
 
     async def _check_data_freshness(self) -> HealthStatus:
         """Check if market data is fresh."""
@@ -219,16 +190,11 @@ class HealthChecker:
                 "data_freshness",
                 True,
                 "Market data is current",
-                {
-                    "last_ingest": datetime.utcnow().isoformat(),
-                    "age_seconds": 0
-                }
+                {"last_ingest": datetime.utcnow().isoformat(), "age_seconds": 0},
             )
         except Exception as e:
             return HealthStatus(
-                "data_freshness",
-                False,
-                f"Data freshness check failed: {str(e)}"
+                "data_freshness", False, f"Data freshness check failed: {str(e)}"
             )
 
     def _generate_summary(self, checks: Dict[str, HealthStatus]) -> Dict:
@@ -249,7 +215,7 @@ class HealthChecker:
             "total_checks": total,
             "healthy": healthy,
             "unhealthy": unhealthy,
-            "unhealthy_services": [k for k, v in checks.items() if not v.healthy]
+            "unhealthy_services": [k for k, v in checks.items() if not v.healthy],
         }
 
     def get_history(self, service: str) -> list:

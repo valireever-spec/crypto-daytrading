@@ -2,8 +2,8 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, Optional, Tuple
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class ExitStrategy(Enum):
     """Exit strategy recommendations."""
+
     HOLD_LONG_TERM = "hold_long_term"  # Wait for 365 days (0% tax)
     SELL_NOW = "sell_now"  # Sell immediately (high profit worth the tax)
     WAIT_BREAKEVEN = "wait_breakeven"  # Hold until breakeven or 365 days
@@ -20,6 +21,7 @@ class ExitStrategy(Enum):
 @dataclass
 class StockPosition:
     """Open stock position."""
+
     symbol: str
     quantity: float
     entry_price: float
@@ -70,6 +72,7 @@ class StockPosition:
 @dataclass
 class ExitAnalysis:
     """Analysis of exit options."""
+
     symbol: str
     current_gain: float
     days_held: int
@@ -146,7 +149,9 @@ class StockExitOptimizer:
 
         # Calculate sell-now scenario
         unrealized_gain = position.unrealized_gain
-        short_term_tax_rate = config["short_term_rate"] * (1 + config.get("solidarity_tax", 0))
+        short_term_tax_rate = config["short_term_rate"] * (
+            1 + config.get("solidarity_tax", 0)
+        )
         sell_now_tax = unrealized_gain * short_term_tax_rate
         sell_now_profit = unrealized_gain - sell_now_tax
 
@@ -156,11 +161,15 @@ class StockExitOptimizer:
 
         # Financial comparison
         additional_profit_if_hold = hold_tax_free_profit - sell_now_profit
-        additional_profit_pct = (additional_profit_if_hold / max(sell_now_profit, 1)) * 100
+        additional_profit_pct = (
+            additional_profit_if_hold / max(sell_now_profit, 1)
+        ) * 100
 
         # Risk metrics
         daily_loss_risk = position.current_value * (volatility_pct / 100)
-        time_value = additional_profit_if_hold / max(days_to_long_term, 1)  # EUR per day
+        time_value = additional_profit_if_hold / max(
+            days_to_long_term, 1
+        )  # EUR per day
 
         # Determine recommendation
         recommendation, reason = self._determine_recommendation(
@@ -206,11 +215,17 @@ class StockExitOptimizer:
 
         # Already long-term? Always hold!
         if days_held >= config["holding_threshold"]:
-            return ExitStrategy.HOLD_LONG_TERM, "✅ Already long-term (0% tax) - hold for tax-free gains"
+            return (
+                ExitStrategy.HOLD_LONG_TERM,
+                "✅ Already long-term (0% tax) - hold for tax-free gains",
+            )
 
         # Loss position? Hold unless too risky
         if gain <= 0:
-            return ExitStrategy.HOLD_LONG_TERM, "📉 Position in loss - hold to long-term or breakeven"
+            return (
+                ExitStrategy.HOLD_LONG_TERM,
+                "📉 Position in loss - hold to long-term or breakeven",
+            )
 
         # Small gain? Almost always better to wait
         if unrealized_gain_pct < 10:

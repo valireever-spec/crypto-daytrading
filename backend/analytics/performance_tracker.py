@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RecommendationRecord:
     """Record of a portfolio recommendation."""
+
     timestamp: datetime
     allocation: Dict[str, float]  # {symbol: weight %}
     expected_return_pct: float
@@ -28,6 +29,7 @@ class RecommendationRecord:
 @dataclass
 class OutcomeRecord:
     """Actual portfolio outcome."""
+
     timestamp: datetime
     actual_return_pct: float
     actual_volatility_pct: float
@@ -37,6 +39,7 @@ class OutcomeRecord:
 @dataclass
 class PerformanceMetrics:
     """Performance metrics for recommendations."""
+
     total_recommendations: int
     avg_forecast_return_pct: float
     avg_actual_return_pct: float
@@ -89,7 +92,9 @@ class PerformanceTracker:
             target_type=target_type,
         )
         self.recommendations.append(record)
-        logger.info(f"Recorded recommendation: return {expected_return_pct:.1f}%, vol {expected_volatility_pct:.1f}%")
+        logger.info(
+            f"Recorded recommendation: return {expected_return_pct:.1f}%, vol {expected_volatility_pct:.1f}%"
+        )
 
     def record_outcome(
         self,
@@ -123,7 +128,9 @@ class PerformanceTracker:
             recommendation_timestamp=recommendation_timestamp,
         )
         self.outcomes.append(record)
-        logger.info(f"Recorded outcome: return {actual_return_pct:.1f}%, vol {actual_volatility_pct:.1f}%")
+        logger.info(
+            f"Recorded outcome: return {actual_return_pct:.1f}%, vol {actual_volatility_pct:.1f}%"
+        )
 
     def get_performance_metrics(self) -> Optional[PerformanceMetrics]:
         """
@@ -139,14 +146,8 @@ class PerformanceTracker:
         # Filter to recommendations within lookback window
         cutoff_date = datetime.now(timezone.utc) - pd.Timedelta(days=self.lookback_days)
 
-        recent_recs = [
-            r for r in self.recommendations
-            if r.timestamp >= cutoff_date
-        ]
-        recent_outcomes = [
-            o for o in self.outcomes
-            if o.timestamp >= cutoff_date
-        ]
+        recent_recs = [r for r in self.recommendations if r.timestamp >= cutoff_date]
+        recent_outcomes = [o for o in self.outcomes if o.timestamp >= cutoff_date]
 
         if not recent_recs or not recent_outcomes:
             return None
@@ -168,17 +169,20 @@ class PerformanceTracker:
         actual_vols = [outcome.actual_volatility_pct for _, outcome in matched_pairs]
 
         # Forecast error (RMSE)
-        forecast_error = np.sqrt(np.mean((np.array(forecast_returns) - np.array(actual_returns)) ** 2))
+        forecast_error = np.sqrt(
+            np.mean((np.array(forecast_returns) - np.array(actual_returns)) ** 2)
+        )
 
         # Directional accuracy (% correct sign)
         correct_direction = sum(
-            1 for f, a in zip(forecast_returns, actual_returns)
-            if (f > 0) == (a > 0)
+            1 for f, a in zip(forecast_returns, actual_returns) if (f > 0) == (a > 0)
         )
         directional_accuracy = (correct_direction / len(matched_pairs)) * 100
 
         # Volatility error
-        volatility_error = np.mean(np.abs(np.array(forecast_vols) - np.array(actual_vols)))
+        volatility_error = np.mean(
+            np.abs(np.array(forecast_vols) - np.array(actual_vols))
+        )
 
         # Sharpe improvement (if we beat buy-and-hold)
         avg_forecast_return = np.mean(forecast_returns)
@@ -192,13 +196,16 @@ class PerformanceTracker:
 
         # Upside capture (if upside scenario predicted)
         upside_recs = [
-            (rec, outcome) for rec, outcome in matched_pairs
+            (rec, outcome)
+            for rec, outcome in matched_pairs
             if rec.scenario_type == "upside"
         ]
         if upside_recs:
             upside_forecasts = [rec.expected_return_pct for rec, _ in upside_recs]
             upside_actuals = [outcome.actual_return_pct for _, outcome in upside_recs]
-            upside_capture = np.mean(upside_actuals) / (np.mean(upside_forecasts) + 1e-6)
+            upside_capture = np.mean(upside_actuals) / (
+                np.mean(upside_forecasts) + 1e-6
+            )
         else:
             upside_capture = 1.0
 
@@ -213,7 +220,9 @@ class PerformanceTracker:
             upside_capture_ratio=upside_capture,
         )
 
-    def get_scenario_performance(self, scenario_type: str) -> Optional[Dict[str, float]]:
+    def get_scenario_performance(
+        self, scenario_type: str
+    ) -> Optional[Dict[str, float]]:
         """
         Get performance for a specific scenario type.
 
@@ -227,8 +236,7 @@ class PerformanceTracker:
         Performance metrics dict or None
         """
         scenario_recs = [
-            r for r in self.recommendations
-            if r.scenario_type == scenario_type.lower()
+            r for r in self.recommendations if r.scenario_type == scenario_type.lower()
         ]
 
         if not scenario_recs:
@@ -252,8 +260,13 @@ class PerformanceTracker:
             "count": len(matched),
             "avg_forecast_return_pct": np.mean(forecast_returns),
             "avg_actual_return_pct": np.mean(actual_returns),
-            "error_pct": np.mean(np.abs(np.array(forecast_returns) - np.array(actual_returns))),
-            "positive_accuracy_pct": (sum(1 for a in actual_returns if a > 0) / len(actual_returns)) * 100,
+            "error_pct": np.mean(
+                np.abs(np.array(forecast_returns) - np.array(actual_returns))
+            ),
+            "positive_accuracy_pct": (
+                sum(1 for a in actual_returns if a > 0) / len(actual_returns)
+            )
+            * 100,
         }
 
     def clear_records(self) -> None:
@@ -275,17 +288,28 @@ class PerformanceTracker:
         return {
             "total_recommendations": len(self.recommendations),
             "total_outcomes": len(self.outcomes),
-            "matched_pairs": len([
-                (r, o) for r in self.recommendations
-                for o in self.outcomes
-                if o.recommendation_timestamp == r.timestamp
-            ]),
+            "matched_pairs": len(
+                [
+                    (r, o)
+                    for r in self.recommendations
+                    for o in self.outcomes
+                    if o.recommendation_timestamp == r.timestamp
+                ]
+            ),
             "performance_metrics": {
-                "avg_forecast_return_pct": metrics.avg_forecast_return_pct if metrics else None,
-                "avg_actual_return_pct": metrics.avg_actual_return_pct if metrics else None,
-                "forecast_accuracy_pct": metrics.forecast_accuracy_pct if metrics else None,
+                "avg_forecast_return_pct": metrics.avg_forecast_return_pct
+                if metrics
+                else None,
+                "avg_actual_return_pct": metrics.avg_actual_return_pct
+                if metrics
+                else None,
+                "forecast_accuracy_pct": metrics.forecast_accuracy_pct
+                if metrics
+                else None,
                 "sharpe_improvement": metrics.sharpe_improvement if metrics else None,
-            } if metrics else None,
+            }
+            if metrics
+            else None,
             "recent_recommendations": [
                 {
                     "timestamp": r.timestamp.isoformat(),

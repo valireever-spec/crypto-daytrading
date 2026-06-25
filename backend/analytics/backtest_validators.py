@@ -9,7 +9,7 @@ Validate portfolio decision quality through historical analysis:
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import pandas as pd
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RegimeAccuracy:
     """Regime detection accuracy metrics."""
+
     total_regime_observations: int
     correct_regime_calls: int
     accuracy_pct: float
@@ -34,6 +35,7 @@ class RegimeAccuracy:
 @dataclass
 class ExitProfitability:
     """Analysis of exit decision profitability."""
+
     total_exits: int
     profitable_exits: int
     unprofitable_exits: int
@@ -48,6 +50,7 @@ class ExitProfitability:
 @dataclass
 class RotationPerformance:
     """Sector rotation performance analysis."""
+
     total_rotations: int
     profitable_rotations: int
     win_rate_pct: float
@@ -93,8 +96,8 @@ class BacktestValidator:
         """
         total_observations = 0
         correct_calls = 0
-        regime_correct_calls = {'bull': 0, 'bear': 0, 'sideways': 0}
-        regime_total_calls = {'bull': 0, 'bear': 0, 'sideways': 0}
+        regime_correct_calls = {"bull": 0, "bear": 0, "sideways": 0}
+        regime_total_calls = {"bull": 0, "bear": 0, "sideways": 0}
         false_positive_exits = 0
         missed_exits = 0
 
@@ -122,27 +125,51 @@ class BacktestValidator:
                     # Check if detection matches reality
                     if det_regime == actual_regime:
                         correct_calls += 1
-                        regime_correct_calls[actual_regime] = regime_correct_calls.get(actual_regime, 0) + 1
+                        regime_correct_calls[actual_regime] = (
+                            regime_correct_calls.get(actual_regime, 0) + 1
+                        )
 
-                    regime_total_calls[actual_regime] = regime_total_calls.get(actual_regime, 0) + 1
+                    regime_total_calls[actual_regime] = (
+                        regime_total_calls.get(actual_regime, 0) + 1
+                    )
 
                     # Check for false positive exits (detected bear but market was bull)
-                    if det_regime in ['bear', 'volatile'] and actual_regime in ['bull', 'sideways']:
+                    if det_regime in ["bear", "volatile"] and actual_regime in [
+                        "bull",
+                        "sideways",
+                    ]:
                         false_positive_exits += 1
 
                     # Check for missed exits (market was bear but detected bull)
-                    if det_regime in ['bull', 'sideways'] and actual_regime in ['bear', 'volatile']:
+                    if det_regime in ["bull", "sideways"] and actual_regime in [
+                        "bear",
+                        "volatile",
+                    ]:
                         missed_exits += 1
 
         # Calculate per-regime accuracy
-        overall_accuracy = (correct_calls / total_observations * 100) if total_observations > 0 else 0
-        bull_total = regime_total_calls.get('bull', 0)
-        bear_total = regime_total_calls.get('bear', 0)
-        sideways_total = regime_total_calls.get('sideways', 0)
+        overall_accuracy = (
+            (correct_calls / total_observations * 100) if total_observations > 0 else 0
+        )
+        bull_total = regime_total_calls.get("bull", 0)
+        bear_total = regime_total_calls.get("bear", 0)
+        sideways_total = regime_total_calls.get("sideways", 0)
 
-        bull_accuracy = (regime_correct_calls.get('bull', 0) / bull_total * 100) if bull_total > 0 else 0
-        bear_accuracy = (regime_correct_calls.get('bear', 0) / bear_total * 100) if bear_total > 0 else 0
-        sideways_accuracy = (regime_correct_calls.get('sideways', 0) / sideways_total * 100) if sideways_total > 0 else 0
+        bull_accuracy = (
+            (regime_correct_calls.get("bull", 0) / bull_total * 100)
+            if bull_total > 0
+            else 0
+        )
+        bear_accuracy = (
+            (regime_correct_calls.get("bear", 0) / bear_total * 100)
+            if bear_total > 0
+            else 0
+        )
+        sideways_accuracy = (
+            (regime_correct_calls.get("sideways", 0) / sideways_total * 100)
+            if sideways_total > 0
+            else 0
+        )
 
         return RegimeAccuracy(
             total_regime_observations=total_observations,
@@ -188,10 +215,10 @@ class BacktestValidator:
         opportunity_costs = []
 
         for exit_decision in exit_decisions:
-            symbol = exit_decision['symbol']
-            exit_date = exit_decision['date']
-            exit_price = exit_decision['price']
-            entry_date = exit_decision.get('entry_date')
+            symbol = exit_decision["symbol"]
+            exit_date = exit_decision["date"]
+            exit_price = exit_decision["price"]
+            entry_date = exit_decision.get("entry_date")
 
             if symbol not in symbol_price_history:
                 continue
@@ -217,7 +244,7 @@ class BacktestValidator:
                 future_price = None
                 for date in prices.index:
                     if date >= future_date:
-                        future_price = float(prices.loc[date, 'Close'])
+                        future_price = float(prices.loc[date, "Close"])
                         break
 
                 if future_price:
@@ -235,8 +262,11 @@ class BacktestValidator:
                 else:
                     unprofitable_exits += 1
 
-        win_rate = (profitable_exits / (profitable_exits + unprofitable_exits) * 100) \
-                  if (profitable_exits + unprofitable_exits) > 0 else 0
+        win_rate = (
+            (profitable_exits / (profitable_exits + unprofitable_exits) * 100)
+            if (profitable_exits + unprofitable_exits) > 0
+            else 0
+        )
 
         return ExitProfitability(
             total_exits=len(exit_decisions),
@@ -244,9 +274,15 @@ class BacktestValidator:
             unprofitable_exits=unprofitable_exits,
             win_rate_pct=win_rate,
             avg_days_held=np.mean(holding_periods) if holding_periods else 0,
-            avg_return_if_held_1_week=np.mean(future_returns_1w) if future_returns_1w else 0,
-            avg_return_if_held_1_month=np.mean(future_returns_1m) if future_returns_1m else 0,
-            avg_return_if_held_3_months=np.mean(future_returns_3m) if future_returns_3m else 0,
+            avg_return_if_held_1_week=np.mean(future_returns_1w)
+            if future_returns_1w
+            else 0,
+            avg_return_if_held_1_month=np.mean(future_returns_1m)
+            if future_returns_1m
+            else 0,
+            avg_return_if_held_3_months=np.mean(future_returns_3m)
+            if future_returns_3m
+            else 0,
             opportunity_cost=np.mean(opportunity_costs) if opportunity_costs else 0,
         )
 
@@ -280,22 +316,28 @@ class BacktestValidator:
         rotation_returns = []
 
         for rotation in rotation_decisions:
-            from_sector = rotation['from_sector']
-            to_sector = rotation['to_sector']
-            rotation_date = rotation['date']
+            from_sector = rotation["from_sector"]
+            to_sector = rotation["to_sector"]
+            rotation_date = rotation["date"]
 
-            if from_sector not in sector_price_history or to_sector not in sector_price_history:
+            if (
+                from_sector not in sector_price_history
+                or to_sector not in sector_price_history
+            ):
                 continue
 
             from_prices = sector_price_history[from_sector]
             to_prices = sector_price_history[to_sector]
 
-            if rotation_date not in from_prices.index or rotation_date not in to_prices.index:
+            if (
+                rotation_date not in from_prices.index
+                or rotation_date not in to_prices.index
+            ):
                 continue
 
             # Get prices at rotation date
-            from_price = float(from_prices.loc[rotation_date, 'Close'])
-            to_price = float(to_prices.loc[rotation_date, 'Close'])
+            from_price = float(from_prices.loc[rotation_date, "Close"])
+            to_price = float(to_prices.loc[rotation_date, "Close"])
 
             # Get prices 1 month later
             future_date = rotation_date + timedelta(days=30)
@@ -304,12 +346,12 @@ class BacktestValidator:
 
             for date in from_prices.index:
                 if date >= future_date:
-                    from_future = float(from_prices.loc[date, 'Close'])
+                    from_future = float(from_prices.loc[date, "Close"])
                     break
 
             for date in to_prices.index:
                 if date >= future_date:
-                    to_future = float(to_prices.loc[date, 'Close'])
+                    to_future = float(to_prices.loc[date, "Close"])
                     break
 
             if from_future and to_future:
@@ -324,7 +366,11 @@ class BacktestValidator:
                 if outperformance > 0:
                     profitable_rotations += 1
 
-        win_rate = (profitable_rotations / len(rotation_decisions) * 100) if rotation_decisions else 0
+        win_rate = (
+            (profitable_rotations / len(rotation_decisions) * 100)
+            if rotation_decisions
+            else 0
+        )
 
         return RotationPerformance(
             total_rotations=len(rotation_decisions),
@@ -333,7 +379,9 @@ class BacktestValidator:
             avg_outperformance_pct=np.mean(rotation_returns) if rotation_returns else 0,
             best_rotation_pct=max(rotation_returns) if rotation_returns else 0,
             worst_rotation_pct=min(rotation_returns) if rotation_returns else 0,
-            vs_buy_hold_comparison=np.mean(rotation_returns) - benchmark_returns if rotation_returns else 0,
+            vs_buy_hold_comparison=np.mean(rotation_returns) - benchmark_returns
+            if rotation_returns
+            else 0,
         )
 
     def get_validation_summary(
@@ -358,14 +406,18 @@ class BacktestValidator:
             summary += "💰 Exit Decision Profitability:\n"
             summary += f"  Win rate: {exit_profitability.win_rate_pct:.1f}%\n"
             summary += f"  Avg hold: {exit_profitability.avg_days_held:.0f} days\n"
-            summary += f"  Opportunity cost: {exit_profitability.opportunity_cost:+.2f}%\n"
+            summary += (
+                f"  Opportunity cost: {exit_profitability.opportunity_cost:+.2f}%\n"
+            )
             summary += f"  1m return if held: {exit_profitability.avg_return_if_held_1_month:+.2f}%\n\n"
 
         if rotation_performance:
             summary += "🔄 Sector Rotation Performance:\n"
             summary += f"  Win rate: {rotation_performance.win_rate_pct:.1f}%\n"
             summary += f"  Avg outperformance: {rotation_performance.avg_outperformance_pct:+.2f}%\n"
-            summary += f"  vs Buy-Hold: {rotation_performance.vs_buy_hold_comparison:+.2f}%\n"
+            summary += (
+                f"  vs Buy-Hold: {rotation_performance.vs_buy_hold_comparison:+.2f}%\n"
+            )
 
         return summary
 

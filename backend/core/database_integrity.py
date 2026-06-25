@@ -12,7 +12,7 @@ Status: ✅ OPERATIONAL
 
 import hashlib
 import logging
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -53,17 +53,23 @@ class DatabaseIntegrityValidator:
             # Check for NaN/Inf
             for key, value in record.items():
                 if isinstance(value, float):
-                    if value != value or value == float('inf') or value == float('-inf'):
+                    if (
+                        value != value
+                        or value == float("inf")
+                        or value == float("-inf")
+                    ):
                         return False, f"Invalid float in {key}: {value}"
 
             # Check for SQL injection patterns
-            sql_patterns = ["'; DROP", "\" OR \"", "UNION SELECT", "1=1"]
+            sql_patterns = ["'; DROP", '" OR "', "UNION SELECT", "1=1"]
             for key, value in record.items():
                 if isinstance(value, str):
                     value_upper = value.upper()
                     for pattern in sql_patterns:
                         if pattern in value_upper:
-                            logger.critical(f"🚨 SQL INJECTION DETECTED in {key}: {value}")
+                            logger.critical(
+                                f"🚨 SQL INJECTION DETECTED in {key}: {value}"
+                            )
                             return False, f"SQL injection detected in {key}"
 
             return True, "Valid"
@@ -89,9 +95,9 @@ class DatabaseIntegrityValidator:
         try:
             # Define expected schema
             expected_tables = {
-                'trades': ['id', 'symbol', 'side', 'quantity', 'price', 'timestamp'],
-                'positions': ['symbol', 'quantity', 'entry_price', 'current_price'],
-                'signals': ['symbol', 'score', 'timestamp', 'type'],
+                "trades": ["id", "symbol", "side", "quantity", "price", "timestamp"],
+                "positions": ["symbol", "quantity", "entry_price", "current_price"],
+                "signals": ["symbol", "score", "timestamp", "type"],
             }
 
             # Check each table exists and has required columns
@@ -133,7 +139,7 @@ class DatabaseIntegrityValidator:
             rows = result.fetchall()
 
             # Create deterministic hash
-            content = ''.join(str(row) for row in rows)
+            content = "".join(str(row) for row in rows)
             return hashlib.sha256(content.encode()).hexdigest()
 
         except Exception as e:
@@ -149,7 +155,7 @@ class DatabaseIntegrityValidator:
         alerts = []
 
         try:
-            critical_tables = ['trades', 'positions', 'signals']
+            critical_tables = ["trades", "positions", "signals"]
 
             for table in critical_tables:
                 current_hash = self.compute_table_hash(table)
@@ -174,26 +180,26 @@ class DatabaseIntegrityValidator:
             tables_valid, tampering_alerts = self.detect_tampering()
 
             return {
-                'timestamp': datetime.now(timezone.utc).isoformat(),
-                'schema_valid': schema_valid,
-                'schema_errors': schema_errors,
-                'tables_valid': tables_valid,
-                'tampering_alerts': tampering_alerts,
-                'overall_healthy': schema_valid and tables_valid,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "schema_valid": schema_valid,
+                "schema_errors": schema_errors,
+                "tables_valid": tables_valid,
+                "tampering_alerts": tampering_alerts,
+                "overall_healthy": schema_valid and tables_valid,
             }
 
         except Exception as e:
             logger.error(f"Status check failed: {e}")
             return {
-                'error': str(e),
-                'overall_healthy': False,
+                "error": str(e),
+                "overall_healthy": False,
             }
 
     def _init_fingerprints(self):
         """Initialize baseline fingerprints."""
         if self.db:
             try:
-                for table in ['trades', 'positions', 'signals']:
+                for table in ["trades", "positions", "signals"]:
                     self.table_hashes[table] = self.compute_table_hash(table)
                 logger.info("✓ Database integrity baseline established")
             except Exception as e:
@@ -207,7 +213,7 @@ class DatabaseIntegrityValidator:
 
             result = self.db.execute(
                 "SELECT 1 FROM information_schema.tables WHERE table_name = %s",
-                (table_name,)
+                (table_name,),
             )
             return result.fetchone() is not None
 
@@ -222,7 +228,7 @@ class DatabaseIntegrityValidator:
 
             result = self.db.execute(
                 "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
-                (table_name,)
+                (table_name,),
             )
             return [row[0] for row in result.fetchall()]
 

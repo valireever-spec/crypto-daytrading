@@ -12,11 +12,13 @@ logger = logging.getLogger(__name__)
 
 class InvalidCurrencyError(ValueError):
     """Raised when currency is invalid."""
+
     pass
 
 
 class InvalidFXRateError(ValueError):
     """Raised when FX rate is invalid."""
+
     pass
 
 
@@ -31,6 +33,7 @@ class CurrencyExposure:
         hedged_amount: Amount that is hedged
         hedge_ratio: Hedging ratio (0.0 = unhedged, 1.0 = fully hedged)
     """
+
     currency: str
     exposure_amount: float
     exposure_pct: float
@@ -51,9 +54,13 @@ class CurrencyExposure:
         if not self.currency or not isinstance(self.currency, str):
             raise InvalidCurrencyError(f"Invalid currency: {self.currency}")
         if self.exposure_amount < 0:
-            raise ValueError(f"Exposure amount cannot be negative: {self.exposure_amount}")
+            raise ValueError(
+                f"Exposure amount cannot be negative: {self.exposure_amount}"
+            )
         if not 0 <= self.exposure_pct <= 100:
-            raise ValueError(f"Exposure percentage must be 0-100, got {self.exposure_pct}")
+            raise ValueError(
+                f"Exposure percentage must be 0-100, got {self.exposure_pct}"
+            )
         if self.hedged_amount < 0:
             raise ValueError(f"Hedged amount cannot be negative: {self.hedged_amount}")
         if not 0 <= self.hedge_ratio <= 1:
@@ -92,9 +99,19 @@ class CurrencyRiskCalculator:
         Raises:
             InvalidFXRateError: If any FX rate is invalid
         """
-        self.fx_rates = fx_rates if fx_rates is not None else CurrencyConfig.DEFAULT_RATES.copy()
-        self.volatility = volatilities if volatilities is not None else CurrencyConfig.DEFAULT_VOLATILITIES.copy()
-        self.correlations = correlations if correlations is not None else CurrencyConfig.DEFAULT_CORRELATIONS.copy()
+        self.fx_rates = (
+            fx_rates if fx_rates is not None else CurrencyConfig.DEFAULT_RATES.copy()
+        )
+        self.volatility = (
+            volatilities
+            if volatilities is not None
+            else CurrencyConfig.DEFAULT_VOLATILITIES.copy()
+        )
+        self.correlations = (
+            correlations
+            if correlations is not None
+            else CurrencyConfig.DEFAULT_CORRELATIONS.copy()
+        )
 
         self._validate_fx_rates()
         self._validate_volatilities()
@@ -187,8 +204,7 @@ class CurrencyRiskCalculator:
         return amount / rate
 
     def calculate_currency_exposure(
-        self,
-        positions: Dict[str, Dict[str, Any]]
+        self, positions: Dict[str, Dict[str, Any]]
     ) -> Dict[str, CurrencyExposure]:
         """Calculate exposure by currency.
 
@@ -226,12 +242,12 @@ class CurrencyRiskCalculator:
         exposures: Dict[str, CurrencyExposure] = {}
         for currency, value in currency_values.items():
             usd_value = self.convert_to_usd(value, currency)
-            exposure_pct = (usd_value / total_value_usd * 100) if total_value_usd > 0 else 0
+            exposure_pct = (
+                (usd_value / total_value_usd * 100) if total_value_usd > 0 else 0
+            )
 
             exposures[currency] = CurrencyExposure(
-                currency=currency,
-                exposure_amount=usd_value,
-                exposure_pct=exposure_pct
+                currency=currency, exposure_amount=usd_value, exposure_pct=exposure_pct
             )
 
         return exposures
@@ -241,7 +257,7 @@ class CurrencyRiskCalculator:
         exposure_amount: float,
         currency: str,
         confidence: float = 0.95,
-        days: int = 1
+        days: int = 1,
     ) -> float:
         """Calculate Value at Risk due to currency movement.
 
@@ -277,9 +293,7 @@ class CurrencyRiskCalculator:
         return var_usd
 
     def calculate_total_currency_var(
-        self,
-        exposures: Dict[str, CurrencyExposure],
-        confidence: float = 0.95
+        self, exposures: Dict[str, CurrencyExposure], confidence: float = 0.95
     ) -> float:
         """Calculate total portfolio currency VaR.
 
@@ -295,9 +309,7 @@ class CurrencyRiskCalculator:
         for currency, exposure in exposures.items():
             if currency != "USD":
                 var = self.calculate_currency_var(
-                    exposure.exposure_amount,
-                    currency,
-                    confidence
+                    exposure.exposure_amount, currency, confidence
                 )
                 total_var += var
 
@@ -307,7 +319,7 @@ class CurrencyRiskCalculator:
         self,
         exposures: Dict[str, CurrencyExposure],
         hedge_threshold_pct: float = 1.0,
-        max_total_fx_risk_pct: float = 2.0
+        max_total_fx_risk_pct: float = 2.0,
     ) -> List[Dict[str, Any]]:
         """Suggest currency hedges based on exposures.
 
@@ -333,18 +345,24 @@ class CurrencyRiskCalculator:
 
             var = self.calculate_currency_var(exposure.exposure_amount, currency)
             total_portfolio_value = sum(e.exposure_amount for e in exposures.values())
-            var_pct = (var / total_portfolio_value * 100) if total_portfolio_value > 0 else 0
+            var_pct = (
+                (var / total_portfolio_value * 100) if total_portfolio_value > 0 else 0
+            )
 
             if var_pct > hedge_threshold_pct:
-                suggestions.append({
-                    "currency": currency,
-                    "exposure_usd": exposure.exposure_amount,
-                    "exposure_pct": exposure.exposure_pct,
-                    "currency_var_usd": var,
-                    "currency_var_pct": var_pct,
-                    "recommendation": self._get_hedge_recommendation(var_pct),
-                    "hedge_ratio": min(var_pct / max_total_fx_risk_pct, 1.0) if var_pct > max_total_fx_risk_pct else 0.5
-                })
+                suggestions.append(
+                    {
+                        "currency": currency,
+                        "exposure_usd": exposure.exposure_amount,
+                        "exposure_pct": exposure.exposure_pct,
+                        "currency_var_usd": var,
+                        "currency_var_pct": var_pct,
+                        "recommendation": self._get_hedge_recommendation(var_pct),
+                        "hedge_ratio": min(var_pct / max_total_fx_risk_pct, 1.0)
+                        if var_pct > max_total_fx_risk_pct
+                        else 0.5,
+                    }
+                )
 
         return sorted(suggestions, key=lambda x: x["currency_var_pct"], reverse=True)
 
@@ -367,8 +385,7 @@ class CurrencyRiskCalculator:
             return "Monitor, hedging optional"
 
     def calculate_correlation_matrix(
-        self,
-        currencies: List[str]
+        self, currencies: List[str]
     ) -> Dict[Tuple[str, str], float]:
         """Get correlation between currency pairs (from config).
 
@@ -390,10 +407,18 @@ class CurrencyRiskCalculator:
                 if curr1 == curr2:
                     matrix[(curr1, curr2)] = 1.0
                 elif curr1 == "USD" or curr2 == "USD":
-                    key = (curr2, curr1) if (curr1, curr2) not in self.correlations else (curr1, curr2)
+                    key = (
+                        (curr2, curr1)
+                        if (curr1, curr2) not in self.correlations
+                        else (curr1, curr2)
+                    )
                     matrix[(curr1, curr2)] = self.correlations.get(key, 0.0)
                 else:
-                    key = (curr1, curr2) if (curr1, curr2) in self.correlations else (curr2, curr1)
+                    key = (
+                        (curr1, curr2)
+                        if (curr1, curr2) in self.correlations
+                        else (curr2, curr1)
+                    )
                     matrix[(curr1, curr2)] = self.correlations.get(key, 0.5)
 
         return matrix
@@ -418,10 +443,7 @@ class CurrencyHedgingStrategy:
         self.hedge_cost_multiplier: float = 0.005  # Config-driven
 
     def create_hedge(
-        self,
-        currency: str,
-        hedge_amount: float,
-        hedge_ratio: float = 1.0
+        self, currency: str, hedge_amount: float, hedge_ratio: float = 1.0
     ) -> Dict[str, Any]:
         """Create a currency hedge.
 
@@ -450,19 +472,18 @@ class CurrencyHedgingStrategy:
             "hedge_ratio": hedge_ratio,
             "hedged_amount": hedge_amount * hedge_ratio,
             "type": "forward",
-            "status": "active"
+            "status": "active",
         }
 
         self.active_hedges[currency] = hedge
-        logger.info(f"Created hedge for {currency}: {hedge_ratio*100:.0f}% of {hedge_amount:.2f}")
+        logger.info(
+            f"Created hedge for {currency}: {hedge_ratio*100:.0f}% of {hedge_amount:.2f}"
+        )
 
         return hedge
 
     def calculate_hedge_cost(
-        self,
-        hedged_amount: float,
-        currency: str,
-        days: int = 30
+        self, hedged_amount: float, currency: str, days: int = 30
     ) -> float:
         """Estimate cost of hedging (config-driven multiplier).
 
@@ -495,18 +516,22 @@ class CurrencyHedgingStrategy:
         """
         evaluation: Dict[str, Any] = {
             "active_hedges": len(self.active_hedges),
-            "total_hedged": sum(h.get("hedged_amount", 0) for h in self.active_hedges.values()),
-            "hedges": []
+            "total_hedged": sum(
+                h.get("hedged_amount", 0) for h in self.active_hedges.values()
+            ),
+            "hedges": [],
         }
 
         for currency, hedge in self.active_hedges.items():
             cost = self.calculate_hedge_cost(hedge["hedged_amount"], currency)
-            evaluation["hedges"].append({
-                "currency": currency,
-                "hedged_amount": hedge["hedged_amount"],
-                "hedge_ratio": hedge["hedge_ratio"],
-                "estimated_cost": cost,
-                "status": hedge["status"]
-            })
+            evaluation["hedges"].append(
+                {
+                    "currency": currency,
+                    "hedged_amount": hedge["hedged_amount"],
+                    "hedge_ratio": hedge["hedge_ratio"],
+                    "estimated_cost": cost,
+                    "status": hedge["status"],
+                }
+            )
 
         return evaluation

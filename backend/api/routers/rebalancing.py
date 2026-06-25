@@ -5,7 +5,7 @@ REST endpoints for constrained portfolio rebalancing.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Body, Query
 import numpy as np
@@ -15,9 +15,6 @@ from backend.analytics.rebalancing_engine import (
 )
 from backend.analytics.rebalancing_stress_tester import (
     get_rebalancing_stress_tester,
-)
-from backend.analytics.constraint_manager import (
-    get_constraint_manager,
 )
 from backend.analytics.scenario_customizer import (
     get_scenario_customizer,
@@ -30,8 +27,12 @@ router = APIRouter(prefix="/api/rebalancing", tags=["rebalancing"])
 
 @router.post("/analyze-drift")
 async def analyze_drift(
-    current_allocation: Dict[str, float] = Body(..., description="Current allocation {symbol: weight %}"),
-    target_allocation: Dict[str, float] = Body(..., description="Target allocation {symbol: weight %}"),
+    current_allocation: Dict[str, float] = Body(
+        ..., description="Current allocation {symbol: weight %}"
+    ),
+    target_allocation: Dict[str, float] = Body(
+        ..., description="Target allocation {symbol: weight %}"
+    ),
     drift_threshold_pct: float = Query(5.0, description="Drift trigger threshold (%)"),
 ) -> Dict[str, Any]:
     """
@@ -68,10 +69,16 @@ async def analyze_drift(
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_drift_pct": round(drift.total_drift_pct, 2),
             "requires_rebalancing": drift.requires_rebalancing,
-            "drift_per_symbol": {k: round(v, 2) for k, v in drift.drift_per_symbol.items()},
+            "drift_per_symbol": {
+                k: round(v, 2) for k, v in drift.drift_per_symbol.items()
+            },
             "drift_threshold_pct": drift.drift_threshold_pct,
-            "current_allocation": {k: round(v, 2) for k, v in drift.current_allocation.items()},
-            "target_allocation": {k: round(v, 2) for k, v in drift.target_allocation.items()},
+            "current_allocation": {
+                k: round(v, 2) for k, v in drift.current_allocation.items()
+            },
+            "target_allocation": {
+                k: round(v, 2) for k, v in drift.target_allocation.items()
+            },
         }
 
     except HTTPException:
@@ -86,7 +93,9 @@ async def generate_rebalancing_plan(
     current_allocation: Dict[str, float] = Body(..., description="Current allocation"),
     target_allocation: Dict[str, float] = Body(..., description="Target allocation"),
     portfolio_value_eur: float = Body(..., description="Portfolio value in EUR"),
-    execution_cost_bps: float = Query(10.0, description="Execution cost in basis points"),
+    execution_cost_bps: float = Query(
+        10.0, description="Execution cost in basis points"
+    ),
     tax_rate_pct: float = Query(27.0, description="Tax rate (%)"),
 ) -> Dict[str, Any]:
     """
@@ -121,7 +130,9 @@ async def generate_rebalancing_plan(
     """
     try:
         if portfolio_value_eur <= 0:
-            raise HTTPException(status_code=400, detail="Portfolio value must be positive")
+            raise HTTPException(
+                status_code=400, detail="Portfolio value must be positive"
+            )
 
         engine = get_rebalancing_engine()
         plan = engine.generate_rebalancing_plan(
@@ -150,9 +161,14 @@ async def generate_rebalancing_plan(
             "estimated_slippage_pct": round(plan.estimated_slippage_pct, 4),
             "tax_impact_pct": round(plan.tax_impact_pct, 4),
             "total_cost_eur": round(
-                (plan.total_cost_pct + plan.estimated_slippage_pct + plan.tax_impact_pct) *
-                portfolio_value_eur / 100,
-                2
+                (
+                    plan.total_cost_pct
+                    + plan.estimated_slippage_pct
+                    + plan.tax_impact_pct
+                )
+                * portfolio_value_eur
+                / 100,
+                2,
             ),
             "feasible": plan.feasible,
             "constraint_violations": plan.constraint_violations,
@@ -257,7 +273,9 @@ async def break_into_tranches(
 @router.post("/stress-test")
 async def stress_test_rebalancing(
     target_allocation: Dict[str, float] = Body(..., description="Target allocation"),
-    scenario_name: str = Query("bull_market", description="Scenario name (bull_market, bear_market, etc.)"),
+    scenario_name: str = Query(
+        "bull_market", description="Scenario name (bull_market, bear_market, etc.)"
+    ),
 ) -> Dict[str, Any]:
     """
     Stress test rebalancing plan under market scenario.
@@ -299,7 +317,9 @@ async def stress_test_rebalancing(
             symbols = list(target_allocation.keys())
             scenario_returns = {symbol: 8.0 for symbol in symbols}
             scenario_volatilities = {symbol: 15.0 for symbol in symbols}
-            scenario_correlations = np.eye(len(symbols)) * 0.7 + np.ones((len(symbols), len(symbols))) * 0.3
+            scenario_correlations = (
+                np.eye(len(symbols)) * 0.7 + np.ones((len(symbols), len(symbols))) * 0.3
+            )
 
             result = tester.stress_test_allocation(
                 target_allocation=target_allocation,
@@ -328,7 +348,9 @@ async def stress_test_rebalancing(
 
 
 @router.get("/history")
-async def get_rebalancing_history(limit: int = Query(10, description="Number of recent records")) -> Dict[str, Any]:
+async def get_rebalancing_history(
+    limit: int = Query(10, description="Number of recent records")
+) -> Dict[str, Any]:
     """
     Get rebalancing history.
 

@@ -5,8 +5,8 @@ REST API for backtesting allocation strategies and analyzing results.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from typing import Dict, Optional, Any
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Body
 import pandas as pd
 
@@ -69,14 +69,18 @@ async def backtest_allocation(
         # Fetch historical data
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=503, detail="Historical data service not available")
+            raise HTTPException(
+                status_code=503, detail="Historical data service not available"
+            )
 
         symbols = list(allocation.keys())
         historical_returns = {}
 
         for symbol in symbols:
             try:
-                df = hist_service.get_candles(symbol, timeframe="1d", limit=lookback_days)
+                df = hist_service.get_candles(
+                    symbol, timeframe="1d", limit=lookback_days
+                )
                 if not df.empty and len(df) > 20:
                     df["return"] = df["close"].pct_change() * 100
                     historical_returns[symbol] = df["return"]
@@ -140,7 +144,9 @@ async def backtest_allocation(
 
 @router.post("/rolling-optimization")
 async def backtest_rolling_optimization(
-    risk_level: str = Query("balanced", description="conservative/moderate/balanced/aggressive/extreme"),
+    risk_level: str = Query(
+        "balanced", description="conservative/moderate/balanced/aggressive/extreme"
+    ),
     rebalance_freq: str = Query("monthly", description="monthly/quarterly/annual"),
     lookback_days: int = Query(365, ge=30, le=2000),
     transaction_cost_bps: int = Query(10, ge=0, le=100),
@@ -164,7 +170,13 @@ async def backtest_rolling_optimization(
     Backtest results with rolling optimization
     """
     try:
-        if risk_level not in ["conservative", "moderate", "balanced", "aggressive", "extreme"]:
+        if risk_level not in [
+            "conservative",
+            "moderate",
+            "balanced",
+            "aggressive",
+            "extreme",
+        ]:
             raise HTTPException(status_code=400, detail="Invalid risk level")
 
         if rebalance_freq not in ["monthly", "quarterly", "annual"]:
@@ -173,14 +185,18 @@ async def backtest_rolling_optimization(
         # Fetch historical data
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=503, detail="Historical data service not available")
+            raise HTTPException(
+                status_code=503, detail="Historical data service not available"
+            )
 
         symbols = ["BTCUSDT", "EQ_AAPL", "EQ_MSFT", "EQ_GOOGL", "EQ_NVDA"]
         historical_returns = {}
 
         for symbol in symbols:
             try:
-                df = hist_service.get_candles(symbol, timeframe="1d", limit=lookback_days)
+                df = hist_service.get_candles(
+                    symbol, timeframe="1d", limit=lookback_days
+                )
                 if not df.empty and len(df) > 20:
                     df["return"] = df["close"].pct_change() * 100
                     historical_returns[symbol] = df["return"]
@@ -257,7 +273,9 @@ async def compare_allocations(
         # Fetch historical data
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=503, detail="Historical data service not available")
+            raise HTTPException(
+                status_code=503, detail="Historical data service not available"
+            )
 
         # Get all symbols from all allocations
         all_symbols = set()
@@ -268,7 +286,9 @@ async def compare_allocations(
 
         for symbol in all_symbols:
             try:
-                df = hist_service.get_candles(symbol, timeframe="1d", limit=lookback_days)
+                df = hist_service.get_candles(
+                    symbol, timeframe="1d", limit=lookback_days
+                )
                 if not df.empty and len(df) > 20:
                     df["return"] = df["close"].pct_change() * 100
                     historical_returns[symbol] = df["return"]
@@ -431,13 +451,15 @@ async def get_backtest_summary() -> Dict[str, Any]:
 
     summaries = []
     for result_id, result in _backtest_results.items():
-        summaries.append({
-            "result_id": result_id,
-            "strategy_name": result.strategy_name,
-            "total_return_pct": round(result.total_return_pct, 2),
-            "sharpe_ratio": round(result.sharpe_ratio, 2),
-            "max_drawdown_pct": round(result.max_drawdown_pct, 2),
-        })
+        summaries.append(
+            {
+                "result_id": result_id,
+                "strategy_name": result.strategy_name,
+                "total_return_pct": round(result.total_return_pct, 2),
+                "sharpe_ratio": round(result.sharpe_ratio, 2),
+                "max_drawdown_pct": round(result.max_drawdown_pct, 2),
+            }
+        )
 
     return {
         "timestamp": datetime.utcnow().isoformat() + "Z",

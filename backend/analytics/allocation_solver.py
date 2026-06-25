@@ -5,7 +5,7 @@ Solve for optimal allocations given return or risk targets.
 """
 
 import logging
-from typing import Dict, Optional, Any
+from typing import Dict
 from dataclasses import dataclass
 import pandas as pd
 import numpy as np
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SolverResult:
     """Allocation solver result."""
+
     target_type: str  # "return" or "volatility"
     target_value: float
     allocation: Dict[str, float]  # symbol -> weight %
@@ -61,14 +62,18 @@ class AllocationSolver:
 
         # Align and calculate stats
         min_len = min(len(s) for s in historical_returns.values())
-        returns_array = np.array([historical_returns[s].tail(min_len).values for s in symbols]).T
+        returns_array = np.array(
+            [historical_returns[s].tail(min_len).values for s in symbols]
+        ).T
 
         mean_returns = returns_array.mean(axis=0) * 252
         cov_matrix = np.cov(returns_array.T) * 252
 
         # Guard against NaN/Inf in covariance
         if np.any(np.isnan(cov_matrix)) or np.any(np.isinf(cov_matrix)):
-            logger.warning("NaN/Inf detected in covariance matrix, using identity matrix")
+            logger.warning(
+                "NaN/Inf detected in covariance matrix, using identity matrix"
+            )
             cov_matrix = np.eye(len(symbols)) * np.std(mean_returns) ** 2
 
         # Guard against NaN/Inf in returns
@@ -132,7 +137,7 @@ class AllocationSolver:
                     target_type="return",
                     target_value=target_return_pct,
                     allocation=allocation,
-                    expected_return_pct=np.dot([1/n]*n, mean_returns) * 100,
+                    expected_return_pct=np.dot([1 / n] * n, mean_returns) * 100,
                     expected_volatility_pct=0,
                     sharpe_ratio=0,
                     feasible=False,
@@ -180,7 +185,9 @@ class AllocationSolver:
 
         # Align and calculate stats
         min_len = min(len(s) for s in historical_returns.values())
-        returns_array = np.array([historical_returns[s].tail(min_len).values for s in symbols]).T
+        returns_array = np.array(
+            [historical_returns[s].tail(min_len).values for s in symbols]
+        ).T
 
         mean_returns = returns_array.mean(axis=0) * 252
         cov_matrix = np.cov(returns_array.T) * 252

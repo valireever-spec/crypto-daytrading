@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class AlertSeverity(str, Enum):
     """Alert severity levels."""
+
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -19,6 +20,7 @@ class AlertSeverity(str, Enum):
 
 class AlertChannel(str, Enum):
     """Alert delivery channels."""
+
     SLACK = "slack"
     EMAIL = "email"
     LOG = "log"
@@ -28,6 +30,7 @@ class AlertChannel(str, Enum):
 @dataclass
 class Alert:
     """Alert event."""
+
     id: str
     severity: AlertSeverity
     title: str
@@ -57,38 +60,38 @@ class AlertManager:
                 "name": "high_memory",
                 "condition": "memory > 90",
                 "severity": AlertSeverity.CRITICAL,
-                "enabled": True
+                "enabled": True,
             },
             {
                 "name": "high_cpu",
                 "condition": "cpu > 90",
                 "severity": AlertSeverity.WARNING,
-                "enabled": True
+                "enabled": True,
             },
             {
                 "name": "disk_full",
                 "condition": "disk > 90",
                 "severity": AlertSeverity.CRITICAL,
-                "enabled": True
+                "enabled": True,
             },
             {
                 "name": "db_disconnect",
                 "condition": "database.healthy == False",
                 "severity": AlertSeverity.CRITICAL,
-                "enabled": True
+                "enabled": True,
             },
             {
                 "name": "api_down",
                 "condition": "api.healthy == False",
                 "severity": AlertSeverity.CRITICAL,
-                "enabled": True
+                "enabled": True,
             },
             {
                 "name": "stale_data",
                 "condition": "data_age > 3600",
                 "severity": AlertSeverity.WARNING,
-                "enabled": True
-            }
+                "enabled": True,
+            },
         ]
 
     async def create_alert(
@@ -97,7 +100,7 @@ class AlertManager:
         title: str,
         message: str,
         service: str,
-        alert_id: str = None
+        alert_id: str = None,
     ) -> Alert:
         """Create a new alert."""
         if alert_id is None:
@@ -109,7 +112,7 @@ class AlertManager:
             title=title,
             message=message,
             service=service,
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.utcnow().isoformat(),
         )
 
         self.alerts.append(alert)
@@ -177,7 +180,7 @@ class AlertManager:
             color = {
                 AlertSeverity.INFO: "#36a64f",
                 AlertSeverity.WARNING: "#ff9900",
-                AlertSeverity.CRITICAL: "#ff0000"
+                AlertSeverity.CRITICAL: "#ff0000",
             }.get(alert.severity, "#808080")
 
             payload = {
@@ -188,9 +191,13 @@ class AlertManager:
                         "text": alert.message,
                         "fields": [
                             {"title": "Service", "value": alert.service, "short": True},
-                            {"title": "Severity", "value": alert.severity.value, "short": True},
-                            {"title": "Time", "value": alert.timestamp, "short": False}
-                        ]
+                            {
+                                "title": "Severity",
+                                "value": alert.severity.value,
+                                "short": True,
+                            },
+                            {"title": "Time", "value": alert.timestamp, "short": False},
+                        ],
                     }
                 ]
             }

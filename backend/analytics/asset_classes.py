@@ -2,13 +2,12 @@
 
 from enum import Enum
 from typing import Dict, List, Optional, Any
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 import logging
 
 from backend.config.asset_config import (
     AssetConfig,
     DEFAULT_ASSETS,
-    CurrencyConfig,
     PortfolioOptimizationConfig,
 )
 
@@ -17,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class AssetClass(str, Enum):
     """Asset classes supported by the platform."""
+
     CRYPTO = "crypto"
     US_EQUITY = "us_equity"
     EU_EQUITY = "eu_equity"
@@ -30,6 +30,7 @@ class AssetClass(str, Enum):
 
 class Region(str, Enum):
     """Geographic regions."""
+
     NORTH_AMERICA = "north_america"
     EUROPE = "europe"
     ASIA_PACIFIC = "asia_pacific"
@@ -39,6 +40,7 @@ class Region(str, Enum):
 
 class Sector(str, Enum):
     """Equity sectors."""
+
     TECHNOLOGY = "technology"
     HEALTHCARE = "healthcare"
     FINANCIALS = "financials"
@@ -55,11 +57,13 @@ class Sector(str, Enum):
 
 class InvalidAssetProfileError(ValueError):
     """Raised when AssetProfile is invalid."""
+
     pass
 
 
 class DuplicateAssetError(ValueError):
     """Raised when attempting to register duplicate asset."""
+
     pass
 
 
@@ -81,6 +85,7 @@ class AssetProfile:
         min_position_size: Minimum position value in USD
         max_position_size: Maximum position value in USD
     """
+
     symbol: str
     name: str
     asset_class: AssetClass
@@ -119,17 +124,25 @@ class AssetProfile:
         if self.sector is not None and not isinstance(self.sector, Sector):
             raise InvalidAssetProfileError(f"Invalid sector: {self.sector}")
         if not 0 <= self.volatility_rank <= 1:
-            raise InvalidAssetProfileError(f"Volatility rank must be 0-1, got {self.volatility_rank}")
+            raise InvalidAssetProfileError(
+                f"Volatility rank must be 0-1, got {self.volatility_rank}"
+            )
         if not 0 <= self.correlation_to_market <= 1:
-            raise InvalidAssetProfileError(f"Correlation must be 0-1, got {self.correlation_to_market}")
+            raise InvalidAssetProfileError(
+                f"Correlation must be 0-1, got {self.correlation_to_market}"
+            )
         if self.min_position_size < 0:
-            raise InvalidAssetProfileError(f"Min position size cannot be negative: {self.min_position_size}")
+            raise InvalidAssetProfileError(
+                f"Min position size cannot be negative: {self.min_position_size}"
+            )
         if self.max_position_size < self.min_position_size:
             raise InvalidAssetProfileError(
                 f"Max position {self.max_position_size} < min {self.min_position_size}"
             )
         if self.liquidity_tier not in ["liquid", "semi-liquid", "illiquid"]:
-            raise InvalidAssetProfileError(f"Invalid liquidity tier: {self.liquidity_tier}")
+            raise InvalidAssetProfileError(
+                f"Invalid liquidity tier: {self.liquidity_tier}"
+            )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert asset profile to dictionary.
@@ -217,13 +230,17 @@ class AssetRegistry:
             InvalidAssetProfileError: If profile is invalid
         """
         if not isinstance(profile, AssetProfile):
-            raise InvalidAssetProfileError(f"Expected AssetProfile, got {type(profile)}")
+            raise InvalidAssetProfileError(
+                f"Expected AssetProfile, got {type(profile)}"
+            )
         if profile.symbol in self.assets:
             raise DuplicateAssetError(f"Asset {profile.symbol} already registered")
 
         profile.validate()
         self.assets[profile.symbol] = profile
-        logger.debug(f"Registered asset: {profile.symbol} ({profile.asset_class.value})")
+        logger.debug(
+            f"Registered asset: {profile.symbol} ({profile.asset_class.value})"
+        )
 
     def get(self, symbol: str) -> Optional[AssetProfile]:
         """Get asset profile by symbol.
@@ -393,7 +410,10 @@ class SignalWeights:
             self.weights: Dict[str, Dict[str, float]] = weights
         else:
             # Deep copy to avoid modifying shared config
-            self.weights = {k: dict(v) for k, v in PortfolioOptimizationConfig.DEFAULT_SIGNAL_WEIGHTS.items()}
+            self.weights = {
+                k: dict(v)
+                for k, v in PortfolioOptimizationConfig.DEFAULT_SIGNAL_WEIGHTS.items()
+            }
 
     def get_weights(self, asset_class: AssetClass) -> Dict[str, float]:
         """Get signal component weights for asset class.

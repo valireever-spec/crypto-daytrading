@@ -1,9 +1,8 @@
 """Data Quality Measurement - Pillar #3 Hardening (Critical)."""
 
 import logging
-import math
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -12,6 +11,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DataQualityScore:
     """Data quality assessment results."""
+
     price_sanity: float  # 0-100
     symbol_coverage: float  # 0-100
     websocket_health: float  # 0-100
@@ -69,7 +69,9 @@ class DataQualityMeasurer:
             failures.append("price_sanity")
 
         # Dimension 2: Symbol Coverage (25%)
-        symbol_coverage = self._measure_symbol_coverage(current_prices, required_symbols)
+        symbol_coverage = self._measure_symbol_coverage(
+            current_prices, required_symbols
+        )
         if symbol_coverage < 100:
             failures.append("symbol_coverage")
 
@@ -171,7 +173,9 @@ class DataQualityMeasurer:
         coverage = len(current_prices) / len(required_symbols) * 100
         if coverage < 100:
             missing = len(required_symbols) - len(current_prices)
-            logger.warning(f"Symbol coverage: {coverage:.0f}% ({missing} symbols missing)")
+            logger.warning(
+                f"Symbol coverage: {coverage:.0f}% ({missing} symbols missing)"
+            )
 
         return min(100, coverage)
 
@@ -197,14 +201,18 @@ class DataQualityMeasurer:
                 else:
                     last_ts = last_update
                 age_seconds = (now - last_ts).total_seconds()
-                active_score = 100 if age_seconds < 5 else max(0, 100 - (age_seconds * 10))
+                active_score = (
+                    100 if age_seconds < 5 else max(0, 100 - (age_seconds * 10))
+                )
             except:
                 active_score = 50
         else:
             active_score = 0
 
         # Weighted health score
-        health_score = (connection_score * 0.5) + (stability_score * 0.3) + (active_score * 0.2)
+        health_score = (
+            (connection_score * 0.5) + (stability_score * 0.3) + (active_score * 0.2)
+        )
 
         if health_score < 90:
             logger.warning(
@@ -214,7 +222,9 @@ class DataQualityMeasurer:
 
         return health_score
 
-    def _measure_age_variance(self, last_updates: Dict[str, datetime], now: datetime) -> float:
+    def _measure_age_variance(
+        self, last_updates: Dict[str, datetime], now: datetime
+    ) -> float:
         """Dimension 4: Check if all prices have similar freshness.
 
         Rule: Max variance should be <5 seconds

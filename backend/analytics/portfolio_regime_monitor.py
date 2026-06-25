@@ -6,10 +6,9 @@ and generate correlated exit signals across portfolio.
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
-from datetime import datetime, timedelta
+from typing import Dict, List, Tuple, Any
+from datetime import datetime
 from dataclasses import dataclass
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RegimeFlip:
     """Detected regime change for a symbol."""
+
     symbol: str
     from_regime: str
     to_regime: str
@@ -28,6 +28,7 @@ class RegimeFlip:
 @dataclass
 class PortfolioRegimeState:
     """Current regime state for entire portfolio."""
+
     timestamp: datetime
     symbol_regimes: Dict[str, str]  # symbol → regime name
     regime_flips: List[RegimeFlip]  # Detected changes this check
@@ -81,29 +82,40 @@ class PortfolioRegimeMonitor:
 
             # Detect flip if we have previous state
             if previous_regime and previous_regime != current_regime:
-                severity = self._calculate_flip_severity(previous_regime, current_regime)
+                severity = self._calculate_flip_severity(
+                    previous_regime, current_regime
+                )
                 flip = RegimeFlip(
                     symbol=symbol,
                     from_regime=previous_regime,
                     to_regime=current_regime,
                     severity=severity,
                     timestamp=now,
-                    should_exit=current_regime in ["bear", "volatile"]
+                    should_exit=current_regime in ["bear", "volatile"],
                 )
                 flips.append(flip)
                 self.regime_change_history.append(flip)
 
-                logger.info(f"🔄 REGIME FLIP: {symbol} {previous_regime} → {current_regime} (severity: {severity:.2f})")
+                logger.info(
+                    f"🔄 REGIME FLIP: {symbol} {previous_regime} → {current_regime} (severity: {severity:.2f})"
+                )
 
                 # Generate exit signal if flipping to bear/volatile
                 if flip.should_exit and symbol in current_positions:
                     exit_signals.append(symbol)
-                    logger.warning(f"⚠️ EXIT SIGNAL: {symbol} flipped to {current_regime}, recommend closing position")
+                    logger.warning(
+                        f"⚠️ EXIT SIGNAL: {symbol} flipped to {current_regime}, recommend closing position"
+                    )
 
                 # Generate entry signal if flipping to bull/sideways
-                if current_regime in ["bull", "sideways"] and symbol not in current_positions:
+                if (
+                    current_regime in ["bull", "sideways"]
+                    and symbol not in current_positions
+                ):
                     entry_signals.append(symbol)
-                    logger.info(f"✅ ENTRY SIGNAL: {symbol} flipped to {current_regime}, favorable for entry")
+                    logger.info(
+                        f"✅ ENTRY SIGNAL: {symbol} flipped to {current_regime}, favorable for entry"
+                    )
 
         # Calculate portfolio-level regime
         portfolio_regime = self._calculate_portfolio_regime(symbol_regimes)
@@ -115,7 +127,9 @@ class PortfolioRegimeMonitor:
 
         state = PortfolioRegimeState(
             timestamp=now,
-            symbol_regimes={s: r.get("regime", "unknown") for s, r in symbol_regimes.items()},
+            symbol_regimes={
+                s: r.get("regime", "unknown") for s, r in symbol_regimes.items()
+            },
             regime_flips=flips,
             portfolio_regime=portfolio_regime,
             exit_signals=exit_signals,
@@ -124,8 +138,10 @@ class PortfolioRegimeMonitor:
         )
 
         # Log portfolio-level regime
-        logger.info(f"📊 Portfolio regime: {portfolio_regime} | "
-                   f"Exits: {len(exit_signals)} | Entries: {len(entry_signals)}")
+        logger.info(
+            f"📊 Portfolio regime: {portfolio_regime} | "
+            f"Exits: {len(exit_signals)} | Entries: {len(entry_signals)}"
+        )
 
         return state
 
@@ -233,16 +249,24 @@ class PortfolioRegimeMonitor:
         exits = []
 
         for flip in self.regime_change_history[-10:]:  # Check recent flips
-            if flip.should_exit and flip.symbol in [p['symbol'] for p in current_positions]:
-                pos = next((p for p in current_positions if p['symbol'] == flip.symbol), None)
+            if flip.should_exit and flip.symbol in [
+                p["symbol"] for p in current_positions
+            ]:
+                pos = next(
+                    (p for p in current_positions if p["symbol"] == flip.symbol), None
+                )
                 if pos:
-                    exits.append({
-                        "symbol": flip.symbol,
-                        "reason": f"Regime flip: {flip.from_regime} → {flip.to_regime}",
-                        "urgency": min(flip.severity * 10, 10),  # 0-10 scale
-                        "detected_at": flip.timestamp,
-                        "recommendation": "CLOSE" if flip.severity > 0.7 else "REDUCE"
-                    })
+                    exits.append(
+                        {
+                            "symbol": flip.symbol,
+                            "reason": f"Regime flip: {flip.from_regime} → {flip.to_regime}",
+                            "urgency": min(flip.severity * 10, 10),  # 0-10 scale
+                            "detected_at": flip.timestamp,
+                            "recommendation": "CLOSE"
+                            if flip.severity > 0.7
+                            else "REDUCE",
+                        }
+                    )
 
         return exits
 
@@ -266,9 +290,7 @@ class PortfolioRegimeMonitor:
         }
         """
         # Calculate sector-level regimes
-        sector_regimes = self._calculate_sector_regimes(
-            symbol_sectors, symbol_regimes
-        )
+        sector_regimes = self._calculate_sector_regimes(symbol_sectors, symbol_regimes)
 
         # Identify strong and weak sectors
         strong_sectors = [s for s, r in sector_regimes.items() if r == "bull"]
@@ -278,13 +300,11 @@ class PortfolioRegimeMonitor:
         if strong_sectors and weak_sectors:
             # Find sectors we're currently overweight in weak areas
             overweight_weak = [
-                s for s in weak_sectors
-                if current_allocation.get(s, 0) > 0.15
+                s for s in weak_sectors if current_allocation.get(s, 0) > 0.15
             ]
 
             underweight_strong = [
-                s for s in strong_sectors
-                if current_allocation.get(s, 0) < 0.20
+                s for s in strong_sectors if current_allocation.get(s, 0) < 0.20
             ]
 
             if overweight_weak and underweight_strong:
@@ -293,7 +313,7 @@ class PortfolioRegimeMonitor:
                     "from_sector": overweight_weak[0],
                     "to_sector": underweight_strong[0],
                     "confidence": 0.8,
-                    "rationale": f"Rotate from {overweight_weak[0]} (bear) to {underweight_strong[0]} (bull)"
+                    "rationale": f"Rotate from {overweight_weak[0]} (bear) to {underweight_strong[0]} (bull)",
                 }
 
         return {
@@ -301,7 +321,7 @@ class PortfolioRegimeMonitor:
             "from_sector": None,
             "to_sector": None,
             "confidence": 0.0,
-            "rationale": "No rotation opportunity detected"
+            "rationale": "No rotation opportunity detected",
         }
 
     def _calculate_sector_regimes(
@@ -347,16 +367,24 @@ class PortfolioRegimeMonitor:
           - Volatility elevated across board
         """
         bear_volatile_count = sum(
-            1 for r in symbol_regimes.values()
+            1
+            for r in symbol_regimes.values()
             if r.get("regime") in ["bear", "volatile"]
         )
 
-        stress_from_regimes = bear_volatile_count / len(symbol_regimes) if symbol_regimes else 0
+        stress_from_regimes = (
+            bear_volatile_count / len(symbol_regimes) if symbol_regimes else 0
+        )
 
         # Add stress from recent flips
-        recent_flips = [f for f in self.regime_change_history
-                       if (datetime.utcnow() - f.timestamp).total_seconds() < 86400]
-        stress_from_flips = min(len(recent_flips) / 5, 1.0)  # Max stress at 5+ flips/day
+        recent_flips = [
+            f
+            for f in self.regime_change_history
+            if (datetime.utcnow() - f.timestamp).total_seconds() < 86400
+        ]
+        stress_from_flips = min(
+            len(recent_flips) / 5, 1.0
+        )  # Max stress at 5+ flips/day
 
         # Combined stress level (weighted average)
         stress_level = (stress_from_regimes * 0.6) + (stress_from_flips * 0.4)
@@ -373,7 +401,9 @@ class PortfolioRegimeMonitor:
 
         for flip in recent_flips:
             emoji = "⚠️" if flip.should_exit else "✅"
-            summary += f"  {emoji} {flip.symbol}: {flip.from_regime} → {flip.to_regime}\n"
+            summary += (
+                f"  {emoji} {flip.symbol}: {flip.from_regime} → {flip.to_regime}\n"
+            )
 
         return summary
 

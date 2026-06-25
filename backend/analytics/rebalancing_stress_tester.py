@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StressTestResult:
     """Result of stress test for rebalancing."""
+
     scenario_name: str
     allocation_under_stress: Dict[str, float]
     constraint_violations: List[str]
@@ -75,15 +76,14 @@ class RebalancingStressTester:
         # Use scenario multipliers to adjust base returns
         symbols = list(target_allocation.keys())
         scenario_returns = {s: 8.0 * scenario.return_multiplier for s in symbols}
-        scenario_volatilities = {s: 15.0 * scenario.volatility_multiplier for s in symbols}
+        scenario_volatilities = {
+            s: 15.0 * scenario.volatility_multiplier for s in symbols
+        }
 
         # Identity correlation matrix adjusted by scenario
         n = len(symbols)
         correlations = np.eye(n) * 0.7 + np.ones((n, n)) * 0.3
-        correlations = self.customizer.adjust_correlation_matrix(
-            correlations,
-            scenario
-        )
+        correlations = self.customizer.adjust_correlation_matrix(correlations, scenario)
 
         return self.stress_test_allocation(
             target_allocation=target_allocation,
@@ -132,10 +132,15 @@ class RebalancingStressTester:
         volatilities = np.array([scenario_volatilities.get(s, 0) for s in symbols])
 
         port_return = np.dot(weights, returns)
-        port_vol = np.sqrt(np.dot(weights, np.dot(
-            scenario_correlations * np.outer(volatilities, volatilities),
-            weights
-        )))
+        port_vol = np.sqrt(
+            np.dot(
+                weights,
+                np.dot(
+                    scenario_correlations * np.outer(volatilities, volatilities),
+                    weights,
+                ),
+            )
+        )
 
         # Simulate drawdown
         np.random.seed(42)
@@ -145,7 +150,9 @@ class RebalancingStressTester:
             cumulative_returns.append(cumulative_returns[-1] * (1 + daily_ret / 100))
 
         cumulative_returns = np.array(cumulative_returns)
-        drawdown = np.max(cumulative_returns / np.maximum.accumulate(cumulative_returns) - 1)
+        drawdown = np.max(
+            cumulative_returns / np.maximum.accumulate(cumulative_returns) - 1
+        )
         worst_drawdown_pct = drawdown * 100
 
         # Estimate recovery time (when back to peak)
@@ -270,7 +277,9 @@ class RebalancingStressTester:
                     target_allocation=alloc,
                     scenario_returns=scenario.get("returns", {}),
                     scenario_volatilities=scenario.get("volatilities", {}),
-                    scenario_correlations=scenario.get("correlations", np.eye(len(alloc))),
+                    scenario_correlations=scenario.get(
+                        "correlations", np.eye(len(alloc))
+                    ),
                     scenario_name=scenario.get("name", "Unknown"),
                 )
                 worst_drawdowns.append(result.worst_case_drawdown_pct)

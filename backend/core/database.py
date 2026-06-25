@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
-from dataclasses import asdict
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,8 @@ class TradingDatabase:
         cursor = conn.cursor()
 
         # Positions table: track open trades
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS open_positions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 symbol TEXT NOT NULL,
@@ -45,10 +45,12 @@ class TradingDatabase:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         # Trades table: audit trail of all fills (PILLAR #10: Hash-verified, append-only)
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 symbol TEXT NOT NULL,
@@ -62,35 +64,42 @@ class TradingDatabase:
                 hash TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         # HARDENING (Pillar #10): Create triggers to enforce append-only semantics
         # Prevent UPDATE on trades table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TRIGGER IF NOT EXISTS prevent_trade_update
             BEFORE UPDATE ON trades
             BEGIN
               SELECT RAISE(ABORT, 'Trades table is append-only: UPDATE not allowed');
             END
-        """)
+        """
+        )
 
         # Prevent DELETE on trades table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TRIGGER IF NOT EXISTS prevent_trade_delete
             BEFORE DELETE ON trades
             BEGIN
               SELECT RAISE(ABORT, 'Trades table is append-only: DELETE not allowed');
             END
-        """)
+        """
+        )
 
         # Configuration snapshots for rollback
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS config_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 config_json TEXT NOT NULL,
                 snapshot_time TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         conn.commit()
         conn.close()
@@ -106,8 +115,14 @@ class TradingDatabase:
             cursor.execute("PRAGMA table_info(trades)")
             columns = {row[1]: row[2] for row in cursor.fetchall()}
 
-            required_cols = {"id": "INTEGER", "symbol": "TEXT", "side": "TEXT",
-                           "quantity": "REAL", "price": "REAL", "trade_time": "TEXT"}
+            required_cols = {
+                "id": "INTEGER",
+                "symbol": "TEXT",
+                "side": "TEXT",
+                "quantity": "REAL",
+                "price": "REAL",
+                "trade_time": "TEXT",
+            }
 
             for col_name, col_type in required_cols.items():
                 if col_name not in columns:
@@ -118,12 +133,19 @@ class TradingDatabase:
             cursor.execute("PRAGMA table_info(open_positions)")
             pos_columns = {row[1]: row[2] for row in cursor.fetchall()}
 
-            pos_required = {"id": "INTEGER", "symbol": "TEXT", "quantity": "REAL",
-                          "entry_price": "REAL", "entry_time": "TEXT"}
+            pos_required = {
+                "id": "INTEGER",
+                "symbol": "TEXT",
+                "quantity": "REAL",
+                "entry_price": "REAL",
+                "entry_time": "TEXT",
+            }
 
             for col_name, col_type in pos_required.items():
                 if col_name not in pos_columns:
-                    logger.critical(f"🚨 SCHEMA POISONED: open_positions.{col_name} missing!")
+                    logger.critical(
+                        f"🚨 SCHEMA POISONED: open_positions.{col_name} missing!"
+                    )
                     raise RuntimeError(f"Database schema corrupted: missing {col_name}")
 
             conn.close()
@@ -180,12 +202,12 @@ class TradingDatabase:
         """
         # Create deterministic representation (sorted keys for consistency)
         data_to_hash = {
-            'symbol': trade_data.get('symbol'),
-            'side': trade_data.get('side'),
-            'quantity': trade_data.get('quantity'),
-            'price': trade_data.get('price'),
-            'trade_time': trade_data.get('trade_time'),
-            'order_id': trade_data.get('order_id'),
+            "symbol": trade_data.get("symbol"),
+            "side": trade_data.get("side"),
+            "quantity": trade_data.get("quantity"),
+            "price": trade_data.get("price"),
+            "trade_time": trade_data.get("trade_time"),
+            "order_id": trade_data.get("order_id"),
         }
         json_str = json.dumps(data_to_hash, sort_keys=True)
         return hashlib.sha256(json_str.encode()).hexdigest()
@@ -214,18 +236,22 @@ class TradingDatabase:
 
             # Pillar #10: Only verify if hash column exists (backward compatible)
             try:
-                stored_hash = row['hash']
+                stored_hash = row["hash"]
                 # Recalculate hash from current data
                 current_hash = self._calculate_trade_hash(dict(row))
 
                 if stored_hash != current_hash:
-                    logger.error(f"🚨 HASH MISMATCH: Trade {trade_id} has been tampered with!")
+                    logger.error(
+                        f"🚨 HASH MISMATCH: Trade {trade_id} has been tampered with!"
+                    )
                     logger.error(f"   Stored:   {stored_hash}")
                     logger.error(f"   Current:  {current_hash}")
                     return False
             except (KeyError, TypeError):
                 # No hash field in old trades - skip verification for backward compatibility
-                logger.debug(f"Trade {trade_id}: No hash field (legacy data), skipping verification")
+                logger.debug(
+                    f"Trade {trade_id}: No hash field (legacy data), skipping verification"
+                )
 
             return True
 
@@ -263,7 +289,9 @@ class TradingDatabase:
                     corrupted.append(trade_id)
 
             if corrupted:
-                logger.error(f"🚨 DATABASE INTEGRITY FAILED: {len(corrupted)}/{len(trade_ids)} recent trades corrupted!")
+                logger.error(
+                    f"🚨 DATABASE INTEGRITY FAILED: {len(corrupted)}/{len(trade_ids)} recent trades corrupted!"
+                )
                 logger.error(f"   Corrupted trades: {corrupted}")
                 return False
 
@@ -314,7 +342,9 @@ class TradingDatabase:
             conn.commit()
             position_id = cursor.lastrowid
 
-            logger.info(f"Position saved to DB: {symbol} {quantity} @ {entry_price} (id={position_id})")
+            logger.info(
+                f"Position saved to DB: {symbol} {quantity} @ {entry_price} (id={position_id})"
+            )
             return position_id
 
         except Exception as e:
@@ -372,7 +402,9 @@ class TradingDatabase:
         if positions:
             logger.info(f"Restored {len(positions)} open positions from DB")
             for pos in positions:
-                logger.info(f"  - {pos['symbol']}: {pos['quantity']} @ {pos['entry_price']}")
+                logger.info(
+                    f"  - {pos['symbol']}: {pos['quantity']} @ {pos['entry_price']}"
+                )
 
         return positions
 
@@ -388,7 +420,9 @@ class TradingDatabase:
             cursor.execute("DELETE FROM open_positions WHERE status = 'OPEN'")
             conn.commit()
             deleted = cursor.rowcount
-            logger.critical(f"🚨 CLEARED {deleted} STALE POSITIONS - DATABASE INTEGRITY CHECK")
+            logger.critical(
+                f"🚨 CLEARED {deleted} STALE POSITIONS - DATABASE INTEGRITY CHECK"
+            )
         except Exception as e:
             logger.error(f"Failed to clear positions: {e}")
             conn.rollback()
@@ -433,7 +467,9 @@ class TradingDatabase:
         # Validate slippage_pct if provided
         if slippage_pct is not None:
             if not isinstance(slippage_pct, (int, float)):
-                raise ValueError(f"slippage_pct must be numeric, got {type(slippage_pct)}")
+                raise ValueError(
+                    f"slippage_pct must be numeric, got {type(slippage_pct)}"
+                )
             if slippage_pct < -100 or slippage_pct > 100:
                 raise ValueError(f"slippage_pct out of range: {slippage_pct}")
 
@@ -444,12 +480,12 @@ class TradingDatabase:
 
             # HARDENING (Pillar #10): Calculate hash for integrity verification
             trade_data = {
-                'symbol': symbol,
-                'side': side,
-                'quantity': quantity,
-                'price': price,
-                'trade_time': trade_time.isoformat(),
-                'order_id': order_id,
+                "symbol": symbol,
+                "side": side,
+                "quantity": quantity,
+                "price": price,
+                "trade_time": trade_time.isoformat(),
+                "order_id": order_id,
             }
             trade_hash = self._calculate_trade_hash(trade_data)
 
@@ -458,13 +494,24 @@ class TradingDatabase:
                 INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, status, hash)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'FILLED', ?)
                 """,
-                (symbol, side, quantity, price, trade_time.isoformat(), order_id, slippage_pct, trade_hash),
+                (
+                    symbol,
+                    side,
+                    quantity,
+                    price,
+                    trade_time.isoformat(),
+                    order_id,
+                    slippage_pct,
+                    trade_hash,
+                ),
             )
 
             conn.commit()
             trade_id = cursor.lastrowid
 
-            logger.info(f"Trade logged to DB (hash-verified): {side} {symbol} {quantity} @ {price} (id={trade_id})")
+            logger.info(
+                f"Trade logged to DB (hash-verified): {side} {symbol} {quantity} @ {price} (id={trade_id})"
+            )
             return trade_id
 
         except sqlite3.IntegrityError as e:

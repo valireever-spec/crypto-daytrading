@@ -28,7 +28,9 @@ async def detect_market_regime_router(symbol: str) -> JSONResponse:
         # Get historical data
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+            raise HTTPException(
+                status_code=500, detail="Historical data service not initialized"
+            )
 
         end = datetime.now()
         start = end - timedelta(days=60)
@@ -36,14 +38,15 @@ async def detect_market_regime_router(symbol: str) -> JSONResponse:
         ohlcv = hist_service.fetch_ohlcv(symbol, start, end)
         if ohlcv is None or ohlcv.empty:
             raise HTTPException(
-                status_code=404,
-                detail=f"No historical data found for {symbol}"
+                status_code=404, detail=f"No historical data found for {symbol}"
             )
 
         # Detect regime
         detector = get_regime_detector()
         if not detector:
-            raise HTTPException(status_code=500, detail="Regime detector not initialized")
+            raise HTTPException(
+                status_code=500, detail="Regime detector not initialized"
+            )
 
         metrics = detector.detect_regime(ohlcv)
 
@@ -66,7 +69,9 @@ async def detect_market_regime_router(symbol: str) -> JSONResponse:
         raise
     except Exception as e:
         logger.error(f"Regime detection error: {e}")
-        raise HTTPException(status_code=500, detail=f"Regime detection failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Regime detection failed: {str(e)}"
+        )
 
 
 @router.get("/strategy-impact")
@@ -105,8 +110,8 @@ async def get_strategy_impact(symbol: str = "BTCUSDT") -> JSONResponse:
         # Adjust strategy weights based on regime
         if regime == "bull":
             strategy_adjustments = {
-                "momentum": 1.2,    # Increase momentum in bull
-                "reversion": 0.8,   # Decrease reversion
+                "momentum": 1.2,  # Increase momentum in bull
+                "reversion": 0.8,  # Decrease reversion
                 "grid": 1.0,
                 "trend": 1.1,
             }
@@ -114,8 +119,8 @@ async def get_strategy_impact(symbol: str = "BTCUSDT") -> JSONResponse:
             avoid = ["reversion"]
         elif regime == "bear":
             strategy_adjustments = {
-                "momentum": 0.6,    # Avoid momentum in bear
-                "reversion": 1.3,   # Increase reversion (catch rebounds)
+                "momentum": 0.6,  # Avoid momentum in bear
+                "reversion": 1.3,  # Increase reversion (catch rebounds)
                 "grid": 0.9,
                 "trend": 0.7,
             }
@@ -124,7 +129,7 @@ async def get_strategy_impact(symbol: str = "BTCUSDT") -> JSONResponse:
         elif regime == "sideways":
             strategy_adjustments = {
                 "momentum": 0.7,
-                "reversion": 1.2,   # Grid works best in sideways
+                "reversion": 1.2,  # Grid works best in sideways
                 "grid": 1.3,
                 "trend": 0.6,
             }
@@ -134,7 +139,7 @@ async def get_strategy_impact(symbol: str = "BTCUSDT") -> JSONResponse:
             strategy_adjustments = {
                 "momentum": 0.8,
                 "reversion": 0.9,
-                "grid": 0.6,        # Avoid grid in high volatility
+                "grid": 0.6,  # Avoid grid in high volatility
                 "trend": 1.1,
             }
             recommended = ["trend"]
@@ -150,16 +155,20 @@ async def get_strategy_impact(symbol: str = "BTCUSDT") -> JSONResponse:
             recommended = ["grid", "momentum"]
             avoid = []
 
-        return JSONResponse({
-            "symbol": symbol,
-            "regime": regime,
-            "regime_confidence": confidence,
-            "strategy_adjustments": strategy_adjustments,
-            "recommended_strategies": recommended,
-            "avoid_strategies": avoid,
-            "guidance": f"In {regime} market, favor {', '.join(recommended)} strategies"
-        })
+        return JSONResponse(
+            {
+                "symbol": symbol,
+                "regime": regime,
+                "regime_confidence": confidence,
+                "strategy_adjustments": strategy_adjustments,
+                "recommended_strategies": recommended,
+                "avoid_strategies": avoid,
+                "guidance": f"In {regime} market, favor {', '.join(recommended)} strategies",
+            }
+        )
 
     except Exception as e:
         logger.error(f"Strategy impact error: {e}")
-        raise HTTPException(status_code=500, detail=f"Strategy impact analysis failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Strategy impact analysis failed: {str(e)}"
+        )

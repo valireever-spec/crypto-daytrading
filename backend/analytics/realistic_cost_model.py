@@ -5,7 +5,7 @@ Accurate execution cost estimation by symbol liquidity tier.
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -18,6 +18,7 @@ TIERS_CONFIG_FILE = Path("config/cost_model_tiers.json")
 @dataclass
 class CostBreakdown:
     """Detailed cost breakdown."""
+
     execution_cost_pct: float  # Bid-ask spread
     slippage_cost_pct: float  # Volume impact
     tax_cost_pct: float  # Realized gains tax
@@ -115,9 +116,7 @@ class RealisticCostModel:
         Execution cost as %
         """
         tier = self.get_symbol_tier(symbol)
-        execution_bps, slippage_bps_per_pct = self.LIQUIDITY_TIERS.get(
-            tier, (4.0, 0.8)
-        )
+        execution_bps, slippage_bps_per_pct = self.LIQUIDITY_TIERS.get(tier, (4.0, 0.8))
 
         # Base execution cost + volume impact
         execution_cost = (execution_bps + slippage_bps_per_pct * volume_pct) / 10000
@@ -241,7 +240,9 @@ class RealisticCostModel:
         """
         # Higher volatility = higher costs
         volatility_multiplier = 1.0 + (volatility_pct - 15.0) * 0.01  # 1x at 15% vol
-        volatility_multiplier = max(0.8, min(2.0, volatility_multiplier))  # Clamp to [0.8, 2.0]
+        volatility_multiplier = max(
+            0.8, min(2.0, volatility_multiplier)
+        )  # Clamp to [0.8, 2.0]
 
         # Direct spread impact
         spread_multiplier = 1.0 + spread_pct

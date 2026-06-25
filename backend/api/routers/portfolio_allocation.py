@@ -5,14 +5,13 @@ REST API for portfolio optimization, efficient frontier, and rebalancing.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 import pandas as pd
 
 from backend.analytics.portfolio_optimizer import (
     get_portfolio_optimizer,
-    AllocationTarget,
 )
 from backend.exchange.paper_trading import get_paper_trading
 from backend.analytics.historical_data import get_historical_service
@@ -24,8 +23,12 @@ router = APIRouter(prefix="/api/allocation", tags=["allocation"])
 
 @router.get("/optimize")
 async def get_optimal_allocation(
-    risk_level: str = Query("balanced", description="conservative/moderate/balanced/aggressive/extreme"),
-    lookback_days: int = Query(365, ge=30, le=1000, description="Days of history for optimization"),
+    risk_level: str = Query(
+        "balanced", description="conservative/moderate/balanced/aggressive/extreme"
+    ),
+    lookback_days: int = Query(
+        365, ge=30, le=1000, description="Days of history for optimization"
+    ),
 ) -> Dict[str, Any]:
     """
     Get optimal portfolio allocation for a risk level.
@@ -55,7 +58,13 @@ async def get_optimal_allocation(
     }
     """
     try:
-        if risk_level not in ["conservative", "moderate", "balanced", "aggressive", "extreme"]:
+        if risk_level not in [
+            "conservative",
+            "moderate",
+            "balanced",
+            "aggressive",
+            "extreme",
+        ]:
             raise HTTPException(
                 status_code=400,
                 detail="Risk level must be: conservative, moderate, balanced, aggressive, or extreme",
@@ -64,7 +73,9 @@ async def get_optimal_allocation(
         # Get historical returns
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=503, detail="Historical data service not available")
+            raise HTTPException(
+                status_code=503, detail="Historical data service not available"
+            )
 
         # Fetch returns for common symbols
         symbols = ["BTCUSDT", "EQ_AAPL", "EQ_MSFT", "EQ_GOOGL", "EQ_NVDA"]
@@ -72,7 +83,9 @@ async def get_optimal_allocation(
 
         for symbol in symbols:
             try:
-                df = hist_service.get_candles(symbol, timeframe="1d", limit=lookback_days)
+                df = hist_service.get_candles(
+                    symbol, timeframe="1d", limit=lookback_days
+                )
                 if not df.empty and len(df) > 20:
                     df["return"] = df["close"].pct_change() * 100
                     returns[symbol] = df["return"]
@@ -101,7 +114,9 @@ async def get_optimal_allocation(
             "risk_level": allocation.risk_level,
             "target_return_pct": safe_round(allocation.target_return_pct, 2),
             "target_volatility_pct": safe_round(allocation.target_volatility_pct, 2),
-            "allocation": {k: safe_round(v, 2) for k, v in allocation.allocation.items()},
+            "allocation": {
+                k: safe_round(v, 2) for k, v in allocation.allocation.items()
+            },
             "sharpe_ratio": safe_round(allocation.sharpe_ratio, 2),
             "diversification_ratio": safe_round(allocation.diversification_ratio, 2),
         }
@@ -141,14 +156,18 @@ async def get_efficient_frontier(
         # Get historical returns
         hist_service = get_historical_service()
         if not hist_service:
-            raise HTTPException(status_code=503, detail="Historical data service not available")
+            raise HTTPException(
+                status_code=503, detail="Historical data service not available"
+            )
 
         symbols = ["BTCUSDT", "EQ_AAPL", "EQ_MSFT", "EQ_GOOGL", "EQ_NVDA"]
         returns = {}
 
         for symbol in symbols:
             try:
-                df = hist_service.get_candles(symbol, timeframe="1d", limit=lookback_days)
+                df = hist_service.get_candles(
+                    symbol, timeframe="1d", limit=lookback_days
+                )
                 if not df.empty and len(df) > 20:
                     df["return"] = df["close"].pct_change() * 100
                     returns[symbol] = df["return"]
@@ -164,14 +183,19 @@ async def get_efficient_frontier(
         frontier = optimizer.efficient_frontier(returns=returns, n_points=n_points)
 
         if not frontier:
-            raise HTTPException(status_code=400, detail="Could not calculate efficient frontier")
+            raise HTTPException(
+                status_code=400, detail="Could not calculate efficient frontier"
+            )
 
         # Find point with max Sharpe (filter out NaN)
         valid_frontier = [p for p in frontier if not pd.isna(p.sharpe_ratio)]
         if not valid_frontier:
             valid_frontier = frontier
 
-        optimal = max(valid_frontier, key=lambda p: p.sharpe_ratio if not pd.isna(p.sharpe_ratio) else 0)
+        optimal = max(
+            valid_frontier,
+            key=lambda p: p.sharpe_ratio if not pd.isna(p.sharpe_ratio) else 0,
+        )
 
         def safe_round(val, decimals=2):
             if pd.isna(val) or (isinstance(val, float) and (val != val)):
@@ -185,7 +209,9 @@ async def get_efficient_frontier(
                     "volatility_pct": safe_round(p.volatility_pct, 2),
                     "expected_return_pct": safe_round(p.expected_return_pct, 2),
                     "sharpe_ratio": safe_round(p.sharpe_ratio, 2),
-                    "allocation": {k: safe_round(v, 2) for k, v in p.allocation.items()},
+                    "allocation": {
+                        k: safe_round(v, 2) for k, v in p.allocation.items()
+                    },
                 }
                 for p in frontier
             ],
@@ -193,7 +219,9 @@ async def get_efficient_frontier(
                 "volatility_pct": safe_round(optimal.volatility_pct, 2),
                 "expected_return_pct": safe_round(optimal.expected_return_pct, 2),
                 "sharpe_ratio": safe_round(optimal.sharpe_ratio, 2),
-                "allocation": {k: safe_round(v, 2) for k, v in optimal.allocation.items()},
+                "allocation": {
+                    k: safe_round(v, 2) for k, v in optimal.allocation.items()
+                },
             },
         }
 
@@ -228,7 +256,9 @@ async def get_current_allocation() -> Dict[str, Any]:
     try:
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=503, detail="Paper trading engine not available")
+            raise HTTPException(
+                status_code=503, detail="Paper trading engine not available"
+            )
 
         positions = engine.get_positions()
         account = engine.get_account_state()
@@ -271,7 +301,9 @@ async def get_current_allocation() -> Dict[str, Any]:
 @router.get("/recommended-rebalancing")
 async def get_recommended_rebalancing(
     risk_level: str = Query("balanced", description="Target risk level"),
-    max_trade_pct: float = Query(2.0, ge=0.1, le=10.0, description="Max trade size as % of portfolio"),
+    max_trade_pct: float = Query(
+        2.0, ge=0.1, le=10.0, description="Max trade size as % of portfolio"
+    ),
 ) -> Dict[str, Any]:
     """
     Get rebalancing recommendations to reach target allocation.
@@ -310,7 +342,13 @@ async def get_recommended_rebalancing(
     }
     """
     try:
-        if risk_level not in ["conservative", "moderate", "balanced", "aggressive", "extreme"]:
+        if risk_level not in [
+            "conservative",
+            "moderate",
+            "balanced",
+            "aggressive",
+            "extreme",
+        ]:
             raise HTTPException(
                 status_code=400,
                 detail="Risk level must be: conservative, moderate, balanced, aggressive, or extreme",
@@ -319,7 +357,9 @@ async def get_recommended_rebalancing(
         # Get current allocation
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=503, detail="Paper trading engine not available")
+            raise HTTPException(
+                status_code=503, detail="Paper trading engine not available"
+            )
 
         positions = engine.get_positions()
         account = engine.get_account_state()
@@ -356,8 +396,12 @@ async def get_recommended_rebalancing(
 
         return {
             "timestamp": datetime.utcnow().isoformat(),
-            "current_allocation": {k: round(v, 2) for k, v in plan.current_allocation.items()},
-            "target_allocation": {k: round(v, 2) for k, v in plan.target_allocation.items()},
+            "current_allocation": {
+                k: round(v, 2) for k, v in plan.current_allocation.items()
+            },
+            "target_allocation": {
+                k: round(v, 2) for k, v in plan.target_allocation.items()
+            },
             "trades": plan.trades,
             "total_trade_volume_eur": round(plan.total_trade_volume_eur, 2),
             "estimated_cost_eur": round(plan.estimated_cost_eur, 2),
@@ -425,13 +469,15 @@ async def get_risk_return_profile() -> Dict[str, Any]:
                 risk_level=risk_level,
             )
 
-            profiles.append({
-                "risk_level": risk_level,
-                "target_return_pct": round(allocation.target_return_pct, 2),
-                "target_volatility_pct": round(allocation.target_volatility_pct, 2),
-                "sharpe_ratio": round(allocation.sharpe_ratio, 2),
-                "suitable_for": description,
-            })
+            profiles.append(
+                {
+                    "risk_level": risk_level,
+                    "target_return_pct": round(allocation.target_return_pct, 2),
+                    "target_volatility_pct": round(allocation.target_volatility_pct, 2),
+                    "sharpe_ratio": round(allocation.sharpe_ratio, 2),
+                    "suitable_for": description,
+                }
+            )
 
         return {
             "timestamp": datetime.utcnow().isoformat(),

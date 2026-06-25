@@ -5,7 +5,7 @@ Constraint management, scenario customization, and performance tracking.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Body, Query
 import numpy as np
@@ -46,7 +46,9 @@ async def add_sector_limit(
     """
     try:
         if max_weight_pct <= 0 or max_weight_pct > 100:
-            raise HTTPException(status_code=400, detail="max_weight_pct must be between 0 and 100")
+            raise HTTPException(
+                status_code=400, detail="max_weight_pct must be between 0 and 100"
+            )
 
         manager = get_constraint_manager()
         manager.add_sector_limit(sector, max_weight_pct)
@@ -88,7 +90,10 @@ async def add_concentration_limit(
     """
     try:
         if max_single_position_pct <= 0 or max_single_position_pct > 100:
-            raise HTTPException(status_code=400, detail="max_single_position_pct must be between 0 and 100")
+            raise HTTPException(
+                status_code=400,
+                detail="max_single_position_pct must be between 0 and 100",
+            )
 
         manager = get_constraint_manager()
         manager.add_concentration_limit(max_single_position_pct)
@@ -109,7 +114,9 @@ async def add_concentration_limit(
 
 @router.post("/constraints/validate")
 async def validate_allocation(
-    allocation: Dict[str, float] = Body(..., description="Allocation {symbol: weight %}"),
+    allocation: Dict[str, float] = Body(
+        ..., description="Allocation {symbol: weight %}"
+    ),
 ) -> Dict[str, Any]:
     """
     Validate allocation against current constraints.
@@ -153,7 +160,9 @@ async def validate_allocation(
 async def analyze_predefined_scenario(
     scenario_name: str = Body(..., description="Predefined scenario name"),
     symbols: List[str] = Body(..., description="Symbols to analyze"),
-    allocation: Dict[str, float] = Body(..., description="Allocation {symbol: weight %}"),
+    allocation: Dict[str, float] = Body(
+        ..., description="Allocation {symbol: weight %}"
+    ),
 ) -> Dict[str, Any]:
     """
     Analyze portfolio under a predefined scenario.
@@ -188,7 +197,7 @@ async def analyze_predefined_scenario(
             available = list(customizer.list_predefined_scenarios().keys())
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown scenario. Available: {', '.join(available)}"
+                detail=f"Unknown scenario. Available: {', '.join(available)}",
             )
 
         # Fetch historical data
@@ -198,15 +207,19 @@ async def analyze_predefined_scenario(
 
         # Analyze scenario
         base_metrics = {
-            "expected_return_pct": np.mean([
-                r.mean() * 252 for r in historical_returns.values()
-            ]) * 100,
-            "volatility_pct": np.mean([
-                r.std() * np.sqrt(252) for r in historical_returns.values()
-            ]) * 100,
+            "expected_return_pct": np.mean(
+                [r.mean() * 252 for r in historical_returns.values()]
+            )
+            * 100,
+            "volatility_pct": np.mean(
+                [r.std() * np.sqrt(252) for r in historical_returns.values()]
+            )
+            * 100,
         }
 
-        result = customizer.analyze_scenario(scenario, historical_returns, allocation, base_metrics)
+        result = customizer.analyze_scenario(
+            scenario, historical_returns, allocation, base_metrics
+        )
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -251,8 +264,7 @@ async def list_scenarios() -> Dict[str, Any]:
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "scenarios": [
-                {"name": name, "description": desc}
-                for name, desc in scenarios.items()
+                {"name": name, "description": desc} for name, desc in scenarios.items()
             ],
             "total": len(scenarios),
         }

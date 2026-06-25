@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ConstraintSpec:
     """Portfolio constraint specification."""
+
     constraint_type: str  # "sector", "concentration", "min_position", "max_position", "asset_class"
     target: str  # sector name, "all", etc.
     min_value: Optional[float] = None  # For min position
@@ -24,6 +25,7 @@ class ConstraintSpec:
 @dataclass
 class SectorAssignment:
     """Symbol to sector mapping."""
+
     symbol: str
     sector: str
     weight_pct: float = 0.0
@@ -144,7 +146,9 @@ class ConstraintManager:
         self.asset_class_map = asset_class_map
         logger.info(f"Set asset class map for {len(asset_class_map)} symbols")
 
-    def validate_allocation(self, allocation: Dict[str, float]) -> Tuple[bool, List[str]]:
+    def validate_allocation(
+        self, allocation: Dict[str, float]
+    ) -> Tuple[bool, List[str]]:
         """
         Validate allocation against constraints.
 
@@ -231,18 +235,22 @@ class ConstraintManager:
         scipy_constraints = []
 
         # Sum to 1 (100%)
-        scipy_constraints.append({
-            "type": "eq",
-            "fun": lambda w: np.sum(w) - 1.0,
-        })
+        scipy_constraints.append(
+            {
+                "type": "eq",
+                "fun": lambda w: np.sum(w) - 1.0,
+            }
+        )
 
         for constraint in self.constraints:
             if constraint.constraint_type == "concentration":
                 # Each weight <= max
-                scipy_constraints.append({
-                    "type": "ineq",
-                    "fun": lambda w: constraint.max_value / 100 - np.max(w),
-                })
+                scipy_constraints.append(
+                    {
+                        "type": "ineq",
+                        "fun": lambda w: constraint.max_value / 100 - np.max(w),
+                    }
+                )
 
             elif constraint.constraint_type == "sector":
                 # Sector weight <= max
@@ -253,10 +261,12 @@ class ConstraintManager:
                             sector_weight += w[i]
                     return constraint.max_value / 100 - sector_weight
 
-                scipy_constraints.append({
-                    "type": "ineq",
-                    "fun": sector_constraint,
-                })
+                scipy_constraints.append(
+                    {
+                        "type": "ineq",
+                        "fun": sector_constraint,
+                    }
+                )
 
             elif constraint.constraint_type == "asset_class":
                 # Asset class weight <= max
@@ -267,40 +277,58 @@ class ConstraintManager:
                             ac_weight += w[i]
                     return constraint.max_value / 100 - ac_weight
 
-                scipy_constraints.append({
-                    "type": "ineq",
-                    "fun": ac_constraint,
-                })
+                scipy_constraints.append(
+                    {
+                        "type": "ineq",
+                        "fun": ac_constraint,
+                    }
+                )
 
             elif constraint.constraint_type == "min_position":
                 # Position >= min (if held)
-                idx = symbols.index(constraint.target) if constraint.target in symbols else -1
+                idx = (
+                    symbols.index(constraint.target)
+                    if constraint.target in symbols
+                    else -1
+                )
                 if idx >= 0:
+
                     def min_constraint(w, idx=idx, min_val=constraint.min_value):
                         if w[idx] > 0:
                             return w[idx] - min_val / 100
                         return 0.1  # Allow zero
 
-                    scipy_constraints.append({
-                        "type": "ineq",
-                        "fun": min_constraint,
-                    })
+                    scipy_constraints.append(
+                        {
+                            "type": "ineq",
+                            "fun": min_constraint,
+                        }
+                    )
 
             elif constraint.constraint_type == "max_position":
                 # Position <= max
-                idx = symbols.index(constraint.target) if constraint.target in symbols else -1
+                idx = (
+                    symbols.index(constraint.target)
+                    if constraint.target in symbols
+                    else -1
+                )
                 if idx >= 0:
+
                     def max_constraint(w, idx=idx, max_val=constraint.max_value):
                         return max_val / 100 - w[idx]
 
-                    scipy_constraints.append({
-                        "type": "ineq",
-                        "fun": max_constraint,
-                    })
+                    scipy_constraints.append(
+                        {
+                            "type": "ineq",
+                            "fun": max_constraint,
+                        }
+                    )
 
         return scipy_constraints
 
-    def get_bounds(self, symbols: List[str], default_max_pct: float = 25.0) -> List[Tuple[float, float]]:
+    def get_bounds(
+        self, symbols: List[str], default_max_pct: float = 25.0
+    ) -> List[Tuple[float, float]]:
         """
         Get weight bounds for each symbol.
 
@@ -323,9 +351,15 @@ class ConstraintManager:
 
             # Check for explicit min/max constraints
             for constraint in self.constraints:
-                if constraint.constraint_type == "min_position" and constraint.target == symbol:
+                if (
+                    constraint.constraint_type == "min_position"
+                    and constraint.target == symbol
+                ):
                     min_bound = max(min_bound, constraint.min_value / 100)
-                elif constraint.constraint_type == "max_position" and constraint.target == symbol:
+                elif (
+                    constraint.constraint_type == "max_position"
+                    and constraint.target == symbol
+                ):
                     max_bound = min(max_bound, constraint.max_value / 100)
 
             bounds.append((min_bound, max_bound))

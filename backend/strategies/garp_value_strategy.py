@@ -22,7 +22,7 @@ class GARPValueStrategy:
         """Initialize with configurable parameters."""
         self.params = params or {
             "garp_threshold": 70.0,  # Score 0-100
-            "momentum_window": 20,   # Days for momentum calc
+            "momentum_window": 20,  # Days for momentum calc
             "exit_stop_loss": 0.08,  # 8% stop loss
             "exit_profit_target": 0.15,  # 15% profit target
         }
@@ -39,13 +39,15 @@ class GARPValueStrategy:
         # Handle empty data
         if result.empty or len(result) < 50:
             result["position"] = 0.0
-            logger.warning(f"GARP: insufficient data ({len(result)} rows), returning zeros")
+            logger.warning(
+                f"GARP: insufficient data ({len(result)} rows), returning zeros"
+            )
             return result[["Open", "High", "Low", "Close", "Volume", "position"]]
 
         # Merge defaults with provided params
         params = {
             "garp_threshold": 50.0,  # Lowered from 70 to account for technical trading
-            "momentum_window": 10,   # Faster momentum for short-term trading
+            "momentum_window": 10,  # Faster momentum for short-term trading
             "exit_stop_loss": 0.08,
             "exit_profit_target": 0.15,
         }
@@ -86,14 +88,17 @@ class GARPValueStrategy:
         has_volume = result["Volume"] >= min_volume
 
         # Entry signal: All quality criteria met + positive momentum + sufficient volume
-        entry_signal = above_ma & not_overbought & vol_reasonable & momentum_positive & has_volume
+        entry_signal = (
+            above_ma & not_overbought & vol_reasonable & momentum_positive & has_volume
+        )
 
         # GARP quality score (0-100) based on criteria
         garp_scores = (
-            above_ma.astype(float) * 35 +           # 35 pts for above MA
-            not_overbought.astype(float) * 25 +     # 25 pts for good entry zone
-            vol_reasonable.astype(float) * 25 +     # 25 pts for healthy volatility
-            has_volume.astype(float) * 15           # 15 pts for sufficient volume
+            above_ma.astype(float) * 35
+            + not_overbought.astype(float) * 25  # 35 pts for above MA
+            + vol_reasonable.astype(float) * 25  # 25 pts for good entry zone
+            + has_volume.astype(float)  # 25 pts for healthy volatility
+            * 15  # 15 pts for sufficient volume
         ).fillna(0)
 
         # Position tracking with stop-loss and profit target
@@ -127,7 +132,9 @@ class GARPValueStrategy:
         rows_after = len(result)
 
         if rows_before != rows_after:
-            logger.warning(f"GARP: dropped {rows_before - rows_after} rows ({100*(rows_before-rows_after)/rows_before:.1f}%) due to NaN values")
+            logger.warning(
+                f"GARP: dropped {rows_before - rows_after} rows ({100*(rows_before-rows_after)/rows_before:.1f}%) due to NaN values"
+            )
 
         return result[["Open", "High", "Low", "Close", "Volume", "position"]]
 

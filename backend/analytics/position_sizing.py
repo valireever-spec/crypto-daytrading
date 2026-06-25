@@ -1,7 +1,7 @@
 """Dynamic position sizing based on Kelly Criterion (Phase 1 Week 3.5)."""
 
 import logging
-from typing import Dict, Optional
+from typing import Optional
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PositionSizeMetrics:
     """Position sizing calculation results."""
+
     kelly_size: float  # Optimal Kelly size (0.0 - 1.0)
     half_kelly: float  # Conservative half-Kelly (0.5x)
     volatility_adjusted: float  # Half-Kelly adjusted by volatility
@@ -153,8 +154,7 @@ class PositionSizer:
 
         # Clamp to min/max bounds
         recommended_bounded = max(
-            min_size_dollars,
-            min(max_size_dollars, recommended_dollars)
+            min_size_dollars, min(max_size_dollars, recommended_dollars)
         )
 
         return PositionSizeMetrics(
@@ -203,7 +203,9 @@ def init_position_sizer(
     """
     global _position_sizer
     _position_sizer = PositionSizer(min_percent=min_percent, max_percent=max_percent)
-    logger.info(f"Position sizer initialized: {min_percent}% - {max_percent}% of capital")
+    logger.info(
+        f"Position sizer initialized: {min_percent}% - {max_percent}% of capital"
+    )
     return _position_sizer
 
 

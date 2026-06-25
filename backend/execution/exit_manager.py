@@ -1,7 +1,7 @@
 """Dynamic exit management with regime-aware risk controls (Phase 3 Week 2)."""
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List, Dict
 from datetime import datetime
 from enum import Enum
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class ExitReason(str, Enum):
     """Reason for position exit."""
+
     PROFIT_TARGET = "profit_target"
     STOP_LOSS = "stop_loss"
     TRAILING_STOP = "trailing_stop"
@@ -26,6 +27,7 @@ class ExitReason(str, Enum):
 @dataclass
 class ExitRule:
     """Exit rule for a position."""
+
     symbol: str
     regime: str
     stop_loss_pct: float
@@ -37,6 +39,7 @@ class ExitRule:
 @dataclass
 class Position:
     """Active trading position."""
+
     symbol: str
     quantity: float
     entry_price: float
@@ -51,6 +54,7 @@ class Position:
 @dataclass
 class ExitSignal:
     """Signal to exit a position."""
+
     symbol: str
     quantity: float
     reason: ExitReason
@@ -103,7 +107,9 @@ class ExitManager:
         )
 
         self.positions[symbol] = position
-        logger.info(f"Position added: {symbol} {quantity} @ ${entry_price:.2f} ({regime})")
+        logger.info(
+            f"Position added: {symbol} {quantity} @ ${entry_price:.2f} ({regime})"
+        )
         return position
 
     def get_exit_rule(self, symbol: str, regime: str) -> ExitRule:
@@ -148,8 +154,10 @@ class ExitManager:
         return ExitRule(
             symbol=symbol,
             regime=regime,
-            stop_loss_pct=thresholds.get("stop_loss", 0.02) * 100,  # Convert to percentage
-            take_profit_pct=thresholds.get("profit_target", 0.05) * 100,  # Convert to percentage
+            stop_loss_pct=thresholds.get("stop_loss", 0.02)
+            * 100,  # Convert to percentage
+            take_profit_pct=thresholds.get("profit_target", 0.05)
+            * 100,  # Convert to percentage
             trailing_stop_pct=trailing_stop,
             max_holding_hours=12.0 if regime == "VOLATILE" else 24.0,
         )
@@ -231,9 +239,14 @@ class ExitManager:
         if rule.trailing_stop_pct > 0:
             position.high_water_mark = max(position.high_water_mark, current_price)
             drawdown_pct = (
-                (position.high_water_mark - current_price) / position.high_water_mark * 100
+                (position.high_water_mark - current_price)
+                / position.high_water_mark
+                * 100
             )
-            if drawdown_pct >= rule.trailing_stop_pct and current_price < position.entry_price:
+            if (
+                drawdown_pct >= rule.trailing_stop_pct
+                and current_price < position.entry_price
+            ):
                 pnl_usd = position.quantity * (current_price - position.entry_price)
                 return ExitSignal(
                     symbol=position.symbol,
@@ -342,7 +355,9 @@ class ExitManager:
             "holding_hours": round(holding_hours, 1),
             "regime": position.regime,
             "stop_loss_pct": rule.stop_loss_pct,
-            "stop_loss_price": round(position.entry_price * (1 - rule.stop_loss_pct / 100), 2),
+            "stop_loss_price": round(
+                position.entry_price * (1 - rule.stop_loss_pct / 100), 2
+            ),
             "take_profit_pct": rule.take_profit_pct,
             "take_profit_price": round(
                 position.entry_price * (1 + rule.take_profit_pct / 100), 2

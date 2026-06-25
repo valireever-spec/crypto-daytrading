@@ -5,12 +5,15 @@ Analyze and compare backtest results, identify best strategies, visualize metric
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from dataclasses import dataclass
 import pandas as pd
 import numpy as np
 
-from backend.analytics.portfolio_backtest_engine_v2 import BacktestResult, AllocationComparison
+from backend.analytics.portfolio_backtest_engine_v2 import (
+    BacktestResult,
+    AllocationComparison,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PerformanceRanking:
     """Ranking of strategies by performance metric."""
+
     metric: str
     rankings: List[Tuple[str, float]]  # [(strategy_name, metric_value), ...]
 
@@ -47,7 +51,9 @@ class BacktestAnalyzer:
         # Rank by key metrics
         by_sharpe = sorted(results, key=lambda r: r.sharpe_ratio, reverse=True)
         by_return = sorted(results, key=lambda r: r.total_return_pct, reverse=True)
-        by_drawdown = sorted(results, key=lambda r: r.max_drawdown_pct)  # Ascending = better
+        by_drawdown = sorted(
+            results, key=lambda r: r.max_drawdown_pct
+        )  # Ascending = better
         by_volatility = sorted(results, key=lambda r: r.volatility_pct)
 
         return {
@@ -74,7 +80,9 @@ class BacktestAnalyzer:
         }
 
     @staticmethod
-    def analyze_rolling_performance(result: BacktestResult, period: str = "monthly") -> Dict:
+    def analyze_rolling_performance(
+        result: BacktestResult, period: str = "monthly"
+    ) -> Dict:
         """
         Analyze rolling performance (monthly, quarterly returns).
 
@@ -118,7 +126,9 @@ class BacktestAnalyzer:
             "num_periods": len(period_returns),
             "positive_periods": int(positive),
             "negative_periods": int(negative),
-            "positive_rate_pct": round(positive / len(period_returns) * 100, 2) if len(period_returns) > 0 else 0,
+            "positive_rate_pct": round(positive / len(period_returns) * 100, 2)
+            if len(period_returns) > 0
+            else 0,
             "average_positive_return_pct": round(avg_positive, 2),
             "average_negative_return_pct": round(avg_negative, 2),
             "best_period_return_pct": round(period_returns.max(), 2),
@@ -149,7 +159,9 @@ class BacktestAnalyzer:
         # Returns
         total_return = (equity_curve.iloc[-1] - 1) * 100
         years = len(daily_returns) / 252
-        annualized_return = ((equity_curve.iloc[-1]) ** (1 / years) - 1) * 100 if years > 0 else 0
+        annualized_return = (
+            ((equity_curve.iloc[-1]) ** (1 / years) - 1) * 100 if years > 0 else 0
+        )
 
         # Risk metrics
         daily_vol = daily_returns.std()
@@ -161,7 +173,9 @@ class BacktestAnalyzer:
 
         # Sortino
         downside_vol = daily_returns[daily_returns < 0].std()
-        sortino = (excess_return / downside_vol) * np.sqrt(252) if downside_vol > 0 else 0
+        sortino = (
+            (excess_return / downside_vol) * np.sqrt(252) if downside_vol > 0 else 0
+        )
 
         # Drawdown
         running_max = equity_curve.expanding().max()
@@ -255,7 +269,9 @@ class BacktestAnalyzer:
         return recommendations
 
     @staticmethod
-    def compare_to_benchmark(result: BacktestResult, benchmark_return: float, benchmark_vol: float) -> Dict:
+    def compare_to_benchmark(
+        result: BacktestResult, benchmark_return: float, benchmark_vol: float
+    ) -> Dict:
         """
         Compare backtest result to a benchmark.
 
@@ -279,7 +295,9 @@ class BacktestAnalyzer:
         """
         excess_return = result.annualized_return_pct - benchmark_return
         tracking_error = result.volatility_pct - benchmark_vol
-        information_ratio = excess_return / abs(tracking_error) if abs(tracking_error) > 0 else 0
+        information_ratio = (
+            excess_return / abs(tracking_error) if abs(tracking_error) > 0 else 0
+        )
 
         outperformance = "BETTER" if excess_return > 0 else "WORSE"
 

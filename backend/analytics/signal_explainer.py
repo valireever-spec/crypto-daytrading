@@ -18,7 +18,12 @@ class SignalExplainer:
             "garp": {
                 "weight": 0.60,
                 "label": "GARP Quality Score",
-                "metrics": ["Trend above MA", "Not overbought", "Volatility health", "Volume"],
+                "metrics": [
+                    "Trend above MA",
+                    "Not overbought",
+                    "Volatility health",
+                    "Volume",
+                ],
                 "max_score": 100,
             },
             "technical": {
@@ -64,17 +69,19 @@ class SignalExplainer:
             contribution = score * weight
             pct_of_total = (contribution / total_score * 100) if total_score > 0 else 0
 
-            breakdown.append({
-                "component": component_name,
-                "label": label,
-                "score": round(score, 1),
-                "max": max_score,
-                "weight": f"{weight*100:.0f}%",
-                "contribution": round(contribution, 1),
-                "pct_of_total": round(pct_of_total, 1),
-                "status": "strong" if score > max_score * 0.7 else "weak",
-                "metrics": comp_info["metrics"],
-            })
+            breakdown.append(
+                {
+                    "component": component_name,
+                    "label": label,
+                    "score": round(score, 1),
+                    "max": max_score,
+                    "weight": f"{weight*100:.0f}%",
+                    "contribution": round(contribution, 1),
+                    "pct_of_total": round(pct_of_total, 1),
+                    "status": "strong" if score > max_score * 0.7 else "weak",
+                    "metrics": comp_info["metrics"],
+                }
+            )
 
         # Determine overall grade (adjusted for 55.0 entry threshold)
         if total_score >= 75:
@@ -95,12 +102,12 @@ class SignalExplainer:
 
         # Top drivers and detractors
         sorted_components: List[Dict[str, Any]] = sorted(
-            breakdown,
-            key=lambda x: x["contribution"],
-            reverse=True
+            breakdown, key=lambda x: x["contribution"], reverse=True
         )
         drivers: List[Dict[str, Any]] = sorted_components[:2]
-        detractors: List[Dict[str, Any]] = sorted_components[-1:] if len(sorted_components) > 1 else []
+        detractors: List[Dict[str, Any]] = (
+            sorted_components[-1:] if len(sorted_components) > 1 else []
+        )
 
         return {
             "symbol": symbol,

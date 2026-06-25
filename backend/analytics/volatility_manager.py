@@ -7,7 +7,6 @@ and ATR-based stop-loss levels.
 
 import math
 import pandas as pd
-import numpy as np
 import logging
 from typing import Dict, Tuple, Any
 
@@ -19,10 +18,10 @@ class VolatilityManager:
 
     def __init__(
         self,
-        lookback_vol: int = 20,      # Rolling window for volatility calc
-        lookback_atr: int = 14,      # ATR lookback window
-        risk_per_trade: float = 0.02, # 2% max loss per trade
-        kelly_fraction: float = 0.25, # Kelly fraction (conservative)
+        lookback_vol: int = 20,  # Rolling window for volatility calc
+        lookback_atr: int = 14,  # ATR lookback window
+        risk_per_trade: float = 0.02,  # 2% max loss per trade
+        kelly_fraction: float = 0.25,  # Kelly fraction (conservative)
     ):
         """
         Initialize volatility manager.
@@ -108,7 +107,9 @@ class VolatilityManager:
         if len(vol_20.dropna()) >= 10:
             recent_avg = float(vol_20.dropna().iloc[-5:].mean())
             prior_avg = float(vol_20.dropna().iloc[-10:-5].mean())
-            trend_pct = (recent_avg - prior_avg) / prior_avg * 100 if prior_avg > 0 else 0.0
+            trend_pct = (
+                (recent_avg - prior_avg) / prior_avg * 100 if prior_avg > 0 else 0.0
+            )
         else:
             trend_pct = 0.0
 
@@ -224,10 +225,10 @@ class VolatilityManager:
 
         # Regime adjustment
         regime_multiplier = {
-            "low": 1.2,        # Low vol: aggressive (120%)
-            "medium": 1.0,     # Medium: normal (100%)
-            "high": 0.7,       # High vol: conservative (70%)
-            "extreme": 0.4,    # Extreme: very conservative (40%)
+            "low": 1.2,  # Low vol: aggressive (120%)
+            "medium": 1.0,  # Medium: normal (100%)
+            "high": 0.7,  # High vol: conservative (70%)
+            "extreme": 0.4,  # Extreme: very conservative (40%)
             "unknown": 1.0,
         }.get(regime, 1.0)
 

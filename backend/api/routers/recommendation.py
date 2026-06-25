@@ -5,15 +5,13 @@ REST API for scenario analysis and allocation recommendations.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Body, Query
 import pandas as pd
-import numpy as np
 
 from backend.analytics.scenario_analyzer import (
     get_scenario_analyzer,
-    MonteCarloResult,
 )
 from backend.analytics.allocation_solver import (
     get_allocation_solver,
@@ -25,7 +23,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/recommendation", tags=["recommendation"])
 
 
-def _get_historical_returns(symbols: List[str], lookback_days: int = 252) -> Dict[str, pd.Series]:
+def _get_historical_returns(
+    symbols: List[str], lookback_days: int = 252
+) -> Dict[str, pd.Series]:
     """
     Fetch historical returns for symbols.
 
@@ -80,7 +80,9 @@ def _get_historical_returns(symbols: List[str], lookback_days: int = 252) -> Dic
 @router.post("/scenario-analysis")
 async def scenario_analysis(
     symbols: List[str] = Body(..., description="List of symbols to analyze"),
-    allocation: Dict[str, float] = Body(..., description="Allocation {symbol: weight %}"),
+    allocation: Dict[str, float] = Body(
+        ..., description="Allocation {symbol: weight %}"
+    ),
     time_horizon_days: int = Query(252, description="Time horizon in days"),
     n_simulations: int = Query(10000, description="Number of Monte Carlo simulations"),
 ) -> Dict[str, Any]:
@@ -127,10 +129,14 @@ async def scenario_analysis(
 
         total_weight = sum(allocation.values())
         if abs(total_weight - 100.0) > 1.0:
-            raise HTTPException(status_code=400, detail="Allocation weights must sum to 100%")
+            raise HTTPException(
+                status_code=400, detail="Allocation weights must sum to 100%"
+            )
 
         # Fetch historical returns
-        historical_returns = _get_historical_returns(symbols, lookback_days=max(500, time_horizon_days * 2))
+        historical_returns = _get_historical_returns(
+            symbols, lookback_days=max(500, time_horizon_days * 2)
+        )
 
         if not historical_returns:
             raise HTTPException(status_code=503, detail="Unable to fetch market data")
@@ -172,7 +178,9 @@ async def scenario_analysis(
                 "percentile_50th_pct": round(mc_result.percentile_50th_pct, 2),
                 "percentile_75th_pct": round(mc_result.percentile_75th_pct, 2),
                 "percentile_95th_pct": round(mc_result.percentile_95th_pct, 2),
-                "probability_positive_pct": round(mc_result.probability_positive_pct, 1),
+                "probability_positive_pct": round(
+                    mc_result.probability_positive_pct, 1
+                ),
                 "best_case_pct": round(mc_result.best_case_pct, 2),
                 "worst_case_pct": round(mc_result.worst_case_pct, 2),
             },
@@ -191,7 +199,9 @@ async def scenario_analysis(
                     "expected_return_pct": round(base_case.expected_return_pct, 2),
                     "worst_case_pct": round(base_case.worst_case_pct, 2),
                     "best_case_pct": round(base_case.best_case_pct, 2),
-                    "expected_shortfall_pct": round(base_case.expected_shortfall_pct, 2),
+                    "expected_shortfall_pct": round(
+                        base_case.expected_shortfall_pct, 2
+                    ),
                 },
                 {
                     "name": downside.scenario_name,
@@ -250,7 +260,9 @@ async def solve_allocation(
             raise HTTPException(status_code=400, detail="No symbols provided")
 
         if target_type not in ["return", "volatility"]:
-            raise HTTPException(status_code=400, detail="target_type must be 'return' or 'volatility'")
+            raise HTTPException(
+                status_code=400, detail="target_type must be 'return' or 'volatility'"
+            )
 
         if target_value <= 0:
             raise HTTPException(status_code=400, detail="target_value must be positive")

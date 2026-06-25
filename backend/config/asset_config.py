@@ -7,6 +7,7 @@ from dataclasses import dataclass
 @dataclass
 class AssetConfig:
     """Configuration for an individual asset."""
+
     symbol: str
     name: str
     asset_class: str
@@ -33,11 +34,17 @@ class AssetConfig:
         if not 0 <= self.volatility_rank <= 1:
             raise ValueError(f"Volatility rank must be 0-1, got {self.volatility_rank}")
         if not 0 <= self.correlation_to_market <= 1:
-            raise ValueError(f"Correlation must be 0-1, got {self.correlation_to_market}")
+            raise ValueError(
+                f"Correlation must be 0-1, got {self.correlation_to_market}"
+            )
         if self.min_position_size_usd < 0:
-            raise ValueError(f"Min position size cannot be negative: {self.min_position_size_usd}")
+            raise ValueError(
+                f"Min position size cannot be negative: {self.min_position_size_usd}"
+            )
         if self.max_position_size_usd < self.min_position_size_usd:
-            raise ValueError(f"Max position {self.max_position_size_usd} < min {self.min_position_size_usd}")
+            raise ValueError(
+                f"Max position {self.max_position_size_usd} < min {self.min_position_size_usd}"
+            )
         if self.liquidity_tier not in ["liquid", "semi-liquid", "illiquid"]:
             raise ValueError(f"Invalid liquidity tier: {self.liquidity_tier}")
 
@@ -45,31 +52,248 @@ class AssetConfig:
 # Default asset configurations (loaded from here, not scattered in code)
 DEFAULT_ASSETS: List[AssetConfig] = [
     # Crypto
-    AssetConfig("BTC", "Bitcoin", "crypto", "global", "crypto", "USD", "Binance", "liquid", 0.75, 0.7, 100, 1000000),
-    AssetConfig("ETH", "Ethereum", "crypto", "global", "crypto", "USD", "Binance", "liquid", 0.8, 0.75, 100, 1000000),
-    AssetConfig("BNB", "Binance Coin", "crypto", "global", "crypto", "USD", "Binance", "semi-liquid", 0.65, 0.65, 100, 500000),
-
+    AssetConfig(
+        "BTC",
+        "Bitcoin",
+        "crypto",
+        "global",
+        "crypto",
+        "USD",
+        "Binance",
+        "liquid",
+        0.75,
+        0.7,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "ETH",
+        "Ethereum",
+        "crypto",
+        "global",
+        "crypto",
+        "USD",
+        "Binance",
+        "liquid",
+        0.8,
+        0.75,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "BNB",
+        "Binance Coin",
+        "crypto",
+        "global",
+        "crypto",
+        "USD",
+        "Binance",
+        "semi-liquid",
+        0.65,
+        0.65,
+        100,
+        500000,
+    ),
     # US Equities
-    AssetConfig("AAPL", "Apple Inc.", "us_equity", "north_america", "technology", "USD", "NASDAQ", "liquid", 0.3, 0.85, 100, 1000000),
-    AssetConfig("MSFT", "Microsoft Corporation", "us_equity", "north_america", "technology", "USD", "NASDAQ", "liquid", 0.3, 0.85, 100, 1000000),
-    AssetConfig("GOOGL", "Alphabet Inc.", "us_equity", "north_america", "technology", "USD", "NASDAQ", "liquid", 0.35, 0.85, 100, 1000000),
-    AssetConfig("JPM", "JPMorgan Chase", "us_equity", "north_america", "financials", "USD", "NYSE", "liquid", 0.25, 0.8, 100, 500000),
-    AssetConfig("JNJ", "Johnson & Johnson", "us_equity", "north_america", "healthcare", "USD", "NYSE", "liquid", 0.2, 0.75, 100, 500000),
-
+    AssetConfig(
+        "AAPL",
+        "Apple Inc.",
+        "us_equity",
+        "north_america",
+        "technology",
+        "USD",
+        "NASDAQ",
+        "liquid",
+        0.3,
+        0.85,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "MSFT",
+        "Microsoft Corporation",
+        "us_equity",
+        "north_america",
+        "technology",
+        "USD",
+        "NASDAQ",
+        "liquid",
+        0.3,
+        0.85,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "GOOGL",
+        "Alphabet Inc.",
+        "us_equity",
+        "north_america",
+        "technology",
+        "USD",
+        "NASDAQ",
+        "liquid",
+        0.35,
+        0.85,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "JPM",
+        "JPMorgan Chase",
+        "us_equity",
+        "north_america",
+        "financials",
+        "USD",
+        "NYSE",
+        "liquid",
+        0.25,
+        0.8,
+        100,
+        500000,
+    ),
+    AssetConfig(
+        "JNJ",
+        "Johnson & Johnson",
+        "us_equity",
+        "north_america",
+        "healthcare",
+        "USD",
+        "NYSE",
+        "liquid",
+        0.2,
+        0.75,
+        100,
+        500000,
+    ),
     # Indices
-    AssetConfig("SPY", "S&P 500 ETF", "index", "north_america", None, "USD", "NYSE", "liquid", 0.2, 1.0, 100, 1000000),
-    AssetConfig("QQQ", "Nasdaq-100 ETF", "index", "north_america", None, "USD", "NASDAQ", "liquid", 0.35, 0.95, 100, 1000000),
-    AssetConfig("EWG", "iShares Germany ETF", "index", "europe", None, "USD", "NYSE", "liquid", 0.3, 0.8, 100, 500000),
-
+    AssetConfig(
+        "SPY",
+        "S&P 500 ETF",
+        "index",
+        "north_america",
+        None,
+        "USD",
+        "NYSE",
+        "liquid",
+        0.2,
+        1.0,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "QQQ",
+        "Nasdaq-100 ETF",
+        "index",
+        "north_america",
+        None,
+        "USD",
+        "NASDAQ",
+        "liquid",
+        0.35,
+        0.95,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "EWG",
+        "iShares Germany ETF",
+        "index",
+        "europe",
+        None,
+        "USD",
+        "NYSE",
+        "liquid",
+        0.3,
+        0.8,
+        100,
+        500000,
+    ),
     # Bonds
-    AssetConfig("TLT", "20+ Year Treasury ETF", "bond_gov", "north_america", None, "USD", "NASDAQ", "liquid", 0.15, 0.4, 100, 1000000),
-    AssetConfig("BND", "Total Bond Market ETF", "bond_corp", "north_america", None, "USD", "NASDAQ", "liquid", 0.1, 0.3, 100, 1000000),
-    AssetConfig("LQD", "Investment Grade Corporate", "bond_corp", "north_america", None, "USD", "NASDAQ", "liquid", 0.12, 0.35, 100, 500000),
-
+    AssetConfig(
+        "TLT",
+        "20+ Year Treasury ETF",
+        "bond_gov",
+        "north_america",
+        None,
+        "USD",
+        "NASDAQ",
+        "liquid",
+        0.15,
+        0.4,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "BND",
+        "Total Bond Market ETF",
+        "bond_corp",
+        "north_america",
+        None,
+        "USD",
+        "NASDAQ",
+        "liquid",
+        0.1,
+        0.3,
+        100,
+        1000000,
+    ),
+    AssetConfig(
+        "LQD",
+        "Investment Grade Corporate",
+        "bond_corp",
+        "north_america",
+        None,
+        "USD",
+        "NASDAQ",
+        "liquid",
+        0.12,
+        0.35,
+        100,
+        500000,
+    ),
     # Commodities
-    AssetConfig("GLD", "SPDR Gold Shares", "commodity", "global", None, "USD", "NYSE", "liquid", 0.25, 0.2, 100, 500000),
-    AssetConfig("USO", "U.S. Oil Fund", "commodity", "global", None, "USD", "NYSE", "semi-liquid", 0.8, 0.5, 100, 250000),
-    AssetConfig("DBC", "Commodities Index", "commodity", "global", None, "USD", "NYSE", "semi-liquid", 0.4, 0.4, 100, 250000),
+    AssetConfig(
+        "GLD",
+        "SPDR Gold Shares",
+        "commodity",
+        "global",
+        None,
+        "USD",
+        "NYSE",
+        "liquid",
+        0.25,
+        0.2,
+        100,
+        500000,
+    ),
+    AssetConfig(
+        "USO",
+        "U.S. Oil Fund",
+        "commodity",
+        "global",
+        None,
+        "USD",
+        "NYSE",
+        "semi-liquid",
+        0.8,
+        0.5,
+        100,
+        250000,
+    ),
+    AssetConfig(
+        "DBC",
+        "Commodities Index",
+        "commodity",
+        "global",
+        None,
+        "USD",
+        "NYSE",
+        "semi-liquid",
+        0.4,
+        0.4,
+        100,
+        250000,
+    ),
 ]
 
 

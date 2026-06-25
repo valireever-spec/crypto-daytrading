@@ -6,7 +6,7 @@ risk profiles, stress test results, and alert thresholds.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Path
 import pandas as pd
@@ -14,7 +14,6 @@ import numpy as np
 
 from backend.analytics.risk_metrics_engine import (
     get_risk_metrics_engine,
-    RiskMetrics,
 )
 from backend.analytics.stress_test_engine import (
     get_stress_test_engine,
@@ -29,7 +28,9 @@ router = APIRouter(prefix="/api/risk", tags=["risk"])
 
 @router.get("/metrics")
 async def get_risk_metrics(
-    lookback_days: int = Query(90, ge=30, le=365, description="Days of history for metrics"),
+    lookback_days: int = Query(
+        90, ge=30, le=365, description="Days of history for metrics"
+    ),
 ) -> Dict[str, Any]:
     """
     Get comprehensive portfolio risk metrics.
@@ -60,7 +61,9 @@ async def get_risk_metrics(
     try:
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=503, detail="Paper trading engine not available")
+            raise HTTPException(
+                status_code=503, detail="Paper trading engine not available"
+            )
 
         # Get portfolio returns (simplified: use equity curve changes)
         positions = engine.get_positions()
@@ -138,11 +141,13 @@ async def get_regime_risk_profile(
         "guidance": "Lower risk environment suitable for growth exposure"
     }
     """
-    if regime not in ['bull', 'bear', 'sideways', 'volatile']:
-        raise HTTPException(status_code=400, detail="Invalid regime. Must be: bull, bear, sideways, or volatile")
+    if regime not in ["bull", "bear", "sideways", "volatile"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid regime. Must be: bull, bear, sideways, or volatile",
+        )
 
     try:
-
         # In real system, would fetch historical data and calculate regime profile
         # For now, return pre-calculated profiles
         profiles = {
@@ -237,37 +242,38 @@ async def get_stress_test_results(
     """
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=503, detail="Paper trading engine not available")
+        raise HTTPException(
+            status_code=503, detail="Paper trading engine not available"
+        )
 
     positions = engine.get_positions()
     if not positions:
         raise HTTPException(status_code=400, detail="No positions to stress test")
 
     try:
-
         account = engine.get_account_state()
-        portfolio_value = account.get('total_equity', 0)
+        portfolio_value = account.get("total_equity", 0)
 
         # Mock position values and symbols
-        position_values = {p['symbol']: p.get('value_eur', 0) for p in positions}
+        position_values = {p["symbol"]: p.get("value_eur", 0) for p in positions}
         symbol_sectors = {
-            'BTCUSDT': 'cryptocurrency',
-            'ETHUSDT': 'cryptocurrency',
-            'EQ_AAPL': 'technology',
-            'EQ_MSFT': 'technology',
+            "BTCUSDT": "cryptocurrency",
+            "ETHUSDT": "cryptocurrency",
+            "EQ_AAPL": "technology",
+            "EQ_MSFT": "technology",
         }
 
         stress_engine = get_stress_test_engine()
         results = stress_engine.run_all_scenarios(
             position_values=position_values,
-            current_prices={p['symbol']: p.get('price', 0) for p in positions},
+            current_prices={p["symbol"]: p.get("price", 0) for p in positions},
             symbol_sectors=symbol_sectors,
         )
 
         # Format results
         scenarios = []
         worst_case = None
-        worst_loss = float('inf')
+        worst_loss = float("inf")
 
         for scenario, result in results.items():
             scenario_result = {
@@ -294,7 +300,9 @@ async def get_stress_test_results(
             "scenarios": scenarios,
             "worst_case": worst_case,
             "portfolio_value_eur": portfolio_value,
-            "estimated_value_after_worst": round(portfolio_value * (1 + worst_loss / 100), 2),
+            "estimated_value_after_worst": round(
+                portfolio_value * (1 + worst_loss / 100), 2
+            ),
         }
 
     except Exception as e:
@@ -304,7 +312,9 @@ async def get_stress_test_results(
 
 @router.get("/stress-tests/{scenario}")
 async def get_single_stress_test(
-    scenario: str = Path(..., description="Stress scenario: market_crash, volatility_spike, etc"),
+    scenario: str = Path(
+        ..., description="Stress scenario: market_crash, volatility_spike, etc"
+    ),
 ) -> Dict[str, Any]:
     """
     Get stress test result for a single scenario.
@@ -330,21 +340,25 @@ async def get_single_stress_test(
     """
     valid_scenarios = [s.value for s in StressScenario]
     if scenario not in valid_scenarios:
-        raise HTTPException(status_code=400, detail=f"Invalid scenario. Must be one of: {', '.join(valid_scenarios)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid scenario. Must be one of: {', '.join(valid_scenarios)}",
+        )
 
     engine = get_paper_trading()
     if not engine:
-        raise HTTPException(status_code=503, detail="Paper trading engine not available")
+        raise HTTPException(
+            status_code=503, detail="Paper trading engine not available"
+        )
 
     positions = engine.get_positions()
     if not positions:
         raise HTTPException(status_code=400, detail="No positions to stress test")
 
     try:
-
-        position_values = {p['symbol']: p.get('value_eur', 0) for p in positions}
-        current_prices = {p['symbol']: p.get('price', 0) for p in positions}
-        symbol_sectors = {p['symbol']: 'other' for p in positions}
+        position_values = {p["symbol"]: p.get("value_eur", 0) for p in positions}
+        current_prices = {p["symbol"]: p.get("price", 0) for p in positions}
+        symbol_sectors = {p["symbol"]: "other" for p in positions}
 
         stress_engine = get_stress_test_engine()
         scenario_enum = StressScenario(scenario)
@@ -359,13 +373,17 @@ async def get_single_stress_test(
         return {
             "scenario": result.scenario.value,
             "portfolio_loss_pct": round(result.portfolio_loss_pct, 2),
-            "affected_symbols": {k: round(v, 2) for k, v in result.affected_symbols.items()},
+            "affected_symbols": {
+                k: round(v, 2) for k, v in result.affected_symbols.items()
+            },
             "worst_affected": result.worst_affected,
             "worst_loss_pct": round(result.worst_loss_pct, 2),
             "recovery_days": result.recovery_days_estimate,
             "leverage_requirement": round(result.leverage_requirement, 2),
             "risk_classification": result.risk_classification,
-            "description": stress_engine.scenario_definitions[scenario_enum].get("description", ""),
+            "description": stress_engine.scenario_definitions[scenario_enum].get(
+                "description", ""
+            ),
         }
 
     except Exception as e:
@@ -377,7 +395,9 @@ async def get_single_stress_test(
 async def set_risk_alert_thresholds(
     var_95_threshold: float = Query(..., description="VaR 95% threshold (%)"),
     volatility_threshold: float = Query(..., description="Volatility threshold (%)"),
-    max_drawdown_threshold: float = Query(..., description="Max drawdown threshold (%)"),
+    max_drawdown_threshold: float = Query(
+        ..., description="Max drawdown threshold (%)"
+    ),
 ) -> Dict[str, Any]:
     """
     Set risk alert thresholds for monitoring.
@@ -408,12 +428,15 @@ async def set_risk_alert_thresholds(
     if var_95_threshold >= 0:
         raise HTTPException(status_code=400, detail="VaR threshold must be negative")
     if volatility_threshold <= 0:
-        raise HTTPException(status_code=400, detail="Volatility threshold must be positive")
+        raise HTTPException(
+            status_code=400, detail="Volatility threshold must be positive"
+        )
     if max_drawdown_threshold >= 0:
-        raise HTTPException(status_code=400, detail="Max drawdown threshold must be negative")
+        raise HTTPException(
+            status_code=400, detail="Max drawdown threshold must be negative"
+        )
 
     try:
-
         return {
             "success": True,
             "thresholds": {
@@ -457,7 +480,9 @@ async def get_risk_alert_status() -> Dict[str, Any]:
     try:
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=503, detail="Paper trading engine not available")
+            raise HTTPException(
+                status_code=503, detail="Paper trading engine not available"
+            )
 
         # In real system, would fetch actual current metrics
         # For demo, return synthetic data
@@ -531,10 +556,12 @@ async def get_risk_dashboard_summary() -> Dict[str, Any]:
     try:
         engine = get_paper_trading()
         if not engine:
-            raise HTTPException(status_code=503, detail="Paper trading engine not available")
+            raise HTTPException(
+                status_code=503, detail="Paper trading engine not available"
+            )
 
         account = engine.get_account_state()
-        portfolio_value = account.get('total_equity', 0)
+        portfolio_value = account.get("total_equity", 0)
 
         # Aggregate all risk data
         # In real system, would call individual endpoints

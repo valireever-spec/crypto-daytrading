@@ -7,13 +7,12 @@ actions in the autonomous trader.
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
+from datetime import datetime
 from dataclasses import dataclass
 
 from backend.analytics.portfolio_regime_monitor import (
     get_portfolio_regime_monitor,
-    RegimeFlip,
 )
 from backend.analytics.sector_rotation_advisor import (
     get_sector_rotation_advisor,
@@ -28,6 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PortfolioDecision:
     """Top-level portfolio decision from coordinator."""
+
     timestamp: datetime
     decision_type: str  # CORRELATED_EXIT, SECTOR_ROTATION, REBALANCE
     action: str  # EXIT, ROTATE, REBALANCE
@@ -86,7 +86,7 @@ class PortfolioDecisionCoordinator:
 
         try:
             # Extract symbol list from positions
-            position_symbols = [p['symbol'] for p in current_positions]
+            position_symbols = [p["symbol"] for p in current_positions]
 
             # 1. CHECK FOR CORRELATED EXITS (highest priority)
             exit_decision = await self._generate_correlated_exit_decision(
@@ -94,8 +94,10 @@ class PortfolioDecisionCoordinator:
             )
             if exit_decision:
                 decisions.append(exit_decision)
-                logger.warning(f"⚠️ Portfolio decision: {exit_decision.decision_type} "
-                             f"(urgency {exit_decision.urgency}/10)")
+                logger.warning(
+                    f"⚠️ Portfolio decision: {exit_decision.decision_type} "
+                    f"(urgency {exit_decision.urgency}/10)"
+                )
 
             # 2. CHECK FOR SECTOR ROTATIONS (medium priority)
             if not exit_decision:  # Only if no urgent exits
@@ -104,8 +106,10 @@ class PortfolioDecisionCoordinator:
                 )
                 if rotation_decision:
                     decisions.append(rotation_decision)
-                    logger.info(f"📊 Portfolio decision: {rotation_decision.decision_type} "
-                              f"(urgency {rotation_decision.urgency}/10)")
+                    logger.info(
+                        f"📊 Portfolio decision: {rotation_decision.decision_type} "
+                        f"(urgency {rotation_decision.urgency}/10)"
+                    )
 
             # 3. CHECK FOR REBALANCING (lower priority)
             if len(decisions) == 0:  # Only if no exits or rotations
@@ -114,8 +118,10 @@ class PortfolioDecisionCoordinator:
                 )
                 if rebalance_decision:
                     decisions.append(rebalance_decision)
-                    logger.info(f"🔄 Portfolio decision: {rebalance_decision.decision_type} "
-                              f"(urgency {rebalance_decision.urgency}/10)")
+                    logger.info(
+                        f"🔄 Portfolio decision: {rebalance_decision.decision_type} "
+                        f"(urgency {rebalance_decision.urgency}/10)"
+                    )
 
             # Store decisions in history
             for decision in decisions:
@@ -148,7 +154,9 @@ class PortfolioDecisionCoordinator:
                 return None
 
             # Get stress level
-            stress_level = self.regime_monitor.get_portfolio_stress_level(symbol_regimes)
+            stress_level = self.regime_monitor.get_portfolio_stress_level(
+                symbol_regimes
+            )
 
             # Generate action dict (all exits are SELL)
             actions = {symbol: "SELL" for symbol in portfolio_state.exit_signals}
@@ -157,7 +165,9 @@ class PortfolioDecisionCoordinator:
             urgency = min(int(stress_level * 10), 10)
 
             # Estimate impact (lost opportunity cost if don't exit)
-            estimated_cost_if_delayed = len(portfolio_state.exit_signals) * 2  # Rough estimate: 2% loss/day in bear
+            estimated_cost_if_delayed = (
+                len(portfolio_state.exit_signals) * 2
+            )  # Rough estimate: 2% loss/day in bear
 
             decision = PortfolioDecision(
                 timestamp=datetime.utcnow(),
@@ -167,19 +177,21 @@ class PortfolioDecisionCoordinator:
                 actions=actions,
                 urgency=urgency,
                 rationale=f"Regime flip to {portfolio_state.portfolio_regime}: "
-                         f"{len(portfolio_state.exit_signals)} positions at risk. "
-                         f"Stress level: {stress_level:.1%}",
+                f"{len(portfolio_state.exit_signals)} positions at risk. "
+                f"Stress level: {stress_level:.1%}",
                 estimated_impact={
                     "symbols_to_exit": len(portfolio_state.exit_signals),
                     "stress_level": stress_level,
                     "portfolio_regime": portfolio_state.portfolio_regime,
                     "estimated_daily_loss_if_delayed": estimated_cost_if_delayed,
                     "execution_time_min": len(portfolio_state.exit_signals) * 2,
-                }
+                },
             )
 
-            logger.warning(f"⚠️ CORRELATED EXIT: {portfolio_state.exit_signals} "
-                         f"(stress: {stress_level:.1%}, regime: {portfolio_state.portfolio_regime})")
+            logger.warning(
+                f"⚠️ CORRELATED EXIT: {portfolio_state.exit_signals} "
+                f"(stress: {stress_level:.1%}, regime: {portfolio_state.portfolio_regime})"
+            )
 
             return decision
 
@@ -236,20 +248,24 @@ class PortfolioDecisionCoordinator:
                 actions=actions,
                 urgency=urgency,
                 rationale=f"Rotate from {rotation_rec.from_sector} to {rotation_rec.to_sector} "
-                         f"for {portfolio_regime} market. "
-                         f"Expected outperformance: {rotation_rec.expected_outperformance:.1f}%",
+                f"for {portfolio_regime} market. "
+                f"Expected outperformance: {rotation_rec.expected_outperformance:.1f}%",
                 estimated_impact={
                     "from_sector": rotation_rec.from_sector,
                     "to_sector": rotation_rec.to_sector,
                     "confidence": rotation_rec.confidence,
                     "expected_outperformance": rotation_rec.expected_outperformance,
-                    "symbols_to_sell": sum(1 for a in actions.values() if a in ["SELL", "REDUCE"]),
+                    "symbols_to_sell": sum(
+                        1 for a in actions.values() if a in ["SELL", "REDUCE"]
+                    ),
                     "symbols_to_buy": sum(1 for a in actions.values() if a == "BUY"),
-                }
+                },
             )
 
-            logger.info(f"📊 SECTOR ROTATION: {rotation_rec.from_sector} → {rotation_rec.to_sector} "
-                       f"(confidence: {rotation_rec.confidence:.1%})")
+            logger.info(
+                f"📊 SECTOR ROTATION: {rotation_rec.from_sector} → {rotation_rec.to_sector} "
+                f"(confidence: {rotation_rec.confidence:.1%})"
+            )
 
             return decision
 
@@ -271,16 +287,18 @@ class PortfolioDecisionCoordinator:
         try:
             # Calculate time since last rebalance
             if self.last_rebalance_time:
-                days_since_rebalance = (datetime.utcnow() - self.last_rebalance_time).days
+                days_since_rebalance = (
+                    datetime.utcnow() - self.last_rebalance_time
+                ).days
             else:
                 days_since_rebalance = 30  # Force rebalance if never done
 
             # Convert position list to portfolio dict for engine
             portfolio_dict = {
-                p['symbol']: {
-                    'value_eur': p.get('value_eur', 0),
-                    'quantity': p.get('quantity', 0),
-                    'price': p.get('price', 0),
+                p["symbol"]: {
+                    "value_eur": p.get("value_eur", 0),
+                    "quantity": p.get("quantity", 0),
+                    "price": p.get("price", 0),
                 }
                 for p in current_positions
             }
@@ -290,7 +308,7 @@ class PortfolioDecisionCoordinator:
                 current_positions=portfolio_dict,
                 portfolio_value=portfolio_value,
                 target_allocation=target_allocation,
-                regime='neutral',
+                regime="neutral",
             )
 
             if not plan:
@@ -310,21 +328,26 @@ class PortfolioDecisionCoordinator:
                 actions=actions,
                 urgency=urgency,
                 rationale=f"Rebalance portfolio: total drift {plan.total_drift:.1f}%. "
-                         f"Expected improvement: {plan.improvement_expected}. "
-                         f"Last rebalance: {days_since_rebalance} days ago.",
+                f"Expected improvement: {plan.improvement_expected}. "
+                f"Last rebalance: {days_since_rebalance} days ago.",
                 estimated_impact={
                     "total_drift": plan.total_drift,
                     "total_cost": plan.total_rebalancing_cost,
-                    "cost_pct_portfolio": (plan.total_rebalancing_cost / portfolio_value * 100)
-                                        if portfolio_value > 0 else 0,
+                    "cost_pct_portfolio": (
+                        plan.total_rebalancing_cost / portfolio_value * 100
+                    )
+                    if portfolio_value > 0
+                    else 0,
                     "improvement_expected": plan.improvement_expected,
                     "execution_time_min": plan.estimated_execution_time_min,
                     "num_actions": len(plan.actions),
-                }
+                },
             )
 
-            logger.info(f"🔄 REBALANCING: {plan.total_drift:.1f}% drift, "
-                       f"{len(plan.actions)} actions, cost €{plan.total_rebalancing_cost:.2f}")
+            logger.info(
+                f"🔄 REBALANCING: {plan.total_drift:.1f}% drift, "
+                f"{len(plan.actions)} actions, cost €{plan.total_rebalancing_cost:.2f}"
+            )
 
             # Update last rebalance time if plan is accepted
             self.last_rebalance_time = datetime.utcnow()
@@ -346,8 +369,8 @@ class PortfolioDecisionCoordinator:
 
         allocation = {}
         for pos in positions:
-            symbol = pos.get('symbol')
-            value = pos.get('value_eur', 0)
+            symbol = pos.get("symbol")
+            value = pos.get("value_eur", 0)
             pct = (value / portfolio_value) * 100
             allocation[symbol] = pct
 
@@ -362,7 +385,9 @@ class PortfolioDecisionCoordinator:
         summary = f"📋 Recent portfolio decisions ({len(recent)}):\n"
 
         for decision in recent:
-            summary += f"  • {decision.decision_type}: {', '.join(decision.target_symbols)} "
+            summary += (
+                f"  • {decision.decision_type}: {', '.join(decision.target_symbols)} "
+            )
             summary += f"(urgency: {decision.urgency}/10, time: {decision.timestamp.strftime('%H:%M:%S')})\n"
 
         return summary
@@ -383,8 +408,10 @@ class PortfolioDecisionCoordinator:
         """Mark a decision as executed."""
         try:
             # In real system, would update decision status
-            logger.info(f"✅ Decision executed: {decision.decision_type} "
-                       f"({len(decision.target_symbols)} symbols)")
+            logger.info(
+                f"✅ Decision executed: {decision.decision_type} "
+                f"({len(decision.target_symbols)} symbols)"
+            )
             return True
         except Exception as e:
             logger.error(f"Error marking decision executed: {e}")

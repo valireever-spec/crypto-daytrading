@@ -5,8 +5,8 @@ Record recommendations and their outcomes for continuous learning.
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Tuple
+from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -19,6 +19,7 @@ TRACKER_DIR = Path("logs/recommendation_tracking")
 @dataclass
 class RecommendationRecord:
     """Single recommendation record."""
+
     recommendation_id: str  # UUID for tracking
     timestamp: str  # ISO format
     symbol: str
@@ -32,6 +33,7 @@ class RecommendationRecord:
 @dataclass
 class OutcomeRecord:
     """Actual outcome for a recommendation."""
+
     recommendation_id: str
     outcome_timestamp: str  # ISO format
     holding_period_days: int
@@ -43,6 +45,7 @@ class OutcomeRecord:
 @dataclass
 class AccuracyMetrics:
     """Tracking accuracy metrics."""
+
     total_recommendations: int
     correct_direction: int
     within_magnitude_tolerance: int
@@ -86,9 +89,7 @@ class RecommendationTracker:
                     for line in f:
                         if line.strip():
                             data = json.loads(line)
-                            self.recommendations.append(
-                                RecommendationRecord(**data)
-                            )
+                            self.recommendations.append(RecommendationRecord(**data))
             except Exception as e:
                 logger.warning(f"Failed to load recommendations: {e}")
 
@@ -112,7 +113,8 @@ class RecommendationTracker:
         # Filter old recommendations
         before = len(self.recommendations)
         self.recommendations = [
-            r for r in self.recommendations
+            r
+            for r in self.recommendations
             if datetime.fromisoformat(r.timestamp).timestamp() > cutoff
         ]
         removed_recs = before - len(self.recommendations)
@@ -120,7 +122,8 @@ class RecommendationTracker:
         # Filter old outcomes
         before = len(self.outcomes)
         self.outcomes = [
-            o for o in self.outcomes
+            o
+            for o in self.outcomes
             if datetime.fromisoformat(o.outcome_timestamp).timestamp() > cutoff
         ]
         removed_outcomes = before - len(self.outcomes)
@@ -222,7 +225,9 @@ class RecommendationTracker:
         self.outcomes.append(outcome)
         self._append_to_file("outcomes.jsonl", outcome)
 
-        logger.info(f"Recorded outcome {recommendation_id}: {actual_return_pct:.2f}% return")
+        logger.info(
+            f"Recorded outcome {recommendation_id}: {actual_return_pct:.2f}% return"
+        )
         return outcome
 
     def _append_to_file(self, filename: str, record: object):
@@ -301,7 +306,9 @@ class RecommendationTracker:
 
             # Skip outcomes with invalid return values
             if outcome.actual_return_pct is None:
-                logger.debug(f"Skipping outcome {outcome.recommendation_id}: None actual_return_pct")
+                logger.debug(
+                    f"Skipping outcome {outcome.recommendation_id}: None actual_return_pct"
+                )
                 continue
 
             matches += 1
@@ -315,9 +322,7 @@ class RecommendationTracker:
 
                 # Check magnitude
                 if rec.expected_return_pct != 0:
-                    ratio = abs(
-                        outcome.actual_return_pct / rec.expected_return_pct
-                    )
+                    ratio = abs(outcome.actual_return_pct / rec.expected_return_pct)
                     if 1.0 / magnitude_tolerance <= ratio <= magnitude_tolerance:
                         within_magnitude += 1
                 else:
@@ -348,13 +353,11 @@ class RecommendationTracker:
         overall_accuracy = (correct_direction / matches * 100) if matches > 0 else 0.0
 
         scenario_accuracy = {
-            s: (scenario_correct[s] / scenario_total[s] * 100)
-            for s in scenario_total
+            s: (scenario_correct[s] / scenario_total[s] * 100) for s in scenario_total
         }
 
         symbol_accuracy = {
-            s: (symbol_correct[s] / symbol_total[s] * 100)
-            for s in symbol_total
+            s: (symbol_correct[s] / symbol_total[s] * 100) for s in symbol_total
         }
 
         return AccuracyMetrics(
@@ -371,9 +374,12 @@ class RecommendationTracker:
         pairs = []
         for outcome in self.outcomes:
             rec = next(
-                (r for r in self.recommendations
-                 if r.recommendation_id == outcome.recommendation_id),
-                None
+                (
+                    r
+                    for r in self.recommendations
+                    if r.recommendation_id == outcome.recommendation_id
+                ),
+                None,
             )
             if rec:
                 pairs.append((rec, outcome))
@@ -386,15 +392,18 @@ class RecommendationTracker:
         scenario_metrics = {}
 
         for scenario in ["base", "upside", "downside"]:
-            matching_pairs = [
-                (r, o) for r, o in pairs if r.scenario == scenario
-            ]
+            matching_pairs = [(r, o) for r, o in pairs if r.scenario == scenario]
 
             if matching_pairs:
-                avg_expected = sum(r.expected_return_pct for r, _ in matching_pairs) / len(matching_pairs)
-                avg_actual = sum(o.actual_return_pct for _, o in matching_pairs) / len(matching_pairs)
+                avg_expected = sum(
+                    r.expected_return_pct for r, _ in matching_pairs
+                ) / len(matching_pairs)
+                avg_actual = sum(o.actual_return_pct for _, o in matching_pairs) / len(
+                    matching_pairs
+                )
                 direction_correct = sum(
-                    1 for r, o in matching_pairs
+                    1
+                    for r, o in matching_pairs
                     if (r.expected_return_pct > 0) == (o.actual_return_pct > 0)
                 )
                 accuracy = direction_correct / len(matching_pairs) * 100
@@ -431,7 +440,9 @@ def trigger_scenario_reweighting() -> Dict[str, float]:
     --------
     Updated scenario weights if reweighting triggered, else current weights.
     """
-    from backend.analytics.scenario_probability_learner import get_scenario_probability_learner
+    from backend.analytics.scenario_probability_learner import (
+        get_scenario_probability_learner,
+    )
 
     tracker = get_recommendation_tracker()
     learner = get_scenario_probability_learner()
@@ -443,8 +454,7 @@ def trigger_scenario_reweighting() -> Dict[str, float]:
     all_scenarios = ["base", "upside", "downside"]
 
     sufficient_data = all(
-        metrics.scenario_accuracy.get(s, 0) >= min_samples
-        for s in all_scenarios
+        metrics.scenario_accuracy.get(s, 0) >= min_samples for s in all_scenarios
     )
 
     if sufficient_data and metrics.total_recommendations >= 15:

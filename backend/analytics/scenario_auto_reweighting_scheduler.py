@@ -5,7 +5,7 @@ Monthly systemd timer to auto-reweight scenarios based on accuracy.
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,9 @@ class ScenarioAutoReweightingScheduler:
         min_samples = 5
         for scenario in ["base", "upside", "downside"]:
             if metrics.scenario_accuracy.get(scenario, 0) < min_samples:
-                logger.info(f"Insufficient samples for {scenario}: {metrics.scenario_accuracy.get(scenario, 0)} < {min_samples}")
+                logger.info(
+                    f"Insufficient samples for {scenario}: {metrics.scenario_accuracy.get(scenario, 0)} < {min_samples}"
+                )
                 return False
 
         return True
@@ -96,11 +98,15 @@ class ScenarioAutoReweightingScheduler:
             # Get old weights with fallback
             try:
                 scenario_analyzer = get_scenario_analyzer()
-                old_weights = getattr(scenario_analyzer, "scenario_probabilities", {
-                    "base": 0.5,
-                    "upside": 0.25,
-                    "downside": 0.25,
-                }).copy()
+                old_weights = getattr(
+                    scenario_analyzer,
+                    "scenario_probabilities",
+                    {
+                        "base": 0.5,
+                        "upside": 0.25,
+                        "downside": 0.25,
+                    },
+                ).copy()
             except Exception as e:
                 logger.warning(f"Could not get scenario analyzer: {e}")
                 old_weights = {"base": 0.5, "upside": 0.25, "downside": 0.25}
@@ -118,18 +124,22 @@ class ScenarioAutoReweightingScheduler:
                 logger.warning(f"Could not update scenario analyzer: {e}")
 
             self.last_reweight_timestamp = datetime.now(timezone.utc).isoformat()
-            self.reweight_history.append({
-                "timestamp": self.last_reweight_timestamp,
-                "old_weights": old_weights,
-                "new_weights": new_weights,
-                "accuracy": metrics.scenario_accuracy,
-            })
+            self.reweight_history.append(
+                {
+                    "timestamp": self.last_reweight_timestamp,
+                    "old_weights": old_weights,
+                    "new_weights": new_weights,
+                    "accuracy": metrics.scenario_accuracy,
+                }
+            )
 
             # Trim history to prevent unbounded growth
             if len(self.reweight_history) > self.history_limit:
                 removed = len(self.reweight_history) - self.history_limit
-                self.reweight_history = self.reweight_history[-self.history_limit:]
-                logger.debug(f"Trimmed reweight history: removed {removed} oldest entries")
+                self.reweight_history = self.reweight_history[-self.history_limit :]
+                logger.debug(
+                    f"Trimmed reweight history: removed {removed} oldest entries"
+                )
 
             logger.info(
                 f"Reweighted scenarios: {old_weights} → {new_weights}, "
