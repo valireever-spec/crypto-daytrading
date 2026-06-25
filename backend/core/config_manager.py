@@ -49,6 +49,10 @@ class ConfigManager:
     def env_to_config() -> Dict[str, Any]:
         """Convert .env variables to config dict."""
         import os
+        # Parse symbols from comma-separated env var
+        symbols_str = os.getenv("TRADING_SYMBOLS", "BTCUSDT,ETHUSDT,BNBUSDT")
+        symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
+
         return {
             "position_size_pct": float(os.getenv("POSITION_SIZE_PCT", "0.02")),
             "max_positions": int(os.getenv("MAX_POSITIONS", "6")),
@@ -57,7 +61,7 @@ class ConfigManager:
             "exit_profit_target": 0.03,
             "exit_stop_loss": 0.02,
             "enabled": True,
-            "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
+            "symbols": symbols,
         }
 
     @staticmethod
