@@ -263,17 +263,17 @@ class AutonomousTrader:
                 # HARDENING: Differentiated quality gates (Entries vs Exits)
                 # Exits are lenient to ensure stop losses and profit targets execute
                 quality_gate_pass_entry = (
-                    data_quality.overall_score >= 90.0
-                )  # Strict for entries
+                    data_quality.overall_score >= self.config.quality_gate_entry
+                )  # Strict for entries (configurable)
                 quality_gate_pass_exit = (
-                    data_quality.overall_score >= 60.0
-                )  # Lenient for exits
+                    data_quality.overall_score >= self.config.quality_gate_exit
+                )  # Lenient for exits (configurable)
 
                 if not quality_gate_pass_entry:
                     logger.warning(
-                        f"⚠️ Entry quality gate FAILED ({data_quality.overall_score:.0f}% < 90%), "
+                        f"⚠️ Entry quality gate FAILED ({data_quality.overall_score:.0f}% < {self.config.quality_gate_entry}%), "
                         f"blocking NEW ENTRIES. Failures: {data_quality.failures}. "
-                        f"Exits still allowed (quality >= 60% for stop loss/profit target)"
+                        f"Exits still allowed (quality >= {self.config.quality_gate_exit}% for stop loss/profit target)"
                     )
                     # Don't skip iteration entirely - exits may still be needed
                     skip_entries = True
@@ -282,7 +282,7 @@ class AutonomousTrader:
 
                 if not quality_gate_pass_exit:
                     logger.critical(
-                        f"🛑 Exit quality gate FAILED ({data_quality.overall_score:.0f}% < 60%), "
+                        f"🛑 Exit quality gate FAILED ({data_quality.overall_score:.0f}% < {self.config.quality_gate_exit}%), "
                         f"CANNOT EXECUTE STOPS. Emergency: will attempt liquidation anyway. "
                         f"Failures: {data_quality.failures}"
                     )
