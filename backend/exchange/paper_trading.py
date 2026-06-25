@@ -103,6 +103,22 @@ class PaperTradingEngine:
             Order confirmation with fill details
         """
         try:
+            # 🚨 CRITICAL SAFETY GATE #1: Reject orders if price data is stale
+            # This prevents trading with outdated prices (e.g., WebSocket disconnected)
+            from backend.exchange.binance_websocket import get_websocket
+            ws = get_websocket()
+            if ws and hasattr(ws, 'last_updates'):
+                last_update = ws.last_updates.get(symbol.lower(), datetime.utcnow())
+                age_seconds = (datetime.utcnow() - last_update).total_seconds()
+                if age_seconds > 60:  # Prices older than 60 seconds = CRITICAL SAFETY REJECT
+                    logger.critical(
+                        f"🚨 SAFETY GATE TRIPPED: Rejecting {symbol} {side} order - price is {age_seconds:.0f}s old (max 60s allowed)"
+                    )
+                    return {
+                        "status": "REJECTED",
+                        "reason": f"Price data stale: {age_seconds:.0f}s old (safety limit 60s). WebSocket likely disconnected. Restart API.",
+                    }
+
             # Validate inputs
             if quantity <= 0:
                 return {
