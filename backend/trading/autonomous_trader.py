@@ -134,13 +134,33 @@ class AutonomousTrader:
                     }}
                 )
 
-                if not data_quality.pass_gate:
-                    logger.critical(
-                        f"⚠️ Data quality gate FAILED ({data_quality.overall_score:.0f}% < 90%), "
-                        f"skipping trading this iteration. Failures: {data_quality.failures}"
+                # HARDENING: Differentiated quality gates (Entries vs Exits)
+                # Exits are lenient to ensure stop losses and profit targets execute
+                quality_gate_pass_entry = data_quality.overall_score >= 90.0  # Strict for entries
+                quality_gate_pass_exit = data_quality.overall_score >= 60.0   # Lenient for exits
+
+                if not quality_gate_pass_entry:
+                    logger.warning(
+                        f"⚠️ Entry quality gate FAILED ({data_quality.overall_score:.0f}% < 90%), "
+                        f"blocking NEW ENTRIES. Failures: {data_quality.failures}. "
+                        f"Exits still allowed (quality >= 60% for stop loss/profit target)"
                     )
-                    await asyncio.sleep(self.config.loop_sleep_seconds)
-                    continue
+                    # Don't skip iteration entirely - exits may still be needed
+                    skip_entries = True
+                else:
+                    skip_entries = False
+
+                if not quality_gate_pass_exit:
+                    logger.critical(
+                        f"🛑 Exit quality gate FAILED ({data_quality.overall_score:.0f}% < 60%), "
+                        f"CANNOT EXECUTE STOPS. Emergency: will attempt liquidation anyway. "
+                        f"Failures: {data_quality.failures}"
+                    )
+                    # Even in emergency, need some minimum data
+                    if data_quality.overall_score < 30.0:
+                        logger.critical("Data quality catastrophically low, waiting for recovery")
+                        await asyncio.sleep(self.config.loop_sleep_seconds)
+                        continue
 
                 # Check daily loss limit (BUG FIX #1: Enforce max_daily_loss_pct)
                 daily_loss_exceeded = await self._check_daily_loss_limit()
@@ -153,13 +173,17 @@ class AutonomousTrader:
                 if loop_count % portfolio_check_interval == 0:
                     await self._check_portfolio_decisions()
 
-                # Monitor each symbol
-                for symbol in self.config.symbols:
-                    signal = await self._check_symbol(symbol)
-                    if signal:
-                        logger.info(f"✅ Signal generated for {symbol}: {signal.reason}")
+                # Monitor each symbol (NEW ENTRIES - quality gated)
+                if not skip_entries:
+                    for symbol in self.config.symbols:
+                        signal = await self._check_symbol(symbol)
+                        if signal:
+                            logger.info(f"✅ Signal generated for {symbol}: {signal.reason}")
+                else:
+                    logger.debug(f"Skipping entry signals due to data quality gate (<90%)")
 
-                # Check exits for existing positions
+                # Check exits for existing positions (EXITS - lenient quality gate, always run)
+                # This ensures stop losses and profit targets execute even with degraded data quality
                 await self._check_exits()
 
                 # Sleep briefly before next iteration
@@ -308,7 +332,12 @@ class AutonomousTrader:
         return signal_score, components
 
     async def _check_exits(self):
-        """Check if any positions should be exited (Phase 314/316: Dynamic stops + regime-aware)."""
+        """Check if any positions should be exited (Phase 314/316: Dynamic stops + regime-aware).
+
+        HARDENING: Uses lenient data quality gate (≥60% vs ≥90% for entries).
+        Rationale: Must execute stop losses and profit targets to protect capital,
+        even with degraded data quality. Can skip new entries, but exits MUST work.
+        """
         try:
             engine = get_paper_trading()
             if not engine:
