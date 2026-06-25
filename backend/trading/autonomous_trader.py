@@ -97,8 +97,10 @@ class TradingConfig:
     max_positions: int = 5  # From MAX_POSITIONS env var
     max_daily_loss_pct: float = 5.0  # From MAX_DAILY_LOSS_PCT env var
     symbols: List[str] = None  # From TRADING_SYMBOLS env var
-    loop_sleep_seconds: float = 10.0  # Sleep between trading loop iterations
+    loop_sleep_seconds: float = 10.0  # Sleep between trading loop iterations (controls frequency)
     retry_sleep_seconds: float = 5.0  # Sleep on error before retry
+    quality_gate_entry: float = 90.0  # Data quality required for NEW entries (%)
+    quality_gate_exit: float = 60.0  # Data quality required for exits (stop loss / profit target)
 
     def __post_init__(self):
         if self.symbols is None:

@@ -26,6 +26,9 @@ class ConfigUpdateRequest(BaseModel):
     max_positions: Optional[int] = None
     max_daily_loss_pct: Optional[float] = None
     symbols: Optional[List[str]] = None
+    loop_sleep_seconds: Optional[float] = None  # Controls trading frequency (seconds)
+    quality_gate_entry: Optional[float] = None  # Min data quality for NEW entries (%)
+    quality_gate_exit: Optional[float] = None  # Min data quality for exits (%)
 
 
 @router.get("/api/autonomous/status")
@@ -86,6 +89,9 @@ async def get_trading_config():
             "max_daily_loss_pct": trader.config.max_daily_loss_pct,
             "symbols": trader.config.symbols,
             "enabled": trader.config.enabled,
+            "loop_sleep_seconds": trader.config.loop_sleep_seconds,
+            "quality_gate_entry": trader.config.quality_gate_entry,
+            "quality_gate_exit": trader.config.quality_gate_exit,
         }
     )
 
@@ -113,6 +119,12 @@ async def update_trading_config(request: ConfigUpdateRequest):
         trader.config.max_daily_loss_pct = request.max_daily_loss_pct
     if request.symbols is not None:
         trader.config.symbols = request.symbols
+    if request.loop_sleep_seconds is not None:
+        trader.config.loop_sleep_seconds = request.loop_sleep_seconds
+    if request.quality_gate_entry is not None:
+        trader.config.quality_gate_entry = request.quality_gate_entry
+    if request.quality_gate_exit is not None:
+        trader.config.quality_gate_exit = request.quality_gate_exit
 
     # Prepare config dict
     config_dict = {
@@ -124,6 +136,9 @@ async def update_trading_config(request: ConfigUpdateRequest):
         "max_daily_loss_pct": trader.config.max_daily_loss_pct,
         "symbols": trader.config.symbols,
         "enabled": trader.config.enabled,
+        "loop_sleep_seconds": trader.config.loop_sleep_seconds,
+        "quality_gate_entry": trader.config.quality_gate_entry,
+        "quality_gate_exit": trader.config.quality_gate_exit,
     }
 
     # Save to persistent storage
@@ -170,6 +185,12 @@ async def sync_config_from_backup(request: ConfigUpdateRequest):
         trader.config.max_daily_loss_pct = request.max_daily_loss_pct
     if request.symbols is not None:
         trader.config.symbols = request.symbols
+    if request.loop_sleep_seconds is not None:
+        trader.config.loop_sleep_seconds = request.loop_sleep_seconds
+    if request.quality_gate_entry is not None:
+        trader.config.quality_gate_entry = request.quality_gate_entry
+    if request.quality_gate_exit is not None:
+        trader.config.quality_gate_exit = request.quality_gate_exit
 
     # Convert to dict for storage
     config_dict = {
