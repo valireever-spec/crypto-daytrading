@@ -123,6 +123,17 @@ class AutonomousTrader:
         self.trade_history: List[Dict] = []
         self.last_signal_time: Dict[str, datetime] = {}
         self.order_failures: Dict[str, int] = {}  # Track failures per symbol (GAP #10)
+        self._sync_with_engine()  # Load positions from paper trading engine on startup
+
+    def _sync_with_engine(self):
+        """Sync trader state with paper trading engine on startup."""
+        try:
+            engine = get_paper_trading()
+            if engine:
+                positions = engine.get_positions()
+                logger.info(f"✅ Synced {len(positions)} positions from paper trading engine on startup")
+        except Exception as e:
+            logger.warning(f"Could not sync with engine on startup: {e}")
 
     async def start(self):
         """Start the autonomous trading loop."""
@@ -1368,27 +1379,49 @@ class AutonomousTrader:
         return score
 
     def get_status(self) -> Dict:
-        """Get trader status."""
+        """Get trader status (synced with paper trading engine)."""
         engine = get_paper_trading()
         daily_pnl = 0.0
         daily_pnl_pct = 0.0
         total_equity = 10000.0
+        active_positions = 0
+        total_trades = len(self.trade_history)
 
         if engine:
+            # Get account data
             account = engine.get_account_state()
             daily_pnl = account.get('daily_pnl', 0.0)
             total_equity = account.get('total_equity', 10000.0)
             if total_equity > 0:
                 daily_pnl_pct = (daily_pnl / total_equity) * 100
 
+            # Get positions from engine (source of truth)
+            positions = engine.get_positions()
+            active_positions = len(positions)
+
+            # Calculate unrealized P&L from positions
+            unrealized_pnl = 0.0
+            for pos in positions:
+                qty = pos.get('quantity', 0)
+                entry = pos.get('entry_price', 0)
+                current = pos.get('current_price', 0)
+                if qty > 0 and entry > 0:
+                    unrealized_pnl += qty * (current - entry)
+
+            # Use unrealized P&L if positions exist
+            if active_positions > 0:
+                daily_pnl = unrealized_pnl
+                if total_equity > 0:
+                    daily_pnl_pct = (daily_pnl / total_equity) * 100
+
         return {
             'running': self.running,
             'enabled': self.config.enabled,
-            'active_positions': 0,  # Would calculate
-            'total_trades': len(self.trade_history),
+            'active_positions': active_positions,
+            'total_trades': total_trades,
             'recent_trades': self.trade_history[-10:] if self.trade_history else [],
-            'daily_pnl': daily_pnl,
-            'daily_pnl_pct': daily_pnl_pct,
+            'daily_pnl': round(daily_pnl, 2),
+            'daily_pnl_pct': round(daily_pnl_pct, 2),
             'config': {
                 'entry_threshold': self.config.entry_threshold,
                 'exit_profit_target': self.config.exit_profit_target,
