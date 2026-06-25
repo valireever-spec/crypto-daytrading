@@ -917,8 +917,9 @@
 
             let configHTML = `
                 <div class="config-input">
+                    <h3>📊 Trading Parameters</h3>
                     <div class="input-group">
-                        <label>Entry Threshold</label>
+                        <label>Entry Threshold (0-100)</label>
                         <input type="number" id="entryThresholdInput" value="${config.entry_threshold}" min="0" max="100" step="1">
                     </div>
                     <div class="input-group">
@@ -929,16 +930,39 @@
                         <label>Position Size %</label>
                         <input type="number" id="positionSizeInput" value="${(config.position_size_pct * 100).toFixed(1)}" min="0.1" max="100" step="0.1">
                     </div>
+
+                    <h3>💰 Exit Targets</h3>
                     <div class="input-group">
-                        <label>Stop Loss %</label>
-                        <input type="number" id="stopLossInput" value="${(config.exit_stop_loss * 100).toFixed(1)}" min="0.1" max="50" step="0.1">
+                        <label>Stop Loss % (Auto-linked to profit target for 1:1.5 ratio)</label>
+                        <input type="number" id="stopLossInput" value="${(config.exit_stop_loss * 100).toFixed(2)}" min="0.01" max="50" step="0.01">
                     </div>
                     <div class="input-group">
-                        <label>Take Profit %</label>
-                        <input type="number" id="takeProfitInput" value="${(config.exit_profit_target * 100).toFixed(1)}" min="0.1" max="50" step="0.1">
+                        <label>Take Profit % (Auto-linked to stop loss for 1:1.5 ratio)</label>
+                        <input type="number" id="takeProfitInput" value="${(config.exit_profit_target * 100).toFixed(2)}" min="0.01" max="50" step="0.01">
                     </div>
+
+                    <h3>🔧 Safety Gates</h3>
+                    <div class="input-group">
+                        <label>Entry Quality Gate % (Min data quality to enter)</label>
+                        <input type="number" id="qualityGateEntryInput" value="${config.quality_gate_entry}" min="0" max="100" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Exit Quality Gate % (Min data quality to exit)</label>
+                        <input type="number" id="qualityGateExitInput" value="${config.quality_gate_exit}" min="0" max="100" step="1">
+                    </div>
+
+                    <h3>⏱️ Execution</h3>
+                    <div class="input-group">
+                        <label>Loop Sleep Seconds (Trading frequency)</label>
+                        <input type="number" id="loopSleepInput" value="${config.loop_sleep_seconds}" min="1" max="300" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label>Max Daily Loss %</label>
+                        <input type="number" id="maxDailyLossInput" value="${config.max_daily_loss_pct}" min="0.1" max="100" step="0.1">
+                    </div>
+
                     <div class="button-group">
-                        <button class="btn-primary" onclick="updateConfig()">Save Configuration</button>
+                        <button class="btn-primary" onclick="updateConfigValues()">💾 Save Configuration</button>
                     </div>
                 </div>
             `;
@@ -964,17 +988,25 @@
             const positionSize = parseFloat(document.getElementById('positionSizeInput').value) / 100;
             const stopLoss = parseFloat(document.getElementById('stopLossInput').value) / 100;
             const takeProfit = parseFloat(document.getElementById('takeProfitInput').value) / 100;
+            const qualityGateEntry = parseFloat(document.getElementById('qualityGateEntryInput').value);
+            const qualityGateExit = parseFloat(document.getElementById('qualityGateExitInput').value);
+            const loopSleep = parseFloat(document.getElementById('loopSleepInput').value);
+            const maxDailyLoss = parseFloat(document.getElementById('maxDailyLossInput').value);
 
             const result = await postAPI('/api/autonomous/config/update', {
                 entry_threshold: entryThreshold,
                 max_positions: maxPositions,
                 position_size_pct: positionSize,
                 exit_stop_loss: stopLoss,
-                exit_profit_target: takeProfit
+                exit_profit_target: takeProfit,
+                quality_gate_entry: qualityGateEntry,
+                quality_gate_exit: qualityGateExit,
+                loop_sleep_seconds: loopSleep,
+                max_daily_loss_pct: maxDailyLoss
             });
 
             if (result) {
-                alert('Configuration updated successfully!');
+                alert('✅ Configuration updated successfully!\n\nNote: Stop Loss and Take Profit are auto-linked (1:1.5 ratio)\nPosition Size and Max Positions are auto-linked (≤25% total risk)');
                 updateStatus();
             }
         }
