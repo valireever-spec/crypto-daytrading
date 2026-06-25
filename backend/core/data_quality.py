@@ -278,12 +278,12 @@ class DataQualityMeasurer:
         return 100.0
 
 
+_data_quality_measurer: Optional[DataQualityMeasurer] = None
+
+
 def get_data_quality_measurer() -> DataQualityMeasurer:
     """Get or create global data quality measurer."""
     global _data_quality_measurer
-    if "_data_quality_measurer" not in globals():
+    if _data_quality_measurer is None:
         _data_quality_measurer = DataQualityMeasurer()
     return _data_quality_measurer
-
-
-_data_quality_measurer: Optional[DataQualityMeasurer] = None
