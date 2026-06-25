@@ -1,5 +1,5 @@
 {
-  "entry_threshold": 60.0,
+  "entry_threshold": 65.0,
   "exit_profit_target": 0.025,
   "exit_stop_loss": 0.015,
   "position_size_pct": 0.02,
@@ -11,6 +11,6 @@
     "BNBUSDT"
   ],
   "enabled": true,
-  "_last_updated": "2026-06-25T14:03:30.713041Z",
+  "_last_updated": "2026-06-25T14:33:22.003038Z",
   "_source": "api_update"
 }
