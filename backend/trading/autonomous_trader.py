@@ -18,6 +18,7 @@ from backend.analytics.signal_explainer import get_signal_explainer
 from backend.analytics.volatility_manager import get_volatility_manager
 from backend.trading.portfolio_decision_coordinator import get_portfolio_decision_coordinator
 from backend.core.data_quality import get_data_quality_measurer
+from backend.core.data_validator import get_price_validator, OrderFillValidator, PositionReconciler
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -340,7 +341,7 @@ class AutonomousTrader:
                     context={
                         "signal_score": signal_score,
                         "threshold": adaptive_threshold,
-                        "regime": regime_data.get("regime", "unknown"),
+                        "regime": regime_info.get("regime", "unknown"),
                         "asset_class": asset_class,
                     }
                 )
@@ -1236,9 +1237,10 @@ class AutonomousTrader:
             return {"regime": "unknown"}, self.config.entry_threshold
 
     async def _get_current_prices(self) -> Dict[str, float]:
-        """Get current prices from Binance WebSocket (HARDENING: Data freshness gate).
+        """Get current prices from Binance WebSocket with validation (HARDENING: Pillars #1, #9).
 
-        Enforces 5-second max age on all prices to prevent trading with stale data.
+        Enforces 5-second max age (Pillar #1: Data Freshness)
+        Validates price ranges and spikes (Pillar #9: Incoming Data Validation)
         """
         try:
             from backend.exchange.binance_stream import get_stream_client
@@ -1251,7 +1253,7 @@ class AutonomousTrader:
                 logger.warning("Price fetch: WebSocket not connected, no fresh data available")
                 return {}
 
-            # HARDENING: Get prices only if fresh (max 5 seconds old)
+            # HARDENING: Get prices only if fresh (max 5 seconds old) - Pillar #1
             prices = client.get_prices_fresh(self.config.symbols, max_age_seconds=5)
 
             if len(prices) < len(self.config.symbols):
@@ -1262,7 +1264,25 @@ class AutonomousTrader:
                 )
                 return prices
 
-            return prices
+            # HARDENING: Validate prices for poisoning (Pillar #9: Incoming Data Validation)
+            validator = get_price_validator()
+            valid_prices, invalid_prices = validator.validate_prices_bulk(prices, datetime.utcnow())
+
+            # Log any rejections
+            if invalid_prices:
+                logger.warning(f"🚨 POISONED PRICES REJECTED ({len(invalid_prices)}):")
+                for symbol, reason in invalid_prices.items():
+                    logger.warning(f"  ❌ {symbol}: {reason}")
+
+            # Return only validated prices
+            if len(valid_prices) < len(self.config.symbols):
+                logger.warning(
+                    f"Data poisoning gate: {len(invalid_prices)} prices rejected, "
+                    f"only {len(valid_prices)} of {len(self.config.symbols)} valid"
+                )
+
+            return valid_prices
+
         except Exception as e:
             logger.error(f"Error fetching prices: {e}")
             return {}

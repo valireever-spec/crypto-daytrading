@@ -10,7 +10,7 @@
 
 | Date | Trades | Wins | Win% | Daily P&L | Positions | Notes |
 |------|--------|------|------|-----------|-----------|-------|
-| 2026-06-25 | 1 | — | — | €0.00 | 0 | Phase 1 Start, hardening complete |
+| 2026-06-25 | 2 | — | — | €0.00 | 2 | Phase 1 LIVE 🚀 Autonomous trader running, first 2 trades filled |
 | 2026-06-26 | — | — | — | — | — | — |
 | 2026-06-27 | — | — | — | — | — | — |
 | 2026-06-28 | — | — | — | — | — | — |
@@ -28,17 +28,17 @@
 
 **Account Status:**
 - Starting Capital: €10,000
-- Current Equity: €10,000
-- Daily P&L: €0.00 (0%)
-- Cumulative P&L: €0.00 (0%)
-- Active Positions: 0
+- Current Equity: €9,999.70
+- Daily P&L: €0.00 (0%) 
+- Cumulative P&L: €-0.30 (fees)
+- Active Positions: 2 (BTCUSDT, ETHUSDT)
 - Max Positions: 5
 
 **Trading Activity:**
-- Total Trades: 1 (test only)
-- Winning Trades: 0
-- Losing Trades: 0
-- Win Rate: 0%
+- Total Trades: 2
+- Winning Trades: 0 (ongoing)
+- Losing Trades: 0 (ongoing)
+- Win Rate: N/A (positions open)
 - Avg Win: N/A
 - Avg Loss: N/A
 
@@ -46,9 +46,9 @@
 - Trader Running: ✅ YES
 - Trader Enabled: ✅ YES
 - Data Quality Score: 100% (excellent)
-- API Health: ✅ OK
+- API Health: ✅ OK (8001)
 - Database: ✅ SQLite synced
-- Failover Monitor: ✅ Ready
+- Immutable Log: ✅ Active (logs/immutable/trades_active.jsonl)
 
 ---
 

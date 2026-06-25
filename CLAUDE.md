@@ -34,9 +34,16 @@ Crypto Daytrading Platform — Development Guidance
 
 ---
 
-## 8-Pillar Framework Application
+## Critical Systems Framework (CSF) Application
 
-This project applies NASA/Tesla/Apple/Toyota standards via the 8-pillar framework.
+This project implements the **Critical Systems Framework (CSF)** — a 26-pillar hardening standard for autonomous trading systems.
+
+**Current Phase:** Phase 1 (Core Safety) — 11 pillars
+- Phase 1 (Paper Trading): 11 pillars ← Current
+- Phase 2 (Live Trading): 17 pillars
+- Phase 3 (Production): 26 pillars
+
+See `CRITICAL_SYSTEMS_FRAMEWORK.md` for full specification.
 
 ### 1️⃣ Architecture Discipline & Traceability (Target: 4/5)
 

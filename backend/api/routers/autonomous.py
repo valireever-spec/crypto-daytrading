@@ -12,6 +12,7 @@ from backend.trading.autonomous_trader import (
     TradingConfig
 )
 from backend.core.config_manager import ConfigManager
+from backend.core.immutable_logger import get_immutable_logger
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Autonomous Trading"])
@@ -202,3 +203,19 @@ async def get_trade_history(limit: int = 50):
         "recent": trades,
         "timestamp": __import__('datetime').datetime.utcnow().isoformat()
     })
+
+
+@router.get("/api/immutable-log/status")
+async def get_immutable_log_status():
+    """Get immutable transaction log status (Pillar #6: State Persistence)."""
+    try:
+        logger = get_immutable_logger()
+        status = logger.get_log_status()
+        return JSONResponse({
+            "status": "ok",
+            "immutable_log": status,
+            "message": "Write-once, append-only transaction logging active"
+        })
+    except Exception as e:
+        logger.error(f"Failed to get immutable log status: {e}")
+        raise HTTPException(status_code=500, detail=f"Immutable log error: {str(e)}")

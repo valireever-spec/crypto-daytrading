@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from backend.core.database import get_database
+from backend.core.immutable_logger import get_immutable_logger
 
 logger = logging.getLogger(__name__)
 
@@ -349,10 +350,26 @@ class PaperTradingEngine:
         logger.info("Paper trading account reset")
 
     def _log_trade(self, trade: Trade) -> None:
-        """Log trade to audit trail (append-only)."""
+        """Log trade to audit trail (append-only, immutable)."""
         try:
+            # Log to traditional audit log
             with open(self.AUDIT_LOG, "a") as f:
                 f.write(json.dumps(trade.to_dict()) + "\n")
+
+            # Log to immutable transaction log (Pillar #6: State Persistence)
+            immutable_logger = get_immutable_logger()
+            immutable_logger.log_transaction("TRADE", {
+                "order_id": trade.order_id,
+                "symbol": trade.symbol,
+                "side": trade.side,
+                "quantity": trade.quantity,
+                "price": trade.price,
+                "fee": trade.fee,
+                "realized_pnl": trade.realized_pnl,
+                "mode": trade.mode,
+                "status": trade.status,
+            })
+
         except Exception as e:
             logger.error(f"Failed to log trade: {e}")
 
