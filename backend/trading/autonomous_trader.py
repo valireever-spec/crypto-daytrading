@@ -195,9 +195,30 @@ class AutonomousTrader:
             }.get(regime_info.get("regime", "unknown"), "?")
             regime_str = f"{regime_emoji} {regime_info.get('regime', 'unknown')} (entry_threshold: {adaptive_threshold:.1f})"
 
-            logger.info(f"{symbol}: {explanation['emoji']} {explanation['reasoning']} (score: {signal_score:.1f}/{adaptive_threshold:.1f}) | Regime: {regime_str}")
+            # Structured signal decision log
+            signal_passed = signal_score >= adaptive_threshold
+            logger.info(
+                f"{symbol}: {explanation['emoji']} {explanation['reasoning']} (score: {signal_score:.1f}/{adaptive_threshold:.1f}) | Regime: {regime_str}",
+                extra={
+                    "extra_fields": {
+                        "event": "SIGNAL_DECISION",
+                        "symbol": symbol,
+                        "signal_score": round(signal_score, 2),
+                        "threshold": round(adaptive_threshold, 2),
+                        "passed": signal_passed,
+                        "reasoning": explanation['reasoning'],
+                        "component_scores": {
+                            k: round(v, 2) if isinstance(v, float) else v
+                            for k, v in component_scores.items()
+                        },
+                        "regime": regime_info.get("regime", "unknown"),
+                        "regime_confidence": round(regime_info.get("trend_strength", 0), 2),
+                        "asset_class": asset_class,
+                    }
+                }
+            )
 
-            if signal_score >= adaptive_threshold:
+            if signal_passed:
                 # Generate entry signal
                 signal = TradeSignal(
                     symbol=symbol,
@@ -654,16 +675,37 @@ class AutonomousTrader:
             logger.info(f"   Order Result: {result}")
 
             if result.get('status') == 'FILLED':
-                logger.info(f"🚀 BUY EXECUTED: {quantity:.6f} {signal.symbol} @ ${current_price:.2f} - {signal.reason}")
-                self.trade_history.append({
-                    'timestamp': datetime.utcnow().isoformat(),
+                trade_log = {
+                    'timestamp': datetime.utcnow().isoformat() + "Z",
                     'symbol': signal.symbol,
                     'side': 'BUY',
                     'quantity': quantity,
                     'price': current_price,
                     'reason': signal.reason,
                     'signal_strength': signal.strength
-                })
+                }
+                self.trade_history.append(trade_log)
+
+                # Structured trade execution log
+                logger.info(
+                    f"🚀 BUY EXECUTED: {quantity:.6f} {signal.symbol} @ ${current_price:.2f}",
+                    extra={
+                        "extra_fields": {
+                            "event": "TRADE_EXECUTED",
+                            "order_id": result.get('order_id', 'unknown'),
+                            "symbol": signal.symbol,
+                            "side": "BUY",
+                            "quantity": round(quantity, 6),
+                            "price": round(current_price, 2),
+                            "total_value": round(quantity * current_price, 2),
+                            "strategy": "autonomous_trader",
+                            "signal_strength": round(signal.strength, 2),
+                            "signal_reason": signal.reason,
+                            "status": result.get('status'),
+                            "timestamp": trade_log['timestamp'],
+                        }
+                    }
+                )
                 # Clear failure count on success
                 self.order_failures[signal.symbol] = 0
                 return True
@@ -671,7 +713,26 @@ class AutonomousTrader:
                 # Track failures (GAP #10 fix)
                 failures = self.order_failures.get(signal.symbol, 0) + 1
                 self.order_failures[signal.symbol] = failures
-                logger.warning(f"BUY order failed for {signal.symbol}: {result.get('error')} (failure #{failures})")
+
+                # Structured order failure log
+                logger.warning(
+                    f"BUY order failed for {signal.symbol}",
+                    extra={
+                        "extra_fields": {
+                            "event": "ORDER_FAILED",
+                            "order_id": result.get('order_id', 'unknown'),
+                            "symbol": signal.symbol,
+                            "side": "BUY",
+                            "quantity": round(quantity, 6),
+                            "price": round(current_price, 2),
+                            "strategy": "autonomous_trader",
+                            "error_code": result.get('error_code'),
+                            "error_message": result.get('error'),
+                            "consecutive_failures": failures,
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                        }
+                    }
+                )
 
                 # Back off if repeated failures
                 if failures > 3:
@@ -711,9 +772,8 @@ class AutonomousTrader:
 
             if result.get('status') == 'FILLED':
                 pnl = result.get('pnl', 0)
-                logger.info(f"SELL {quantity:.6f} {symbol} @ {current_price} - {reason} (PnL: €{pnl:.2f}, {pnl_pct*100:.1f}%)")
-                self.trade_history.append({
-                    'timestamp': datetime.utcnow().isoformat(),
+                exit_log = {
+                    'timestamp': datetime.utcnow().isoformat() + "Z",
                     'symbol': symbol,
                     'side': 'SELL',
                     'quantity': quantity,
@@ -721,10 +781,51 @@ class AutonomousTrader:
                     'reason': reason,
                     'pnl': pnl,
                     'pnl_pct': pnl_pct,
-                })
+                }
+                self.trade_history.append(exit_log)
+
+                # Structured trade exit log
+                logger.info(
+                    f"📊 SELL {quantity:.6f} {symbol} @ {current_price} - PnL: €{pnl:.2f}",
+                    extra={
+                        "extra_fields": {
+                            "event": "TRADE_EXIT",
+                            "order_id": result.get('order_id', 'unknown'),
+                            "symbol": symbol,
+                            "side": "SELL",
+                            "quantity": round(quantity, 6),
+                            "price": round(current_price, 2),
+                            "total_value": round(quantity * current_price, 2),
+                            "strategy": "autonomous_trader",
+                            "exit_reason": reason,
+                            "pnl": round(pnl, 2),
+                            "pnl_pct": round(pnl_pct, 4),
+                            "status": result.get('status'),
+                            "timestamp": exit_log['timestamp'],
+                        }
+                    }
+                )
                 return True
             else:
-                logger.warning(f"SELL order failed for {symbol}: {result.get('error')}")
+                # Structured exit failure log
+                logger.warning(
+                    f"SELL order failed for {symbol}",
+                    extra={
+                        "extra_fields": {
+                            "event": "EXIT_FAILED",
+                            "order_id": result.get('order_id', 'unknown'),
+                            "symbol": symbol,
+                            "side": "SELL",
+                            "quantity": round(quantity, 6),
+                            "price": round(current_price, 2),
+                            "strategy": "autonomous_trader",
+                            "exit_reason": reason,
+                            "error_code": result.get('error_code'),
+                            "error_message": result.get('error'),
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                        }
+                    }
+                )
                 return False
 
         except Exception as e:

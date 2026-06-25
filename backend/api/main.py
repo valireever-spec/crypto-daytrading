@@ -18,7 +18,6 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.core.config import settings
 from backend.core.config_manager import ConfigManager
-from backend.core.logging import setup_logging
 from backend.core.structured_logging import setup_structured_logging
 from backend.core.metrics import get_metrics
 from backend.core.auth import get_auth_manager
@@ -59,9 +58,8 @@ from backend.api.routers.portfolio import router as portfolio_router
 from backend.api.routers.redundancy import router as redundancy_router
 from backend.api.routers.ha_postgres import router as ha_postgres_router
 
-# Setup logging
-setup_logging(settings.log_level)
-logger = logging.getLogger(__name__)
+# Logger initialized after structured logging setup (see below)
+logger = None
 
 # Global state
 websocket_task: asyncio.Task = None
@@ -336,6 +334,7 @@ app = FastAPI(
 
 # Initialize structured logging (JSON format)
 setup_structured_logging(level=logging.INFO, json_format=True)
+logger = logging.getLogger(__name__)
 
 # Initialize auth manager
 auth_manager = get_auth_manager()
