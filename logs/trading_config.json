@@ -1,9 +1,9 @@
 {
   "entry_threshold": 65.0,
   "exit_profit_target": 0.025,
-  "exit_stop_loss": 0.015,
-  "position_size_pct": 0.02,
-  "max_positions": 10,
+  "exit_stop_loss": 0.01,
+  "position_size_pct": 3.0,
+  "max_positions": 8,
   "max_daily_loss_pct": 5.0,
   "symbols": [
     "BTCUSDT",
@@ -11,6 +11,9 @@
     "BNBUSDT"
   ],
   "enabled": true,
-  "_last_updated": "2026-06-25T14:33:22.003038Z",
+  "loop_sleep_seconds": 10.0,
+  "quality_gate_entry": 90.0,
+  "quality_gate_exit": 60.0,
+  "_last_updated": "2026-06-25T19:35:12.856118Z",
   "_source": "api_update"
 }

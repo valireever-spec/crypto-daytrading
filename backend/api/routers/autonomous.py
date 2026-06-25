@@ -126,6 +126,41 @@ async def update_trading_config(request: ConfigUpdateRequest):
     if request.quality_gate_exit is not None:
         trader.config.quality_gate_exit = request.quality_gate_exit
 
+    # Apply cascading linkage rules
+    # Rule 1: Position Size × Max Positions ≤ 25% total risk
+    total_risk = trader.config.position_size_pct * trader.config.max_positions
+    if total_risk > 25.0:
+        if request.position_size_pct is not None and request.max_positions is None:
+            # User changed position_size_pct; adjust max_positions down
+            trader.config.max_positions = max(1, int(25.0 / trader.config.position_size_pct))
+            logger.info(
+                f"Auto-adjusted max_positions to {trader.config.max_positions} "
+                f"to keep total risk ≤25% (position_size_pct={trader.config.position_size_pct}%)"
+            )
+        else:
+            # User changed max_positions; adjust position_size_pct down
+            trader.config.position_size_pct = 25.0 / trader.config.max_positions
+            logger.info(
+                f"Auto-adjusted position_size_pct to {trader.config.position_size_pct:.2f}% "
+                f"to keep total risk ≤25% (max_positions={trader.config.max_positions})"
+            )
+
+    # Rule 2: Exit Profit Target ÷ Exit Stop Loss = 1.5 risk/reward ratio
+    if request.exit_stop_loss is not None and request.exit_profit_target is None:
+        # User changed stop_loss; adjust profit_target to maintain 1:1.5
+        trader.config.exit_profit_target = trader.config.exit_stop_loss * 1.5
+        logger.info(
+            f"Auto-adjusted exit_profit_target to {trader.config.exit_profit_target:.4f} "
+            f"to maintain 1:1.5 risk/reward (exit_stop_loss={trader.config.exit_stop_loss:.4f})"
+        )
+    elif request.exit_profit_target is not None and request.exit_stop_loss is None:
+        # User changed profit_target; adjust stop_loss to maintain 1:1.5
+        trader.config.exit_stop_loss = trader.config.exit_profit_target / 1.5
+        logger.info(
+            f"Auto-adjusted exit_stop_loss to {trader.config.exit_stop_loss:.4f} "
+            f"to maintain 1:1.5 risk/reward (exit_profit_target={trader.config.exit_profit_target:.4f})"
+        )
+
     # Prepare config dict
     config_dict = {
         "entry_threshold": trader.config.entry_threshold,
@@ -191,6 +226,39 @@ async def sync_config_from_backup(request: ConfigUpdateRequest):
         trader.config.quality_gate_entry = request.quality_gate_entry
     if request.quality_gate_exit is not None:
         trader.config.quality_gate_exit = request.quality_gate_exit
+
+    # Apply cascading linkage rules (same as /config/update)
+    # Rule 1: Position Size × Max Positions ≤ 25% total risk
+    total_risk = trader.config.position_size_pct * trader.config.max_positions
+    if total_risk > 25.0:
+        if request.position_size_pct is not None and request.max_positions is None:
+            # Sync sent position_size_pct; adjust max_positions down
+            trader.config.max_positions = max(1, int(25.0 / trader.config.position_size_pct))
+            logger.info(
+                f"[SYNC] Auto-adjusted max_positions to {trader.config.max_positions} "
+                f"to keep total risk ≤25%"
+            )
+        else:
+            # Sync sent max_positions; adjust position_size_pct down
+            trader.config.position_size_pct = 25.0 / trader.config.max_positions
+            logger.info(
+                f"[SYNC] Auto-adjusted position_size_pct to {trader.config.position_size_pct:.2f}% "
+                f"to keep total risk ≤25%"
+            )
+
+    # Rule 2: Exit Profit Target ÷ Exit Stop Loss = 1.5 risk/reward ratio
+    if request.exit_stop_loss is not None and request.exit_profit_target is None:
+        trader.config.exit_profit_target = trader.config.exit_stop_loss * 1.5
+        logger.info(
+            f"[SYNC] Auto-adjusted exit_profit_target to {trader.config.exit_profit_target:.4f} "
+            f"to maintain 1:1.5 risk/reward"
+        )
+    elif request.exit_profit_target is not None and request.exit_stop_loss is None:
+        trader.config.exit_stop_loss = trader.config.exit_profit_target / 1.5
+        logger.info(
+            f"[SYNC] Auto-adjusted exit_stop_loss to {trader.config.exit_stop_loss:.4f} "
+            f"to maintain 1:1.5 risk/reward"
+        )
 
     # Convert to dict for storage
     config_dict = {
