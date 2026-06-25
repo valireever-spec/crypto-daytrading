@@ -98,6 +98,8 @@ class AutonomousTrader:
         """Main trading loop - runs continuously."""
         loop_count = 0
         portfolio_check_interval = 6  # Check portfolio decisions every 60 seconds (6 * 10s)
+        warmup_complete = False
+
         while self.running:
             try:
                 loop_count += 1
@@ -105,10 +107,15 @@ class AutonomousTrader:
 
                 # Get current prices - if empty, WebSocket hasn't connected yet
                 prices = await self._get_current_prices()
-                if not prices:
-                    logger.debug("⏳ Waiting for Binance WebSocket prices...")
+                if not prices or len(prices) < len(self.config.symbols):
+                    logger.debug(f"⏳ Waiting for Binance WebSocket prices... ({len(prices) if prices else 0}/{len(self.config.symbols)})")
                     await asyncio.sleep(1)
                     continue
+
+                # First successful price fetch - log warmup complete
+                if not warmup_complete:
+                    warmup_complete = True
+                    logger.info(f"✅ Warmup complete: received prices for {list(prices.keys())}")
 
                 # Check daily loss limit (BUG FIX #1: Enforce max_daily_loss_pct)
                 daily_loss_exceeded = await self._check_daily_loss_limit()
