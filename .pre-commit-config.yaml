@@ -24,9 +24,9 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports]
+        args: [--ignore-missing-imports, --disallow-untyped-defs, --warn-unused-ignores]
         additional_dependencies: [types-all]
-        files: ^backend/analytics/(asset_classes|currency_risk|global_optimization)\.py$
+        files: ^backend/
 
   # Secrets scanning
   - repo: https://github.com/Yelp/detect-secrets

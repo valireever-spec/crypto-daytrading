@@ -1,626 +1,326 @@
-# Operational Runbooks
+# Operational Runbooks — Crypto Daytrading Phase 1
 
-**Purpose**: Step-by-step diagnosis and resolution guides for common alerts and failures.  
-**Updated**: Phase 337 (2026-06-24)
+**Purpose**: Step-by-step response guides for circuit breaker triggers  
+**Updated**: 2026-06-25  
+**Severity Levels**: 🔴 CRITICAL (immediate) | 🟠 HIGH (< 5 min) | 🟡 MEDIUM (< 30 min)
 
 ---
 
-## Incident Response Process (IRP)
+## Quick Alert Reference
 
-**Goal**: Detect, respond, and learn from incidents in <30 minutes
+| Alert | Severity | RB | Response |
+|-------|----------|-----|----------|
+| Data Quality <30% | 🔴 | [#1](#rb-1-data-quality-low) | Check WebSocket stream |
+| WebSocket Disconnected >2 min | 🔴 | [#2](#rb-2-websocket-disconnect) | Wait for auto-reconnect or restart |
+| Position Reconciliation Failed | 🔴 | [#3](#rb-3-position-reconciliation) | Check DB integrity |
+| Daily Loss >5% | 🟠 | [#4](#rb-4-daily-loss) | Review & adjust settings |
+| API Latency >5s | 🟡 | [#5](#rb-5-api-latency) | Check CPU/memory |
 
-### Phase 1: DETECTION (0–2 min)
+---
 
-**Who notices**?
-- Alert fires (error rate spike, latency p99 >2s)
-- User reports issue ("I can't place trades")
-- Team member observes anomaly
+## RB-1: Data Quality Drops Below 30%
 
-**Initial actions**:
-1. ✅ Check `/metrics` endpoint: confirm issue is real
-2. ✅ Check `journalctl` logs: find error pattern
-3. ✅ Page on-call engineer (if critical)
-4. ✅ Slack #incidents channel: broadcast alert
+**Trigger**: Circuit breaker trips, trading halted  
+**Severity**: 🔴 CRITICAL  
+**Response Time**: Immediate
 
-**Example**:
+### Check Status
 ```bash
-# User: "API is slow"
-curl http://localhost:8000/metrics | jq '.p99_latency_ms'  # 2500ms! Alert!
+curl http://localhost:8001/api/health/detailed | jq .data_quality
+# Should show: {score: 100, sanity: 100, coverage: 100, ...}
 ```
 
-### Phase 2: TRIAGE (2–5 min)
+### Root Causes
+1. **WebSocket disconnected** → Price stream dead
+2. **Missing symbol prices** → One of BTCUSDT/ETHUSDT/BNBUSDT not updating
+3. **Binance API down** → Exchange unavailable
+4. **Network issues** → High latency, packet loss
 
-**Severity Assignment**:
-- **CRITICAL** (RED): Service down, data loss risk, user impact
-- **HIGH** (ORANGE): Degraded performance, users affected
-- **MEDIUM** (YELLOW): Minor issue, workaround exists
-- **LOW** (BLUE): Informational, no user impact
+### Fix Steps
 
-**On-call Response**:
-- **CRITICAL**: Page someone immediately
-- **HIGH**: Investigate within 15 min
-- **MEDIUM**: Investigate within 1 hour
-- **LOW**: Investigate within next business day
+**If WebSocket disconnected:**
+```bash
+tail -50 logs/system.log | grep -i "websocket\|disconnect"
+# System auto-reconnects in <30 seconds
+# If still down after 2 min → Restart API
+```
 
-**Triage checklist**:
-- [ ] Is it a real issue or false alarm?
-- [ ] Is it affecting customers/users?
-- [ ] Do we have a runbook for this?
-- [ ] Do we need to escalate?
+**If Binance is down:**
+- Check status: https://www.binance.com/en/support/announcement
+- Wait for recovery (do NOT trade manually, system pause is correct)
 
-### Phase 3: MITIGATION (5–15 min)
+**If network issue:**
+```bash
+ping stream.binance.com  # Should have <100ms latency
+nslookup stream.binance.com  # Should resolve to IP
+```
 
-**Quick wins** (before understanding root cause):
-- Restart service if unresponsive: `sudo systemctl restart investing-platform`
-- Clear cache if stale: `rm logs/_composite_signals_cache.json`
-- Revert recent change if applicable: `git revert <commit>`
-
-**Use runbooks**:
-- Error rate spike? → RB-001
-- Latency spike? → RB-002
-- Auth failures? → RB-003
-- API down? → RB-004
-- Metrics broken? → RB-005
-
-**Communication**:
-- Update Slack #incidents with status
-- Estimate time to recovery
-- Inform affected users
-
-### Phase 4: RESOLUTION (15–30 min)
-
-**Deep diagnosis**:
-- Run full troubleshooting from applicable runbook
-- Fix root cause (not just symptoms)
-- Verify fix works (test endpoint, check metrics)
-- Monitor for 5 minutes (no regression)
-
-**Confirmation**:
-- [ ] Issue is resolved (metric returned to normal)
-- [ ] All systems operational
-- [ ] No secondary issues appeared
-
-### Phase 5: POST-MORTEM (within 48 hours)
-
-**Root-cause analysis** (see template below)
-
-**Follow-ups**:
-- [ ] Document in TECHNICAL_DEBT.md if debt was underlying cause
-- [ ] Create tickets for prevention (monitoring, tests, etc.)
-- [ ] Share learnings with team
-- [ ] Update runbooks if process was unclear
+### Recovery
+- Circuit breaker auto-recovers when quality ≥60%
+- Trading resumes automatically
+- Log will show: "Circuit Breaker Auto-recovery..."
 
 ---
 
-## Root-Cause Analysis Template
+## RB-2: WebSocket Disconnected >2 Minutes
 
-**Use this template for all incidents** (copy and fill in):
+**Trigger**: No price updates for >120 seconds  
+**Severity**: 🔴 CRITICAL  
+**Response Time**: <2 minutes
 
+### Check Status
+```bash
+curl http://localhost:8001/api/paper/positions | head -1
+# If no prices updating → WebSocket dead
 ```
-## Incident: [Brief Title]
 
-**Date**: YYYY-MM-DD HH:MM UTC  
-**Duration**: X minutes (detection to resolution)  
-**Severity**: CRITICAL / HIGH / MEDIUM / LOW  
-**Status**: Resolved ✅
+### Fix - Option A: Wait (Recommended)
+- System auto-reconnects with exponential backoff
+- Usually recovers in <30 seconds
+- Max wait: 120 seconds
 
-### Timeline
+### Fix - Option B: Manual Restart
+```bash
+lsof -i :8001 | grep python | awk '{print $2}' | xargs kill -9
+sleep 2
+source venv/bin/activate
+python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8001 &
+# Wait 30-60 seconds for prices to appear in logs
+```
 
-| Time | Event |
-|------|-------|
-| 14:30 | Error rate spike detected (alerts) |
-| 14:32 | Checked /metrics: 25% error rate |
-| 14:35 | Identified: Database connection pool exhausted |
-| 14:38 | Restarted service |
-| 14:40 | Error rate back to <1% |
-
-### Root Cause
-
-**5-Why Analysis**:
-1. Why did error rate spike?
-   - Database connection pool exhausted
-
-2. Why was pool exhausted?
-   - Query timeout = connections held too long
-
-3. Why was query slow?
-   - Missing index on `users.email` column
-
-4. Why wasn't it caught earlier?
-   - No test for slow queries (chaos test missing)
-
-5. Why not in requirements?
-   - Database performance SLO wasn't defined
-
-**Root Cause**: Missing index on high-traffic column + no performance SLO
-
-### Impact
-
-- **Duration**: 10 minutes
-- **Users Affected**: ~50 (can't place trades)
-- **Data Loss**: None
-- **Financial Loss**: ~$2,000 in missed trades
-
-### Resolution
-
-**Immediate** (14:38):
-- Restarted service (cleared connection pool)
-
-**Short-term** (14:50):
-- Created index: `CREATE INDEX idx_users_email ON users(email);`
-- Verified query latency dropped 100x
-
-**Long-term** (action items):
-- Add monitoring for connection pool usage
-- Define database query SLOs (p99 <100ms)
-- Add chaos tests for slow queries
-- Document in TECHNICAL_DEBT.md
-
-### Follow-Ups
-
-- [ ] DEBT-010 created: "No database performance SLOs"
-- [ ] Ticket T-1234: Add connection pool monitoring
-- [ ] Ticket T-1235: Implement query latency SLO alerts
-- [ ] Runbook RB-006 created: Database Connection Pool Exhausted
-
-### Lessons Learned
-
-1. **What went well**:
-   - Detected quickly (2 min)
-   - Had a clear runbook to follow
-   - Restart fixed immediately
-
-2. **What went poorly**:
-   - Missing index (should be in schema validation)
-   - No performance SLO defined
-   - No chaos test for slow queries
-
-3. **What we'll do next time**:
-   - Always define SLOs upfront
-   - Test performance regressions in CI
-   - Monitor connection pool as critical metric
-
-### Owner & Approver
-
-- **Incident Commander**: [Name]
-- **Root-Cause Analyst**: [Name]
-- **Approved by**: [Tech Lead/Manager]
+### Fix - Option C: Failover to Backup
+```bash
+ssh -i ~/.ssh/openhab_key openhabian@192.168.3.25
+curl http://localhost:8002/api/health
+# If backup is OK, trading continues there
 ```
 
 ---
 
-## 5-Why Framework
+## RB-3: Position Reconciliation Failed
 
-**Goal**: Get to root cause (not symptoms)
+**Trigger**: Paper engine positions ≠ autonomous trader positions  
+**Severity**: 🔴 CRITICAL  
+**Response Time**: Immediate
 
-**Example**:
-```
-Issue: API latency p99 = 5s
+### Check Positions
+```bash
+echo "=== Paper Engine ===" && \
+curl http://localhost:8001/api/paper/positions | jq '.positions | length'
 
-1. Why is latency high?
-   → Optimizer is computing efficient frontier (slow)
-
-2. Why is optimizer slow?
-   → No timeout; calculates 1000 points on frontier
-
-3. Why 1000 points?
-   → Default parameter never changed from original value
-
-4. Why was default never reviewed?
-   → No SLO defined for optimizer runtime
-
-5. Why no SLO?
-   → Not prioritized in requirements
-
-ROOT CAUSE: Missing non-functional requirement (SLO)
-FIX: Define SLO (max 2s), add timeout, reduce points to 50
+echo "=== Autonomous Trader ===" && \
+curl http://localhost:8001/api/autonomous/status | jq .active_positions
+# These should match
 ```
 
----
+### Fix - Duplicate Positions
+```bash
+sqlite3 data/trading.db "SELECT symbol, COUNT(*) FROM positions WHERE status='open' GROUP BY symbol HAVING COUNT(*) > 1;"
+# If any symbol appears twice:
+curl -X POST http://localhost:8001/api/paper/close-position \
+  -H "Content-Type: application/json" \
+  -d '{"symbol":"BTCUSDT","quantity":0.5}'
+```
 
-## When to Open Incidents
+### Fix - Orphaned Positions
+```bash
+sqlite3 data/trading.db "UPDATE positions SET status='closed' WHERE symbol='ETHUSDT';"
+# Then restart API
+pkill -f uvicorn; sleep 2; python -m uvicorn backend.api.main:app &
+```
 
-**✅ OPEN AN INCIDENT IF**:
-- Error rate > 5% (more than 1 in 20 requests fail)
-- Latency p99 > 5s (99th percentile is very slow)
-- Any service down (can't connect)
-- Data inconsistency detected
-- Security issue found
-- User complains about reliability
-
-**❌ DON'T NEED INCIDENT IF**:
-- Informational alert (disk usage 70%)
-- Expected maintenance window
-- Test environment only
-- Single user affected (likely user error)
-- Automatic recovery in <1 min
-
----
-
----
-
-## Runbook Index
-
-| Alert | Severity | Diagnosis | Resolution |
-|-------|----------|-----------|-----------|
-| High Error Rate (>10%) | 🔴 CRITICAL | Check `/metrics` endpoint | See [RB-001](#rb-001-high-error-rate) |
-| High Latency (p99 >1s) | 🟠 WARNING | Profile with logs | See [RB-002](#rb-002-high-latency) |
-| Authentication Failures | 🟠 WARNING | Check auth tokens | See [RB-003](#rb-003-auth-failures) |
-| API Unresponsive | 🔴 CRITICAL | Check process health | See [RB-004](#rb-004-api-unresponsive) |
-| Metrics Collection Failed | 🟡 INFO | Check metrics endpoint | See [RB-005](#rb-005-metrics-collection-failed) |
+### Recovery
+- Wait 120 seconds for auto-recovery
+- Log will show: "Positions reconciled successfully"
 
 ---
 
-## RB-001: High Error Rate (>10%)
+## RB-4: Daily Loss Exceeds 5%
 
-**Alert Condition**: `error_rate_percent > 10` (check `/metrics`)
+**Trigger**: Daily P&L < -5% of equity  
+**Severity**: 🟠 HIGH  
+**Response Time**: <5 minutes
 
-**Symptoms**:
-- Many requests returning 4xx or 5xx status codes
-- Users report "Something went wrong"
-- Spikes in error rate correlating with time of day
+### Check Current Loss
+```bash
+curl http://localhost:8001/api/paper/account | jq '{daily_pnl, total_equity, daily_pnl_pct}'
+# Should show: daily_pnl_pct < -5.0
+```
 
-### Diagnosis
+### Analyze Losing Position
+```bash
+curl http://localhost:8001/api/paper/positions | jq '.positions[] | {symbol, unrealized_pnl}'
+# Identify which symbol is losing money
+```
 
-1. **Check current error rate**:
-   ```bash
-   curl http://localhost:8000/metrics | jq '.error_rate_percent'
-   ```
+### Option A: Stop Trading (Conservative)
+```bash
+curl -X POST http://localhost:8001/api/autonomous/stop
+# Closes autonomous trader
+# Manual: Close all positions
+curl -X POST http://localhost:8001/api/paper/close-all
+# Document in RETROSPECTIVES.md what went wrong
+# Resume next day with fixes
+```
 
-2. **View recent error logs**:
-   ```bash
-   journalctl -u investing-platform -f | grep ERROR
-   ```
+### Option B: Continue with Adjustments
+```bash
+# Tighten risk settings
+curl -X POST http://localhost:8001/api/autonomous/config/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entry_threshold": 75,
+    "exit_stop_loss": 0.01,
+    "max_positions": 5
+  }'
 
-3. **Identify error patterns**:
-   ```bash
-   journalctl -u investing-platform -S "5 minutes ago" | grep ERROR | jq -r '.message' | sort | uniq -c | sort -rn
-   ```
+# Reset circuit breaker
+curl -X POST http://localhost:8001/api/circuit-breaker/reset \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"Adjusted settings after loss review"}'
+```
 
-4. **Check error by endpoint**:
-   ```bash
-   journalctl -u investing-platform -S "5 minutes ago" | jq 'select(.level=="ERROR")' | jq -r '.logger'
-   ```
-
-### Resolution
-
-**If auth errors** (401/403):
-- Check token validity: `curl -H "Authorization: Bearer <token>" http://localhost:8000/api/multi-asset/assets`
-- Confirm user role: Check logs for `Authorization failed: user X lacks Y role`
-- **Fix**: Issue new token or elevate user permissions
-
-**If validation errors** (400):
-- Check request format: `curl -X GET http://localhost:8000/api/multi-asset/assets/INVALID`
-- Review error details in logs
-- **Fix**: Correct client request format or API input
-
-**If server errors** (500):
-- Get full error stack: `journalctl -u investing-platform -S "1 minute ago" -p err --no-pager`
-- Check for resource issues (RAM, disk, CPU)
-- **Fix**: Restart service or increase resources
-
-**Recovery Steps**:
-1. Identify root cause from above
-2. Restart service if needed: `sudo systemctl restart investing-platform`
-3. Verify error rate dropped: `curl http://localhost:8000/metrics | jq '.error_rate_percent'`
-4. If error rate remains >10%, escalate to engineering team
+### Document & Learn
+- Update RETROSPECTIVES.md with: what signal misfired, why, prevention
+- If repeated → rethink entire strategy
 
 ---
 
-## RB-002: High Latency (p99 >1000ms)
+## RB-5: API Latency Exceeds 5 Seconds
 
-**Alert Condition**: `p99_latency_ms > 1000` (check `/metrics`)
+**Trigger**: Response time >5000ms  
+**Severity**: 🟡 MEDIUM  
+**Response Time**: <10 minutes
 
-**Symptoms**:
-- UI feels sluggish or times out
-- API responses take >1 second
-- 99th percentile of requests very slow (but median OK)
+### Check Latency
+```bash
+time curl http://localhost:8001/api/health
+# Should be <100ms
+```
 
-### Diagnosis
+### If CPU High (>80%)
+```bash
+top -bn1 | head -20  # See top processes
+# Kill background processes or restart API
+pkill -f uvicorn; python -m uvicorn backend.api.main:app &
+```
 
-1. **Check latency breakdown**:
-   ```bash
-   curl http://localhost:8000/metrics | jq '.[] | {p50:.p50_latency_ms, p95:.p95_latency_ms, p99:.p99_latency_ms}'
-   ```
+### If Memory High (>90%)
+```bash
+free -h  # Check RAM usage
+# Restart API (usually fixes it)
+pkill -f uvicorn; python -m uvicorn backend.api.main:app &
+```
 
-2. **Identify slow endpoints** (from logs):
-   ```bash
-   journalctl -u investing-platform -S "5 minutes ago" | jq 'select(.latency_ms > 1000)' | jq -r '.message'
-   ```
-
-3. **Check system resources**:
-   ```bash
-   free -h           # RAM usage
-   df -h /           # Disk usage
-   top -bn1 | head   # CPU usage
-   ```
-
-4. **Profile a specific endpoint**:
-   ```bash
-   time curl http://localhost:8000/api/multi-asset/assets
-   ```
-
-### Resolution
-
-**If CPU high (>80%)**:
-- Identify hot function: `python -m cProfile -s cumtime backend/api/main.py` (development only)
-- Optimize heavy computation (optimizer, backtesting)
-- **Fix**: Reduce calculation scope or add caching
-
-**If RAM high (>90%)**:
-- Check memory leaks: `ps aux | grep "python\|gunicorn" | awk '{print $6}' | tail -20`
-- Restart service to clear memory: `sudo systemctl restart investing-platform`
-- **Fix**: Profile memory usage and fix leaks
-
-**If Disk I/O high**:
-- Check if logs filling disk: `du -sh /var/log /home/vali/projects/crypto-daytrading/logs`
-- Archive old logs: `tar czf logs-archive.tar.gz logs/` && `rm logs/*.log`
-- **Fix**: Rotate logs or increase disk space
-
-**If query slow** (e.g., optimizer convergence):
-- Reduce problem size (fewer assets in portfolio)
-- Add timeout to optimizer: `set_timeout(optimizer, 5000)  # 5 seconds max`
-- **Fix**: Use approximation instead of exact optimization
-
-**Recovery Steps**:
-1. Identify bottleneck from above
-2. Apply fix (restart, optimize, cache, etc.)
-3. Monitor latency: `watch 'curl -s http://localhost:8000/metrics | jq .p99_latency_ms'`
-4. Confirm p99 <1000ms before closing
+### If Disk I/O High
+```bash
+du -sh logs/  # Check log size
+# If >500MB, archive old logs
+tar czf logs-archive.tar.gz logs/trades.jsonl
+# Keep only recent trades
+head -1000 logs/trades.jsonl > logs/trades.tmp && mv logs/trades.tmp logs/trades.jsonl
+```
 
 ---
 
-## RB-003: Authentication Failures
+## Emergency: Complete System Failure
 
-**Alert Condition**: Multiple 401/403 responses in logs
+### Step 1: Pause Trading
+```bash
+curl -X POST http://localhost:8001/api/autonomous/stop
+# Stop autonomous trader immediately
+```
 
-**Symptoms**:
-- Users cannot call `/api/multi-asset/*` endpoints
-- Error: "Invalid authentication credentials" or "Missing Authorization header"
-- Legitimate users locked out
+### Step 2: Failover to Backup
+```bash
+ssh -i ~/.ssh/openhab_key openhabian@192.168.3.25
+cd /home/claude/crypto-daytrading
+curl http://localhost:8002/api/health
+# Verify backup is healthy
+```
 
-### Diagnosis
+### Step 3: Close All Positions (if needed)
+```bash
+curl -X POST http://localhost:8001/api/paper/close-all
+# Or manually in Binance Testnet UI
+```
 
-1. **Check auth logs**:
-   ```bash
-   journalctl -u investing-platform -S "5 minutes ago" | grep "Authentication failed\|Authorization failed"
-   ```
-
-2. **Verify token format**:
-   ```bash
-   # Token should be sent as: Authorization: Bearer <token>
-   curl -H "Authorization: Bearer admin-token-123" http://localhost:8000/api/multi-asset/assets
-   ```
-
-3. **Check user roles** (from auth manager in logs):
-   ```bash
-   # Search for specific user authentication
-   journalctl -u investing-platform -S "5 minutes ago" | grep "Authenticated user\|user_id"
-   ```
-
-4. **Verify auth server/config** (if using external auth):
-   - Check if auth service is running (OAuth2, JWT service, etc.)
-   - Verify config points to correct auth endpoint
-
-### Resolution
-
-**If token invalid**:
-- Regenerate token for user
-- Distribute new token to client
-- **Fix**: Issue new token, revoke old one
-
-**If token expired**:
-- Implement token refresh: add `/api/auth/refresh` endpoint (Phase 338+)
-- For now: Issue new token
-- **Fix**: Add token expiration and refresh logic
-
-**If user role insufficient**:
-- Check required role for endpoint: `router.endpoint_requires_role = UserRole.ANALYST`
-- Elevate user: `auth_manager.users['token'].roles.add(UserRole.TRADER)`
-- **Fix**: Adjust user permissions or endpoint requirements
-
-**If CORS blocking requests**:
-- Error: "CORS policy: No 'Access-Control-Allow-Origin' header"
-- Check allowed origins in `main.py` line ~298
-- **Fix**: Add client origin to `allow_origins` list
-
-**Recovery Steps**:
-1. Identify root cause from above
-2. Apply fix (new token, role elevation, CORS config, etc.)
-3. Test with same client: `curl -H "Authorization: Bearer <new-token>" http://localhost:8000/api/multi-asset/assets`
-4. Confirm 200 response before closing
+### Step 4: Data Recovery
+- All positions backed up in: `data/trading.db`
+- All trades logged in: `logs/trades.jsonl` (append-only)
+- Config saved in: `logs/trading_config.json`
 
 ---
 
-## RB-004: API Unresponsive (No Response)
+## Daily Health Check (Run Every Morning)
 
-**Alert Condition**: API doesn't respond to any request (timeout, connection refused)
-
-**Symptoms**:
-- `curl http://localhost:8000/api/health` times out or connection refused
-- All endpoints down (not just one)
-- Possible crash or hang
-
-### Diagnosis
-
-1. **Check if process running**:
-   ```bash
-   ps aux | grep "python\|uvicorn" | grep -v grep
-   # Should show: uvicorn backend.api.main:app --host 127.0.0.1 --port 8000
-   ```
-
-2. **Check logs for crashes**:
-   ```bash
-   sudo journalctl -u investing-platform -n 50 --no-pager
-   # Look for: Exception, Traceback, ERROR, CRITICAL
-   ```
-
-3. **Check port availability**:
-   ```bash
-   netstat -tlnp | grep 8000
-   # Should show: LISTEN on 127.0.0.1:8000
-   ```
-
-4. **Check system resources**:
-   ```bash
-   free -h            # RAM might be exhausted
-   df -h /            # Disk might be full
-   dmesg | tail -20   # OOM killer events
-   ```
-
-### Resolution
-
-**If process not running**:
-- Start API: `source venv/bin/activate && uvicorn backend.api.main:app --host 127.0.0.1 --port 8000`
-- Or via systemd: `sudo systemctl start investing-platform`
-- **Fix**: Restart service
-
-**If process crashed**:
-- Check crash reason in logs: `journalctl -u investing-platform -e`
-- Common causes:
-  - `NameError`: Missing import or undefined variable
-  - `ImportError`: Missing dependency
-  - `MemoryError`: RAM exhausted → restart or increase RAM
-  - `PermissionError`: File permissions issue
-- **Fix**: Fix root cause and restart
-
-**If port already in use**:
-- Find process using port 8000: `lsof -i :8000`
-- Kill it: `kill -9 <PID>` or `sudo fuser -k 8000/tcp`
-- **Fix**: Clear port and restart
-
-**If disk full**:
-- Check disk: `df -h /`
-- Clear logs: `rm /home/vali/projects/crypto-daytrading/logs/*.log*`
-- Or archive: `tar czf logs-old.tar.gz logs/` && `rm logs/*.log*`
-- **Fix**: Free up disk space and restart
-
-**If memory exhausted**:
-- Restart process: `sudo systemctl restart investing-platform`
-- Monitor: `watch 'free -h'` and `watch 'ps aux | grep python'`
-- If repeats, profile memory: implement memory limit in systemd
-- **Fix**: Add MemoryMax to service file (see CLAUDE.md)
-
-**Recovery Steps**:
-1. Identify root cause from above
-2. Fix issue (restart, delete logs, kill process, etc.)
-3. Verify API responds: `curl http://localhost:8000/api/health`
-4. Confirm health check returns 200 before closing
+```bash
+#!/bin/bash
+echo "=== System Health ===" && \
+curl http://localhost:8001/api/health && \
+echo "" && \
+echo "=== Data Quality ===" && \
+curl http://localhost:8001/api/health/detailed | jq .data_quality && \
+echo "" && \
+echo "=== Positions ===" && \
+curl http://localhost:8001/api/paper/positions | jq '.positions | length' && \
+echo "" && \
+echo "=== P&L ===" && \
+curl http://localhost:8001/api/paper/account | jq '{daily_pnl, total_equity}'
+```
 
 ---
 
-## RB-005: Metrics Collection Failed
-
-**Alert Condition**: `/metrics` endpoint returns error or empty data
-
-**Symptoms**:
-- `curl http://localhost:8000/metrics` returns 500 or no data
-- Monitoring dashboard can't scrape metrics
-- Latency percentiles missing
-
-### Diagnosis
-
-1. **Check metrics endpoint**:
-   ```bash
-   curl -v http://localhost:8000/metrics
-   # Should return: 200 OK with JSON
-   ```
-
-2. **Check metrics collector initialization**:
-   ```bash
-   journalctl -u investing-platform -S "1 hour ago" | grep "metrics\|Metrics"
-   ```
-
-3. **Check for exceptions in metrics collection**:
-   ```bash
-   journalctl -u investing-platform -S "1 hour ago" | grep "ERROR\|Exception" | grep -i metric
-   ```
-
-### Resolution
-
-**If endpoint returns 500**:
-- Full error: `curl http://localhost:8000/metrics 2>&1 | tail -20`
-- Check logs: `journalctl -u investing-platform -e`
-- Likely cause: metrics collector not initialized
-- **Fix**: Ensure `get_metrics()` called in middleware setup
-
-**If metrics are empty**:
-- Metrics data might not be collected yet (need some requests first)
-- Wait a few seconds and retry: `sleep 5 && curl http://localhost:8000/metrics | jq`
-- **Fix**: No action needed, metrics will populate
-
-**If latency percentiles are 0**:
-- Not enough samples yet for percentiles (need >100 requests)
-- **Fix**: No action needed, will be calculated after more requests
-
-**Recovery Steps**:
-1. Verify endpoint works: `curl http://localhost:8000/metrics | jq '.requests_total'`
-2. Make test requests: `for i in {1..10}; do curl http://localhost:8000/api/health; done`
-3. Check metrics updated: `curl http://localhost:8000/metrics | jq '.requests_total'`
-4. Confirm metrics populated before closing
-
----
-
-## Quick Reference: Common Commands
+## Common Commands
 
 ```bash
 # Health check
-curl http://localhost:8000/api/health
+curl http://localhost:8001/api/health
 
-# View metrics
-curl http://localhost:8000/metrics | jq
+# Full system status
+curl http://localhost:8001/api/health/detailed
 
-# View error rate
-curl http://localhost:8000/metrics | jq '.error_rate_percent'
+# Check positions
+curl http://localhost:8001/api/paper/positions
 
-# View latency percentiles
-curl http://localhost:8000/metrics | jq '{p50:.p50_latency_ms, p95:.p95_latency_ms, p99:.p99_latency_ms}'
+# Check account P&L
+curl http://localhost:8001/api/paper/account
+
+# View autonomous trader status
+curl http://localhost:8001/api/autonomous/status
+
+# View recent trades
+curl http://localhost:8001/api/autonomous/trades
 
 # Tail logs
-journalctl -u investing-platform -f
+tail -f logs/system.log
 
-# Recent errors only
-journalctl -u investing-platform -S "5 minutes ago" -p err
+# Search logs for errors
+grep -i ERROR logs/system.log
 
-# JSON logs (if structured logging enabled)
-journalctl -u investing-platform -o json | jq .
-
-# Restart service
-sudo systemctl restart investing-platform
-
-# Check service status
-sudo systemctl status investing-platform
-
-# Check if port 8000 in use
-lsof -i :8000
+# Check circuit breaker
+curl http://localhost:8001/api/health | jq .circuit_breaker
 ```
 
 ---
 
-## Escalation Path
+## When to Escalate
 
-**Tier 1** (Operations/Oncall):
-- Run diagnostics from above
-- Restart service if needed
-- Check resources (RAM, disk, CPU)
+**Don't handle yourself:**
+- Database corruption (PRAGMA integrity_check returns errors)
+- Multiple simultaneous failures
+- System running out of disk space
+- Need to manually edit database records
+- Network infrastructure issues (ISP down)
 
-**Tier 2** (Engineering/Backend):
-- Profile code performance
-- Fix bugs identified in logs
-- Optimize slow queries/algorithms
-
-**Tier 3** (Architecture/Lead):
-- Design scalability improvements
-- Review infrastructure capacity
-- Plan roadmap (caching, async, etc.)
+**In those cases:**
+1. Document exactly what happened in RETROSPECTIVES.md
+2. Stop trading to prevent further loss
+3. Contact backup for takeover
+4. Review post-incident
 
 ---
 
-## Phase 338 Roadmap (Future Runbooks)
-
-- [ ] RB-006: Circuit Breaker Activation (when Binance API fails)
-- [ ] RB-007: Database Connection Pool Exhausted
-- [ ] RB-008: Optimizer Convergence Timeout
-- [ ] RB-009: Cache Staleness Detected
-- [ ] RB-010: Duplicate Trade Detection
-
+**Last Updated**: 2026-06-25  
+**Next Review**: 2026-07-01  
+**Version**: 1.0
