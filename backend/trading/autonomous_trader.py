@@ -171,6 +171,26 @@ class AutonomousTrader:
                 symbol
             )
 
+            # HARDENING: Validate signal quality before proceeding (Pillar #2)
+            import math
+            if not isinstance(signal_score, (int, float)) or math.isnan(signal_score) or math.isinf(signal_score):
+                logger.error(f"{symbol}: Invalid signal score {signal_score} (NaN/Inf/type error), skipping")
+                return None
+
+            if signal_score < 0 or signal_score > 100:
+                logger.error(f"{symbol}: Signal score {signal_score} out of range [0-100], skipping")
+                return None
+
+            if not isinstance(component_scores, dict) or not component_scores:
+                logger.error(f"{symbol}: Invalid component scores {component_scores}, skipping")
+                return None
+
+            # Validate all component scores are numbers
+            for comp_name, comp_value in component_scores.items():
+                if not isinstance(comp_value, (int, float)) or math.isnan(comp_value) or math.isinf(comp_value):
+                    logger.error(f"{symbol}: Component {comp_name} has invalid value {comp_value}, skipping")
+                    return None
+
             # Get market regime and adaptive entry threshold (Phase 316)
             regime_detector = get_regime_detector()
             regime_info, adaptive_threshold = await self._get_adaptive_entry_threshold(symbol, regime_detector)
@@ -1018,15 +1038,32 @@ class AutonomousTrader:
             return {"regime": "unknown"}, self.config.entry_threshold
 
     async def _get_current_prices(self) -> Dict[str, float]:
-        """Get current prices from Binance WebSocket."""
+        """Get current prices from Binance WebSocket (HARDENING: Data freshness gate).
+
+        Enforces 5-second max age on all prices to prevent trading with stale data.
+        """
         try:
             from backend.exchange.binance_stream import get_stream_client
             client = get_stream_client()
             if not client:
+                logger.warning("Price fetch: WebSocket client not initialized")
                 return {}
 
-            # Get cached prices from WebSocket
-            prices = client.get_prices(self.config.symbols)
+            if not client.is_connected:
+                logger.warning("Price fetch: WebSocket not connected, no fresh data available")
+                return {}
+
+            # HARDENING: Get prices only if fresh (max 5 seconds old)
+            prices = client.get_prices_fresh(self.config.symbols, max_age_seconds=5)
+
+            if len(prices) < len(self.config.symbols):
+                missing = len(self.config.symbols) - len(prices)
+                logger.warning(
+                    f"Price freshness gate: {missing} of {len(self.config.symbols)} prices "
+                    f"too stale or missing, skipping trading this iteration"
+                )
+                return prices
+
             return prices
         except Exception as e:
             logger.error(f"Error fetching prices: {e}")

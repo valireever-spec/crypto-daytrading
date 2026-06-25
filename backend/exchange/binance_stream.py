@@ -210,6 +210,44 @@ class BinanceStreamClient:
             if sym in self.price_cache
         }
 
+    def get_prices_fresh(self, symbols: list, max_age_seconds: int = 5) -> Dict[str, float]:
+        """Get cached prices only if fresh (HARDENING: Data freshness gate G-011).
+
+        Args:
+            symbols: List of symbols in uppercase
+            max_age_seconds: Max acceptable price age in seconds (default 5)
+
+        Returns:
+            Dict mapping symbol -> price (only for fresh data)
+            Empty dict if any prices too stale
+        """
+        if not self.is_connected:
+            logger.warning("Price freshness check: WebSocket not connected")
+            return {}
+
+        now = datetime.utcnow()
+        fresh_prices = {}
+        stale_symbols = []
+
+        for sym in symbols:
+            if sym not in self.price_cache:
+                continue
+
+            last_update = self.last_update.get(sym)
+            if not last_update:
+                continue
+
+            age_seconds = (now - last_update).total_seconds()
+            if age_seconds < max_age_seconds:
+                fresh_prices[sym] = self.price_cache[sym]
+            else:
+                stale_symbols.append(f"{sym}({age_seconds:.1f}s)")
+
+        if stale_symbols:
+            logger.warning(f"Stale prices rejected: {', '.join(stale_symbols)} max_age={max_age_seconds}s")
+
+        return fresh_prices
+
 
 # Global stream client instance
 _stream_client: Optional[BinanceStreamClient] = None
