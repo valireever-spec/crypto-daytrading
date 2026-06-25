@@ -370,6 +370,25 @@ class TradingDatabase:
 
         return positions
 
+    def clear_all_positions(self) -> None:
+        """Clear all corrupted/stale positions (Pillar #10: Database Integrity).
+
+        Used when too many orphaned positions are detected (likely test data).
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("DELETE FROM open_positions WHERE status = 'OPEN'")
+            conn.commit()
+            deleted = cursor.rowcount
+            logger.critical(f"🚨 CLEARED {deleted} STALE POSITIONS - DATABASE INTEGRITY CHECK")
+        except Exception as e:
+            logger.error(f"Failed to clear positions: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+
     def insert_trade(
         self,
         symbol: str,

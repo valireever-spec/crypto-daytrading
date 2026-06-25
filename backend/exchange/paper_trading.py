@@ -383,6 +383,7 @@ class PaperTradingEngine:
         """Restore open positions from database on startup (Pillar #5 hardening).
 
         This prevents orphaned positions if the API crashes while holding positions.
+        Pillar #10 (Database Integrity): Validates all positions before restoration.
         """
         try:
             db = get_database()
@@ -394,6 +395,13 @@ class PaperTradingEngine:
 
             logger.critical(f"RECOVERING {len(db_positions)} ORPHANED POSITIONS FROM DATABASE!")
 
+            # Pillar #10: Check for suspicious patterns (too many positions = stale data)
+            if len(db_positions) > 10:
+                logger.critical(f"🚨 ALERT: {len(db_positions)} positions exceeds safety limit (10). Likely stale data. Clearing all.")
+                db.clear_all_positions()
+                return
+
+            restored_count = 0
             for db_pos in db_positions:
                 symbol = db_pos["symbol"]
                 quantity = db_pos["quantity"]
@@ -404,6 +412,25 @@ class PaperTradingEngine:
                 entry_time = db_pos["entry_time"]
                 if isinstance(entry_time, str):
                     entry_time = datetime.fromisoformat(entry_time)
+
+                # Pillar #10: Validate position data
+                validation_errors = []
+
+                # Check quantity is positive and reasonable
+                if quantity <= 0 or quantity > 1000:
+                    validation_errors.append(f"Invalid quantity: {quantity}")
+
+                # Check entry price is positive and reasonable
+                if entry_price <= 0 or entry_price > 1_000_000:
+                    validation_errors.append(f"Invalid price: ${entry_price}")
+
+                # Check for duplicate symbols (only one position per symbol allowed)
+                if symbol in self.positions:
+                    validation_errors.append(f"Duplicate position for {symbol}")
+
+                if validation_errors:
+                    logger.error(f"🚨 REJECTING CORRUPTED POSITION {pos_id}: {', '.join(validation_errors)}")
+                    continue
 
                 # Restore position to in-memory state
                 self.positions[symbol] = Position(
@@ -417,6 +444,9 @@ class PaperTradingEngine:
                 )
 
                 logger.critical(f"RESTORED: {symbol} {quantity} @ {entry_price} (db_id={pos_id})")
+                restored_count += 1
+
+            logger.info(f"✅ Restored {restored_count}/{len(db_positions)} positions (rejected {len(db_positions) - restored_count} corrupted)")
 
         except Exception as e:
             logger.error(f"Failed to restore positions from DB: {e}")
