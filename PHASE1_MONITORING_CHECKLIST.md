@@ -176,23 +176,27 @@ curl -s http://localhost:8001/api/autonomous/config | jq .
 
 ---
 
-### WEEK 2 (Day 10): Final Evaluation
+### WEEK 2 (Day 10+): Final Evaluation
 
 **Go/No-Go Decision:**
 
-**GO to Phase 2 if:**
+**GO to Phase 2 if ALL of these are met:**
 - ✅ Win rate ≥ 55%
 - ✅ Cumulative P&L > €0 (preferably >€100)
+- ✅ Minimum 50 trades completed (statistical validity)
 - ✅ 0 crashes
 - ✅ 0 repeated errors (same error 1-2x is fine, 3+ is bad)
 - ✅ All trades logged completely
 
-**NO-GO if:**
+**Note:** If <50 trades in 10 days, extend Phase 1 until 50 trades reached.
+
+**NO-GO if ANY of these are true:**
 - ❌ Win rate < 45%
 - ❌ P&L < -€200
 - ❌ 2+ crashes
 - ❌ Systematic errors (same failure 5+ times)
 - ❌ Missing logs (can't trace decisions)
+- ❌ <50 trades completed
 
 **If NO-GO, debug priorities:**
 1. Check signal quality (are thresholds right?)
@@ -371,6 +375,33 @@ PHASE 1 PROGRESS: Day 3 / 10
    - Slippage worse than expected (0.5% vs 0.1%)
    - Regime detector broken (all "unknown")
    - Position sizing too aggressive (2x too large)
+
+---
+
+## Phase 2 Abort Criteria (If You Proceed to Live Trading)
+
+**If Phase 1 succeeds and you go live with €1,000, STOP trading immediately if:**
+
+| Event | Threshold | Action |
+|-------|-----------|--------|
+| **Cumulative Loss** | > €100 (10%) | ⛔ STOP. Debug root cause. |
+| **Consecutive Losing Days** | 3 days in a row | ⛔ STOP. Review signals. |
+| **API Crashes** | 2+ crashes | ⛔ STOP. Fix state persistence. |
+| **Daily Loss Limit Hit** | €500 loss in 1 day | ⏸️ PAUSE (trading already disabled). |
+
+**When to Resume After Abort:**
+1. Identify root cause (slippage? regime change? algorithm bug?)
+2. Fix the issue
+3. Run 3-day paper test with fix
+4. Only resume live if paper test validates >55% win rate
+
+**€100 is the Point of No Return**
+- After 10 days of >55% win rate in paper
+- If live trading loses €100, that suggests:
+  - Slippage is much worse than 0.1% (paper assumes)
+  - Market conditions changed
+  - Algorithm doesn't work in live conditions
+- Better to pause and investigate than lose €500+
 
 ---
 
