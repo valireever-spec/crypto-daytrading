@@ -54,9 +54,9 @@ class ConfigManager:
         symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
 
         return {
-            "position_size_pct": float(os.getenv("POSITION_SIZE_PCT", "0.02")),
-            "max_positions": int(os.getenv("MAX_POSITIONS", "6")),
-            "max_daily_loss_pct": float(os.getenv("MAX_DAILY_LOSS_PCT", "8.0")),
+            "position_size_pct": float(os.getenv("POSITION_SIZE_PCT", "0.05")),
+            "max_positions": int(os.getenv("MAX_POSITIONS", "5")),
+            "max_daily_loss_pct": float(os.getenv("MAX_DAILY_LOSS_PCT", "5.0")),
             "entry_threshold": 60.0,
             "exit_profit_target": 0.03,
             "exit_stop_loss": 0.02,
@@ -71,7 +71,7 @@ class ConfigManager:
             config_file = ConfigManager.get_config_path()
             config_with_meta = {
                 **config,
-                "_last_updated": datetime.utcnow().isoformat(),
+                "_last_updated": datetime.utcnow().isoformat() + "Z",
                 "_source": "api_update",
             }
 

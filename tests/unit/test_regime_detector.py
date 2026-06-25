@@ -80,7 +80,7 @@ class TestRegimeDetector:
         """Test bull market detection."""
         regime_info = detector.detect_regime(bull_market_data)
 
-        assert regime_info["regime"] == "BULL"
+        assert regime_info["regime"] == "bull"
         assert regime_info["trend_strength"] > 0.2
         assert regime_info["volatility_level"] in ["low", "medium"]
 
@@ -96,7 +96,7 @@ class TestRegimeDetector:
         """Test sideways market detection."""
         regime_info = detector.detect_regime(sideways_market_data)
 
-        assert regime_info["regime"] == "SIDEWAYS"
+        assert regime_info["regime"] == "sideways"
         assert abs(regime_info["trend_strength"]) < 0.3
         assert regime_info["volatility_level"] in ["low", "medium"]
 

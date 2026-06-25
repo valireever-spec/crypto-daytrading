@@ -110,7 +110,7 @@ async def backtest_allocation(
 
         return {
             "result_id": result_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "strategy_name": result.strategy_name,
             "allocation": {k: safe_round(v, 2) for k, v in result.allocation.items()},
             "period_days": result.period_days,
@@ -213,7 +213,7 @@ async def backtest_rolling_optimization(
 
         return {
             "result_id": result_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "strategy_name": result.strategy_name,
             "risk_level": risk_level,
             "rebalance_freq": rebalance_freq,
@@ -291,7 +291,7 @@ async def compare_allocations(
         recommendations = analyzer.generate_recommendations(comparison)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "num_strategies": len(comparison.results),
             "best_sharpe": comparison.best_sharpe,
             "best_return": comparison.best_return,
@@ -338,7 +338,7 @@ async def get_backtest_results(
 
     response = {
         "result_id": result_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
         "strategy_name": result.strategy_name,
         "allocation": {k: round(v, 2) for k, v in result.allocation.items()},
         "period_days": result.period_days,
@@ -440,7 +440,7 @@ async def get_backtest_summary() -> Dict[str, Any]:
         })
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
         "total_backtests": len(_backtest_results),
         "results": summaries,
     }

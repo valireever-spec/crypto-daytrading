@@ -4,7 +4,7 @@ Provides P&L, risk metrics, backtesting, and performance reporting
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any
 import statistics
 import asyncio
@@ -147,7 +147,7 @@ class PortfolioAnalyzer:
     def generate_daily_report(self) -> Dict[str, Any]:
         """Generate comprehensive daily report"""
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "account": self.account_state,
             "pnl": self.calculate_daily_pnl(),
             "risk_metrics": self.calculate_risk_metrics(),

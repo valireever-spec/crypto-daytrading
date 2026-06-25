@@ -107,7 +107,7 @@ class TestRegimeDetector:
         """Detect bull market regime."""
         metrics = detector.detect_regime(bull_market_data)
 
-        assert metrics["regime"] == "BULL"
+        assert metrics["regime"] == "bull"
         assert metrics.get("volatility_ratio", 1.0) >= 0.4
         assert metrics["trend_strength"] > 0  # Uptrend
 
@@ -123,7 +123,7 @@ class TestRegimeDetector:
         """Detect sideways market regime."""
         metrics = detector.detect_regime(sideways_market_data)
 
-        assert metrics["regime"] in ["SIDEWAYS", "VOLATILE"]
+        assert metrics["regime"] in ["sideways", "volatile"]
         assert metrics.get("volatility_ratio", 1.0) > 0
 
     def test_rsi_calculation(self, detector, bull_market_data):
@@ -177,7 +177,7 @@ class TestRegimeDetector:
         assert isinstance(metrics, dict)
         assert "regime" in metrics
         assert isinstance(metrics["regime"], str)
-        assert metrics["regime"] in ["BULL", "BEAR", "SIDEWAYS", "VOLATILE", "unknown"]
+        assert metrics["regime"] in ["bull", "bear", "sideways", "volatile", "unknown"]
         assert "trend_strength" in metrics
         assert -1 <= metrics["trend_strength"] <= 1
         assert "rsi_value" in metrics
@@ -186,7 +186,7 @@ class TestRegimeDetector:
     def test_regime_impact_analysis(self, detector):
         """Verify regime-aware threshold adjustments."""
         bull_metrics = {
-            "regime": "BULL",
+            "regime": "bull",
             "trend_strength": 0.5,
             "volatility_level": "medium",
             "rsi_value": 55,

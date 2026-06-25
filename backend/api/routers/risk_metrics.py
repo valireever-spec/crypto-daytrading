@@ -66,7 +66,7 @@ async def get_risk_metrics(
         positions = engine.get_positions()
         if not positions:
             return {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.utcnow().isoformat() + "Z",
                 "error": "No positions in portfolio",
                 "value_at_risk_95": 0,
                 "value_at_risk_99": 0,
@@ -290,7 +290,7 @@ async def get_stress_test_results(
                 }
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "scenarios": scenarios,
             "worst_case": worst_case,
             "portfolio_value_eur": portfolio_value,
@@ -499,7 +499,7 @@ async def get_risk_alert_status() -> Dict[str, Any]:
                 alerts.append(alert)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "current_metrics": current_metrics,
             "thresholds": thresholds,
             "alerts": alerts,
@@ -539,7 +539,7 @@ async def get_risk_dashboard_summary() -> Dict[str, Any]:
         # Aggregate all risk data
         # In real system, would call individual endpoints
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "portfolio_value": portfolio_value,
             "risk_level": "BALANCED",
             "summary": {
