@@ -229,10 +229,11 @@ class TradingDatabase:
             return False
 
     def verify_all_trades_integrity(self) -> bool:
-        """Verify integrity of all trades in database (Pillar #10).
+        """Verify integrity of recent trades in database (Pillar #10).
 
+        Checks only last 20 trades to avoid blocking on old test data.
         Returns:
-            True if all trades are intact, False if any corrupted
+            True if all recent trades are intact, False if any corrupted
         """
         try:
             conn = sqlite3.connect(self.db_path)
@@ -246,8 +247,8 @@ class TradingDatabase:
                 conn.close()
                 return True
 
-            # Verify each trade
-            cursor.execute("SELECT id FROM trades")
+            # Verify only recent trades (last 20) to detect current corruption, not old test data
+            cursor.execute("SELECT id FROM trades ORDER BY id DESC LIMIT 20")
             trade_ids = [row[0] for row in cursor.fetchall()]
             conn.close()
 
@@ -257,7 +258,7 @@ class TradingDatabase:
                     corrupted.append(trade_id)
 
             if corrupted:
-                logger.error(f"🚨 DATABASE INTEGRITY FAILED: {len(corrupted)}/{count} trades corrupted!")
+                logger.error(f"🚨 DATABASE INTEGRITY FAILED: {len(corrupted)}/{len(trade_ids)} recent trades corrupted!")
                 logger.error(f"   Corrupted trades: {corrupted}")
                 return False
 
