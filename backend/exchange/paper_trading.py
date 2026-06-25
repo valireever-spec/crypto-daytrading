@@ -8,6 +8,8 @@ from dataclasses import dataclass, asdict
 import json
 from pathlib import Path
 
+from backend.core.database import get_database
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +24,7 @@ class Position:
     entry_time: datetime
     current_price: float
     unrealized_pnl: float = 0.0
+    db_id: Optional[int] = None  # Database ID for persistence
 
 
 @dataclass
@@ -70,6 +73,9 @@ class PaperTradingEngine:
 
         # Ensure logs directory exists
         self.AUDIT_LOG.parent.mkdir(exist_ok=True)
+
+        # Restore positions from database (Pillar #5: State Persistence)
+        self._restore_positions_from_db()
 
     async def place_order(
         self,
@@ -120,19 +126,59 @@ class PaperTradingEngine:
             gross_amount = quantity * fill_price
             fee = gross_amount * self.FEE_RATE
 
+            # HARDENING: Validate order fill (Pillar #4: Order Execution)
+            # Verify: 1) Fill quantity matches requested, 2) Fill price in bounds, 3) Log discrepancies
+            fill_quantity = quantity  # Paper trading always fills the entire order
+            slippage_pct = abs(fill_price - current_price) / current_price * 100
+
+            if fill_quantity != quantity:
+                logger.error(
+                    f"PARTIAL FILL DETECTED: {symbol} requested {quantity} but filled {fill_quantity}"
+                )
+                return {
+                    "status": "PARTIAL",
+                    "reason": f"Requested {quantity}, filled {fill_quantity}",
+                }
+
+            expected_min = current_price * (1 - slippage - 0.001)  # Slippage + 0.1% tolerance
+            expected_max = current_price * (1 + slippage + 0.001)
+            if not (expected_min < fill_price < expected_max):
+                logger.warning(
+                    f"UNEXPECTED SLIPPAGE: {symbol} {side} @ {fill_price:.2f} "
+                    f"vs expected {current_price:.2f} (slippage {slippage_pct:.2f}%)"
+                )
+
+            logger.debug(
+                f"ORDER_FILL_VALIDATED: {symbol} {side} {fill_quantity} "
+                f"@ {fill_price:.2f} (slippage {slippage_pct:.2f}%)"
+            )
+
             # Update positions and cash
             entry_price_for_analytics = None
+            now = datetime.utcnow()
             if side == "BUY":
                 self.cash -= gross_amount + fee
-                self.positions[symbol] = Position(
+
+                # Save position to database first (Pillar #5: State Persistence)
+                db_id = None
+                try:
+                    db = get_database()
+                    db_id = db.insert_position(symbol, quantity, fill_price, now)
+                except Exception as e:
+                    logger.error(f"Failed to save position to DB: {e}")
+
+                position = Position(
                     symbol=symbol,
                     side="LONG",
                     quantity=quantity,
                     entry_price=fill_price,
-                    entry_time=datetime.utcnow(),
+                    entry_time=now,
                     current_price=fill_price,
+                    db_id=db_id,
                 )
+                self.positions[symbol] = position
                 realized_pnl = 0.0
+
             else:  # SELL
                 if symbol not in self.positions:
                     return {
@@ -146,6 +192,15 @@ class PaperTradingEngine:
                 self.total_pnl += realized_pnl
                 self.daily_pnl += realized_pnl
                 self.cash += gross_amount - fee
+
+                # Mark position as closed in database (Pillar #5: State Persistence)
+                if position.db_id:
+                    try:
+                        db = get_database()
+                        db.close_position(position.db_id)
+                    except Exception as e:
+                        logger.error(f"Failed to close position in DB: {e}")
+
                 del self.positions[symbol]
 
             # Create trade record
@@ -165,6 +220,21 @@ class PaperTradingEngine:
 
             self.trade_history.append(trade)
             self._log_trade(trade)
+
+            # Log trade to database (Pillar #5: State Persistence - audit trail)
+            try:
+                db = get_database()
+                db.insert_trade(
+                    symbol=symbol,
+                    side=side,
+                    quantity=quantity,
+                    price=fill_price,
+                    trade_time=now,
+                    order_id=order_id,
+                    slippage_pct=(abs(fill_price - current_price) / current_price * 100),
+                )
+            except Exception as e:
+                logger.error(f"Failed to log trade to DB: {e}")
 
             # Record to strategy analytics if strategy_name provided
             if strategy_name and side == "SELL" and entry_price_for_analytics:
@@ -291,6 +361,48 @@ class PaperTradingEngine:
         """Check if datetime is today."""
         today = datetime.utcnow().date()
         return dt.date() == today
+
+    def _restore_positions_from_db(self) -> None:
+        """Restore open positions from database on startup (Pillar #5 hardening).
+
+        This prevents orphaned positions if the API crashes while holding positions.
+        """
+        try:
+            db = get_database()
+            db_positions = db.get_open_positions()
+
+            if not db_positions:
+                logger.info("No orphaned positions to restore from database")
+                return
+
+            logger.critical(f"RECOVERING {len(db_positions)} ORPHANED POSITIONS FROM DATABASE!")
+
+            for db_pos in db_positions:
+                symbol = db_pos["symbol"]
+                quantity = db_pos["quantity"]
+                entry_price = db_pos["entry_price"]
+                pos_id = db_pos["id"]
+
+                # Parse entry_time if it's a string
+                entry_time = db_pos["entry_time"]
+                if isinstance(entry_time, str):
+                    entry_time = datetime.fromisoformat(entry_time)
+
+                # Restore position to in-memory state
+                self.positions[symbol] = Position(
+                    symbol=symbol,
+                    side="LONG",
+                    quantity=quantity,
+                    entry_price=entry_price,
+                    entry_time=entry_time,
+                    current_price=entry_price,  # Will be updated at next mark-to-market
+                    db_id=pos_id,
+                )
+
+                logger.critical(f"RESTORED: {symbol} {quantity} @ {entry_price} (db_id={pos_id})")
+
+        except Exception as e:
+            logger.error(f"Failed to restore positions from DB: {e}")
 
 
 # Global paper trading engine

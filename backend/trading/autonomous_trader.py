@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import uuid
+import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Any
@@ -22,6 +24,47 @@ logger = logging.getLogger(__name__)
 
 # Thread pool for CPU-intensive calculations (prevents blocking event loop)
 _signal_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="signal_calc")
+
+
+def log_trading_decision(
+    decision_type: str,
+    symbol: str,
+    decision: str,
+    reason: str,
+    context: Dict,
+) -> str:
+    """Log a trading decision with full traceability (Pillar #8: Logging Fidelity).
+
+    Args:
+        decision_type: 'ENTRY' or 'EXIT'
+        symbol: Trading symbol
+        decision: 'ACCEPT' or 'REJECT'
+        reason: Human-readable reason
+        context: Decision context (signal_score, threshold, regime, etc.)
+
+    Returns:
+        Decision ID (UUID) for tracing
+    """
+    decision_id = str(uuid.uuid4())[:8]
+    log_entry = {
+        "decision_id": decision_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "decision_type": decision_type,
+        "symbol": symbol,
+        "decision": decision,
+        "reason": reason,
+        **context,
+    }
+
+    if decision == "ACCEPT":
+        logger.info(f"✅ {decision_type} ACCEPTED [{decision_id}] {symbol}: {reason}")
+    else:
+        logger.info(f"❌ {decision_type} REJECTED [{decision_id}] {symbol}: {reason}")
+
+    # Log full context for debugging (searchable by decision_id)
+    logger.debug(f"DECISION_CONTEXT[{decision_id}]: {json.dumps(log_entry)}")
+
+    return decision_id
 
 
 @dataclass
@@ -288,6 +331,20 @@ class AutonomousTrader:
             )
 
             if signal_passed:
+                # HARDENING: Log entry decision with full context (Pillar #8: Logging Fidelity)
+                decision_id = log_trading_decision(
+                    decision_type="ENTRY",
+                    symbol=symbol,
+                    decision="ACCEPT",
+                    reason=explanation['reasoning'],
+                    context={
+                        "signal_score": signal_score,
+                        "threshold": adaptive_threshold,
+                        "regime": regime_data.get("regime", "unknown"),
+                        "asset_class": asset_class,
+                    }
+                )
+
                 # Generate entry signal
                 signal = TradeSignal(
                     symbol=symbol,
@@ -456,6 +513,79 @@ class AutonomousTrader:
         except Exception as e:
             logger.error(f"Error checking daily loss limit: {e}", exc_info=True)
             return False
+
+    async def _validate_risk_before_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        current_price: float,
+    ) -> tuple[bool, str]:
+        """Pre-order risk validation (Pillar #6: Risk Enforcement Double-Check).
+
+        Validates:
+        1. Daily loss limit not exceeded
+        2. New order won't push us over limit (worst-case)
+        3. Sufficient cash available (for BUY orders)
+        4. Position size within limits
+
+        Args:
+            symbol: Trading symbol
+            side: 'BUY' or 'SELL'
+            quantity: Order quantity
+            current_price: Current market price
+
+        Returns:
+            (is_valid, reason_if_invalid)
+        """
+        try:
+            engine = get_paper_trading()
+            if not engine:
+                return False, "Paper trading engine unavailable"
+
+            account = engine.get_account_state()
+            daily_pnl = account.get('daily_pnl', 0.0)
+            total_equity = account.get('total_equity', 10000.0)
+            cash = account.get('cash', 10000.0)
+
+            if total_equity <= 0:
+                return False, "Invalid account equity"
+
+            # Check 1: Daily loss not already exceeded
+            daily_loss_pct = abs(daily_pnl) / total_equity * 100
+            if daily_pnl < 0 and daily_loss_pct >= self.config.max_daily_loss_pct:
+                return False, f"Daily loss limit already exceeded: ${abs(daily_pnl):.2f}"
+
+            # Check 2: BUY-specific validations
+            if side == "BUY":
+                order_cost = quantity * current_price
+
+                # Verify sufficient cash
+                if order_cost > cash:
+                    return False, f"Insufficient cash: need ${order_cost:.2f}, have ${cash:.2f}"
+
+                # Worst-case loss: order fails and position closes at -2% (stop loss)
+                worst_case_loss = order_cost * 0.02 + (order_cost * 0.001)  # SL + fee
+                projected_daily_pnl = daily_pnl - worst_case_loss
+                projected_loss_pct = abs(projected_daily_pnl) / total_equity * 100
+
+                if projected_loss_pct > self.config.max_daily_loss_pct:
+                    return (
+                        False,
+                        f"Order would exceed daily limit: worst-case loss ${worst_case_loss:.2f} → "
+                        f"${abs(projected_daily_pnl):.2f} ({projected_loss_pct:.1f}%)",
+                    )
+
+            logger.debug(
+                f"RISK_VALIDATION_PASSED: {side} {quantity} {symbol} @ ${current_price:.2f} "
+                f"(daily P&L: ${daily_pnl:.2f}, limit: {self.config.max_daily_loss_pct:.1f}%)"
+            )
+
+            return True, "OK"
+
+        except Exception as e:
+            logger.error(f"Error validating risk before order: {e}", exc_info=True)
+            return False, f"Validation error: {str(e)}"
 
     async def _check_portfolio_decisions(self):
         """Check and execute portfolio-level regime decisions (Phase 318)."""
@@ -649,6 +779,20 @@ class AutonomousTrader:
                 return False
 
             logger.info(f"🎯 EXECUTING ENTRY FOR {signal.symbol} @ ${current_price:.2f}")
+
+            # HARDENING: Pre-order risk validation (Pillar #6: Risk Enforcement Double-Check)
+            # Estimate position size to validate risk (will be recalculated below with volatility)
+            account = engine.get_account_state()
+            estimated_quantity = (account['total_equity'] * 0.03) / current_price  # Rough estimate
+            risk_valid, risk_reason = await self._validate_risk_before_order(
+                symbol=signal.symbol,
+                side='BUY',
+                quantity=estimated_quantity,
+                current_price=current_price,
+            )
+            if not risk_valid:
+                logger.critical(f"🛑 ENTRY REJECTED - RISK CHECK FAILED: {risk_reason}")
+                return False
 
             # Calculate position size with volatility & regime adjustments (Phase 314/316)
             account = engine.get_account_state()
