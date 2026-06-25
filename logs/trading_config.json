@@ -2,11 +2,11 @@
   "entry_threshold": 60.0,
   "exit_profit_target": 0.03,
   "exit_stop_loss": 0.02,
-  "position_size_pct": 0.1,
+  "position_size_pct": 0.05,
   "max_positions": 5,
   "max_daily_loss_pct": 5.0,
-  "symbols": [],
-  "enabled": false,
-  "_last_updated": "2026-06-25T06:08:26.103155Z",
-  "_source": "api_update"
+  "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
+  "enabled": true,
+  "_last_updated": "2026-06-25T06:10:36.258684Z",
+  "_source": "phase_1_launch"
 }
