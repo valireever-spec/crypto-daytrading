@@ -1178,7 +1178,8 @@ function validateResponse(response, requiredFields = []) {
     </script>
 
     <script>
-        const API = 'http://127.0.0.1:8001/api';
+        // Use dynamic base URL to support any host/IP
+        const API = `${window.location.protocol}//${window.location.host}/api`;
         let autoRefreshEnabled = true;
         let autoRefreshInterval = null;
 
