@@ -39,7 +39,7 @@ class HealthStatus:
 class HealthChecker:
     """Production health monitoring."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.last_checks: Dict[str, HealthStatus] = {}
         self.check_history: Dict[str, list] = {}
         self.max_history = 100
@@ -256,9 +256,13 @@ class HealthChecker:
         Failure = cannot save/restore positions = data loss.
         """
         try:
-            from backend.core.database import Database
+            from backend.core.database import get_database
 
-            db = Database()
+            db = get_database()
+            if not db:
+                return HealthStatus(
+                    "database", False, "Database not initialized"
+                )
 
             # Test connection by querying
             open_pos = db.get_open_positions()
