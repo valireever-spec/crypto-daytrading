@@ -257,19 +257,22 @@ async def lifespan(app: FastAPI):
     global autonomous_trader_task
     # Load trading configuration from persistent storage (logs/trading_config.json) or .env
     config_dict = ConfigManager.load_config()
+    # STANDARDIZED: position_size_pct is always stored as PERCENTAGE (e.g., 2.5 = 2.5%)
+    # No division/multiplication needed - API, .env, and TradingConfig all use percentages
     trader_config = TradingConfig(
         enabled=config_dict.get("enabled", True),
         entry_threshold=config_dict.get("entry_threshold", 60.0),
-        exit_profit_target=config_dict.get("exit_profit_target", 0.03),
-        exit_stop_loss=config_dict.get("exit_stop_loss", 0.02),
-        position_size_pct=config_dict.get("position_size_pct", 0.02),
-        max_positions=config_dict.get("max_positions", 6),
-        max_daily_loss_pct=config_dict.get("max_daily_loss_pct", 8.0),
+        exit_profit_target=config_dict.get("exit_profit_target", 4.5),  # 4.5% profit target (1.5× stop loss)
+        exit_stop_loss=config_dict.get("exit_stop_loss", 3.0),  # 3% stop loss
+        position_size_pct=config_dict.get("position_size_pct", 2.5),  # 2.5% per trade
+        max_positions=config_dict.get("max_positions", 8),  # 8 concurrent positions
+        max_daily_loss_pct=config_dict.get("max_daily_loss_pct", 5.0),
         symbols=config_dict.get("symbols", ["BTCUSDT", "ETHUSDT", "BNBUSDT"]),
     )
     autonomous_trader = init_autonomous_trader(trader_config)
     logger.info(
-        f"Trading config loaded: position_size={trader_config.position_size_pct*100:.1f}%, max_positions={trader_config.max_positions}, max_daily_loss={trader_config.max_daily_loss_pct:.1f}%"
+        f"Trading config loaded: position_size={trader_config.position_size_pct:.2f}%, max_positions={trader_config.max_positions}, max_daily_loss={trader_config.max_daily_loss_pct:.1f}%, "
+        f"entry_threshold={trader_config.entry_threshold:.0f}, exit_stop_loss={trader_config.exit_stop_loss:.1f}%, exit_profit_target={trader_config.exit_profit_target:.1f}%"
     )
     autonomous_trader_task = asyncio.create_task(autonomous_trader.start())
     logger.info("Autonomous trader initialized and started")

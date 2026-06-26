@@ -179,18 +179,23 @@ class ConfigManager:
 
     @staticmethod
     def _config_to_env_lines(config: Dict[str, Any]) -> list:
-        """Convert trading config dict to .env format lines."""
+        """Convert trading config dict to .env format lines.
+
+        STANDARDIZED: All values stored as percentages (e.g., 2.5 = 2.5%), not decimals.
+        No conversion needed - values are already in correct format.
+        """
         env_lines = [
             "# Trading Configuration - SOURCE OF TRUTH FOR BOTH MACHINES",
             "TRADING_MODE=paper",
             f"INITIAL_CAPITAL={config.get('initial_capital', 10000.0)}",
             "",
             "# 9 Adjustable Parameters (critical for HA sync)",
+            "# IMPORTANT: All percentages stored as percentages (e.g., 2.5 = 2.5%), NOT decimals",
             f"ENTRY_THRESHOLD={config.get('entry_threshold', 60.0)}",
-            f"POSITION_SIZE_PCT={config.get('position_size_pct', 1.5) * 100}",  # Convert decimal to %
-            f"MAX_POSITIONS={config.get('max_positions', 5)}",
-            f"EXIT_STOP_LOSS={config.get('exit_stop_loss', 0.02)}",
-            f"EXIT_PROFIT_TARGET={config.get('exit_profit_target', 0.03)}",
+            f"POSITION_SIZE_PCT={config.get('position_size_pct', 2.5)}",
+            f"MAX_POSITIONS={config.get('max_positions', 8)}",
+            f"EXIT_STOP_LOSS={config.get('exit_stop_loss', 3.0)}",
+            f"EXIT_PROFIT_TARGET={config.get('exit_profit_target', 4.5)}",
             f"QUALITY_GATE_ENTRY={config.get('quality_gate_entry', 90.0)}",
             f"QUALITY_GATE_EXIT={config.get('quality_gate_exit', 60.0)}",
             f"LOOP_SLEEP_SECONDS={config.get('loop_sleep_seconds', 10.0)}",

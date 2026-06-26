@@ -88,20 +88,26 @@ class TradeSignal:
 
 @dataclass
 class TradingConfig:
-    """Configuration for autonomous trading (all values from .env)."""
+    """Configuration for autonomous trading (all percentage values stored as percentages, not decimals).
+
+    IMPORTANT: All values are stored as percentages (e.g., 2.5 = 2.5%), not decimals.
+    - position_size_pct = 2.5 means 2.5% per trade (NOT 0.025)
+    - exit_stop_loss = 3.0 means 3% max loss per trade (NOT 0.03)
+    - exit_profit_target = 3.0 means 3% profit target (NOT 0.03)
+    """
 
     enabled: bool = True
-    entry_threshold: float = 60.0  # From ENTRY_THRESHOLD env var
-    exit_profit_target: float = 0.03  # From EXIT_PROFIT_TARGET env var
-    exit_stop_loss: float = 0.02  # From EXIT_STOP_LOSS env var
-    position_size_pct: float = 0.05  # From POSITION_SIZE_PCT env var
-    max_positions: int = 5  # From MAX_POSITIONS env var
-    max_daily_loss_pct: float = 5.0  # From MAX_DAILY_LOSS_PCT env var
-    symbols: List[str] = None  # From TRADING_SYMBOLS env var
-    loop_sleep_seconds: float = 10.0  # Sleep between trading loop iterations (controls frequency)
+    entry_threshold: float = 60.0  # Signal strength threshold (0-100)
+    exit_profit_target: float = 3.0  # Profit target per trade (%)
+    exit_stop_loss: float = 3.0  # Stop loss per trade (%)
+    position_size_pct: float = 2.5  # Position size per trade (%)
+    max_positions: int = 8  # Maximum concurrent open positions
+    max_daily_loss_pct: float = 5.0  # Daily loss limit (%)
+    symbols: List[str] = None  # Trading symbols
+    loop_sleep_seconds: float = 10.0  # Sleep between trading loop iterations
     retry_sleep_seconds: float = 5.0  # Sleep on error before retry
     quality_gate_entry: float = 90.0  # Data quality required for NEW entries (%)
-    quality_gate_exit: float = 60.0  # Data quality required for exits (stop loss / profit target)
+    quality_gate_exit: float = 60.0  # Data quality required for exits (%)
 
     def __post_init__(self):
         if self.symbols is None:
@@ -136,16 +142,18 @@ def load_trading_config_from_env() -> TradingConfig:
     Environment variables override hardcoded defaults. Both primary and backup load from same .env.
     Changes via API are synced to backup immediately via /api/autonomous/config/sync.
 
+    STANDARDIZED: All percentage values stored as percentages (e.g., 2.5 = 2.5%), not decimals.
+
     Returns:
         TradingConfig with values from .env or hardcoded defaults
     """
     return TradingConfig(
         enabled=True,
         entry_threshold=float(os.getenv("ENTRY_THRESHOLD", "60.0")),
-        exit_profit_target=float(os.getenv("EXIT_PROFIT_TARGET", "0.03")),
-        exit_stop_loss=float(os.getenv("EXIT_STOP_LOSS", "0.02")),
-        position_size_pct=float(os.getenv("POSITION_SIZE_PCT", "1.5")) / 100,  # Convert % to decimal
-        max_positions=int(os.getenv("MAX_POSITIONS", "5")),
+        exit_profit_target=float(os.getenv("EXIT_PROFIT_TARGET", "4.5")),  # 4.5% profit target (1.5× stop loss)
+        exit_stop_loss=float(os.getenv("EXIT_STOP_LOSS", "3.0")),  # 3% stop loss
+        position_size_pct=float(os.getenv("POSITION_SIZE_PCT", "2.5")),  # 2.5% per trade
+        max_positions=int(os.getenv("MAX_POSITIONS", "8")),  # 8 concurrent positions
         max_daily_loss_pct=float(os.getenv("MAX_DAILY_LOSS_PCT", "5.0")),
         loop_sleep_seconds=float(os.getenv("LOOP_SLEEP_SECONDS", "10.0")),
         quality_gate_entry=float(os.getenv("QUALITY_GATE_ENTRY", "90.0")),

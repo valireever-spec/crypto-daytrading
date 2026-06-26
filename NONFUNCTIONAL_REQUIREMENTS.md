@@ -318,49 +318,52 @@ The following 9 parameters define the autonomous trading system's behavior durin
 ---
 
 ### CFR-002: Position Size Per Trade
-- **Current Value:** 1.5% (of total equity)
+- **Current Value:** 2.5% (of total equity)
 - **Requirement:** Maximum risk per individual trade
-- **Rationale:** 1.5% × €10,000 initial = €150 per trade; limits loss on bad signals
+- **Rationale:** 2.5% × €10,000 initial = €250 per trade; improved from 1.5% for better learning signal
 - **Source of Truth:** `POSITION_SIZE_PCT` in `.env`
 - **Sync Method:** SSH to backup machine when changed via API
 - **Validation:** 0.1 ≤ value ≤ 20 (%)
+- **Format:** Stored as percentage (e.g., 2.5 = 2.5%), not decimal
 - **Linkage:** Auto-linked to Max Positions to keep total portfolio risk ≤25%
 - **Acceptance:** Position size always matches configured percentage
 
 ---
 
 ### CFR-003: Maximum Concurrent Positions
-- **Current Value:** 5 (simultaneous open trades)
+- **Current Value:** 8 (simultaneous open trades)
 - **Requirement:** Limit concentration risk and capital drawdown
-- **Rationale:** 5 positions × 1.5% = 7.5% total risk; leaves 92.5% capital for margin/volatility
+- **Rationale:** 8 positions × 2.5% = 20% total portfolio risk; leaves 80% capital for margin/volatility; improved from 5 for more learning activity
 - **Source of Truth:** `MAX_POSITIONS` in `.env`
 - **Sync Method:** SSH to backup machine when changed via API
 - **Validation:** 1 ≤ value ≤ 10
 - **Linkage:** Auto-linked to Position Size to keep total portfolio risk ≤25%
-- **Acceptance:** System never opens >5 positions simultaneously
+- **Acceptance:** System never opens >8 positions simultaneously
 
 ---
 
 ### CFR-004: Exit Stop Loss
-- **Current Value:** 0.02 (2% loss per trade)
+- **Current Value:** 3.0% (loss per trade)
 - **Requirement:** Maximum acceptable loss before automatically closing position
-- **Rationale:** 2% loss per trade limits downside; standard risk management
+- **Rationale:** 3% loss per trade (improved from 2%) reduces whipsaws from crypto noise while maintaining risk control
 - **Source of Truth:** `EXIT_STOP_LOSS` in `.env`
 - **Sync Method:** SSH to backup machine when changed via API
-- **Validation:** 0.001 ≤ value ≤ 0.5 (decimal, 0.1% to 50%)
+- **Validation:** 0.1 ≤ value ≤ 50 (%)
+- **Format:** Stored as percentage (e.g., 3.0 = 3%), not decimal
 - **Linkage:** Auto-linked to Exit Profit Target to maintain 1:1.5 risk/reward ratio
 - **Acceptance:** All positions have stop loss ≤ configured value
 
 ---
 
 ### CFR-005: Exit Profit Target
-- **Current Value:** 0.03 (3% profit per trade)
+- **Current Value:** 4.5% (profit per trade)
 - **Requirement:** Automatic profit-taking level
-- **Rationale:** 3% profit target = 1.5× the 2% stop loss (favorable risk/reward)
+- **Rationale:** Maintains 1:1.5 risk/reward ratio (3% stop loss × 1.5 = 4.5% profit target)
 - **Source of Truth:** `EXIT_PROFIT_TARGET` in `.env`
 - **Sync Method:** SSH to backup machine when changed via API
-- **Validation:** 0.001 ≤ value ≤ 0.5 (decimal, 0.1% to 50%)
-- **Linkage:** Auto-linked to Exit Stop Loss to maintain 1:1.5 risk/reward ratio
+- **Validation:** 0.1 ≤ value ≤ 50 (%)
+- **Format:** Stored as percentage (e.g., 4.5 = 4.5%), not decimal
+- **Linkage:** Auto-linked to Exit Stop Loss to maintain 1:1.5 risk/reward ratio (always maintained at stop_loss × 1.5)
 - **Acceptance:** Exit profit target / stop loss = 1.5 (within 0.01 tolerance)
 
 ---
