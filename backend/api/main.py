@@ -495,44 +495,38 @@ if frontend_path.exists():
 
 
 @app.get("/api/health")
-def health_check() -> JSONResponse:
+async def health_check() -> JSONResponse:
     """
-    Lightweight health check - responds immediately without blocking.
+    Comprehensive health check with critical system validation.
 
-    Used by redundancy monitor to detect if service is alive.
-    Does NOT await anything to prevent event loop blocking.
+    CRITICAL CHECKS:
+    - WebSocket price feed age <2 min (catches silent disconnects)
+    - Trade log age <1 hour (catches trader stalls)
+    - Price data freshness per symbol
+    - Autonomous trader running status
+    - Database connectivity
+    - Memory/disk/CPU usage
+
+    Returns CRITICAL if ANY core check fails.
     """
-    return JSONResponse(
-        {
-            "status": "ok",
-            "mode": settings.trading_mode,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-    )
+    from backend.core.health_checker import init_health_checker, get_health_checker
+
+    checker = get_health_checker()
+    if not checker:
+        checker = init_health_checker()
+
+    result = await checker.check_all()
+
+    # Determine HTTP status code based on health
+    status_code = 200 if result["overall_healthy"] else 503
+
+    return JSONResponse(result, status_code=status_code)
 
 
 @app.get("/api/health/detailed")
 async def health_check_detailed() -> JSONResponse:
-    """
-    Detailed health check with full system status.
-
-    Used for diagnostics only - may take longer due to async operations.
-    """
-    ws = get_websocket()
-    ws_status = await ws.get_connection_status() if ws else {"connected": False}
-
-    engine = get_paper_trading()
-    account = engine.get_account_state() if engine else {}
-
-    return JSONResponse(
-        {
-            "status": "ok",
-            "mode": settings.trading_mode,
-            "websocket": ws_status,
-            "paper_trading": account,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-    )
+    """Alias for /api/health - same comprehensive check."""
+    return await health_check()
 
 
 # === Paper Trading Endpoints (FR-002) ===
