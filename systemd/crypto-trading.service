@@ -24,7 +24,7 @@ StandardError=journal
 SyslogIdentifier=crypto-trading
 
 # Resource limits
-MemoryLimit=500M
+MemoryMax=500M
 MemoryAccounting=true
 
 # Watchdog: systemd monitors process, auto-restarts if it hangs
