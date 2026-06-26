@@ -40,14 +40,14 @@ class Alert:
     resolved: bool = False
     resolution_time: Optional[str] = None
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
         return asdict(self)
 
 
 class AlertManager:
     """Manages alerts and notifications."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.alerts: List[Alert] = []
         self.active_alerts: Dict[str, Alert] = {}
         self.rules: List[Dict] = self._init_rules()

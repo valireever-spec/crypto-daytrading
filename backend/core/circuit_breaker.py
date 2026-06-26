@@ -36,7 +36,7 @@ class CircuitBreaker:
     - Position reconciliation fails
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize circuit breaker (starts CLOSED = trading allowed)."""
         self.is_broken = False
         self.reason = ""

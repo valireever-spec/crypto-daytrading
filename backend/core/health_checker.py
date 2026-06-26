@@ -19,14 +19,14 @@ class HealthStatus:
 
     def __init__(
         self, name: str, healthy: bool, message: str = "", details: Dict = None
-    ):
+    ) -> None:
         self.name = name
         self.healthy = healthy
         self.message = message
         self.details = details or {}
         self.timestamp = datetime.utcnow().isoformat()
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
         return {
             "name": self.name,
             "healthy": self.healthy,

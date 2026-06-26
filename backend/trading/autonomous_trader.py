@@ -285,13 +285,11 @@ class AutonomousTrader:
                 except Exception as e:
                     logger.warning(f"Could not verify database integrity: {e}")
 
-                # If circuit breaker is open, stop new entries
-                if not circuit_breaker.check_health():
+                # CRITICAL FIX: Check circuit breaker (must not be overwritten by quality gate)
+                circuit_breaker_open = not circuit_breaker.check_health()
+                if circuit_breaker_open:
                     cb_status = circuit_breaker.get_status_report()
                     logger.critical(f"🚨 CIRCUIT BREAKER ACTIVE: {cb_status['reason']}")
-                    skip_entries = True
-                else:
-                    skip_entries = False
 
                 # HARDENING: Differentiated quality gates (Entries vs Exits)
                 # Exits are lenient to ensure stop losses and profit targets execute
@@ -302,16 +300,23 @@ class AutonomousTrader:
                     data_quality.overall_score >= self.config.quality_gate_exit
                 )  # Lenient for exits (configurable)
 
-                if not quality_gate_pass_entry:
+                quality_gate_fail = not quality_gate_pass_entry
+
+                if quality_gate_fail:
                     logger.warning(
                         f"⚠️ Entry quality gate FAILED ({data_quality.overall_score:.0f}% < {self.config.quality_gate_entry}%), "
                         f"blocking NEW ENTRIES. Failures: {data_quality.failures}. "
                         f"Exits still allowed (quality >= {self.config.quality_gate_exit}% for stop loss/profit target)"
                     )
-                    # Don't skip iteration entirely - exits may still be needed
-                    skip_entries = True
-                else:
-                    skip_entries = False
+
+                # CRITICAL FIX: Combine with OR logic - skip if EITHER condition true
+                skip_entries = circuit_breaker_open or quality_gate_fail
+
+                if skip_entries:
+                    if circuit_breaker_open:
+                        logger.critical("🚨 CIRCUIT BREAKER: Stopping new entries (system in failure state)")
+                    if quality_gate_fail:
+                        logger.warning(f"⚠️ Quality gate fail: Stopping new entries (data quality {data_quality.overall_score:.0f}% < {self.config.quality_gate_entry}%)")
 
                 if not quality_gate_pass_exit:
                     logger.critical(
