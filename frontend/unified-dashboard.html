@@ -802,6 +802,66 @@
                             </div>
                         </div>
 
+                        <!-- Entry Quality Gate -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #FF5722; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>🔍 Entry Quality Gate</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">Min data quality % required to open a position</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #FF5722;" id="config-quality-entry-display">90%</div>
+                            </div>
+                            <input type="range" min="0" max="100" value="90" style="width: 100%;" onchange="updateTraderConfig({quality_gate_entry: this.value})" id="slider-quality-entry">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Higher = stricter entry conditions. 90% = only enter on excellent data quality
+                            </div>
+                        </div>
+
+                        <!-- Exit Quality Gate -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #FFC107; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>⚠️ Exit Quality Gate</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">Min data quality % required to close a position</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #FFC107;" id="config-quality-exit-display">60%</div>
+                            </div>
+                            <input type="range" min="0" max="100" value="60" style="width: 100%;" onchange="updateTraderConfig({quality_gate_exit: this.value})" id="slider-quality-exit">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Lower = exits faster even on degraded data. 60% = reasonable for exits
+                            </div>
+                        </div>
+
+                        <!-- Loop Sleep Seconds -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #3F51B5; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>⏱️ Trading Frequency</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">Seconds between trading loop iterations</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #3F51B5;" id="config-loop-display">10s</div>
+                            </div>
+                            <input type="range" min="1" max="60" value="10" style="width: 100%;" onchange="updateTraderConfig({loop_sleep_seconds: this.value})" id="slider-loop-sleep">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Lower = faster trading (6/min at 10s). Higher = slower trading. Recommended: 10-30s
+                            </div>
+                        </div>
+
+                        <!-- Max Daily Loss -->
+                        <div style="padding: 15px; background: #f9f9f9; border-left: 4px solid #E91E63; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <strong>🛑 Max Daily Loss Circuit Breaker</strong>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">Auto-stop trading if daily loss reaches this %</div>
+                                </div>
+                                <div style="font-size: 16px; font-weight: bold; color: #E91E63;" id="config-daily-loss-display">5.0%</div>
+                            </div>
+                            <input type="range" min="0.1" max="20" step="0.1" value="5" style="width: 100%;" onchange="updateTraderConfig({max_daily_loss_pct: this.value})" id="slider-daily-loss">
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                                💡 Safety mechanism: stops all trading if daily loss exceeds this threshold. 5% = conservative
+                            </div>
+                        </div>
+
                         <!-- Parameter Interactions -->
                         <div style="padding: 15px; background: #e3f2fd; border-radius: 4px; border: 1px solid #2196F3;">
                             <strong style="color: #1976D2;">⚡ Parameter Interactions:</strong>
@@ -1538,6 +1598,22 @@ function validateResponse(response, requiredFields = []) {
                 if (el) el.textContent = updates.max_positions;
                 // Update risk calculation
                 updateRiskCalculation();
+            }
+            if (updates.quality_gate_entry !== undefined) {
+                const el = document.getElementById('config-quality-entry-display');
+                if (el) el.textContent = updates.quality_gate_entry + '%';
+            }
+            if (updates.quality_gate_exit !== undefined) {
+                const el = document.getElementById('config-quality-exit-display');
+                if (el) el.textContent = updates.quality_gate_exit + '%';
+            }
+            if (updates.loop_sleep_seconds !== undefined) {
+                const el = document.getElementById('config-loop-display');
+                if (el) el.textContent = updates.loop_sleep_seconds + 's';
+            }
+            if (updates.max_daily_loss_pct !== undefined) {
+                const el = document.getElementById('config-daily-loss-display');
+                if (el) el.textContent = (parseFloat(updates.max_daily_loss_pct)).toFixed(1) + '%';
             }
         }
 
