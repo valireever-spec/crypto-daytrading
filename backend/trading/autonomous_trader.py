@@ -4,6 +4,7 @@ import asyncio
 import logging
 import uuid
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Any
@@ -129,11 +130,35 @@ class TradingConfig:
             self.symbols = unique_symbols
 
 
+def load_trading_config_from_env() -> TradingConfig:
+    """Load TradingConfig from environment variables (source of truth for both machines).
+
+    Environment variables override hardcoded defaults. Both primary and backup load from same .env.
+    Changes via API are synced to backup immediately via /api/autonomous/config/sync.
+
+    Returns:
+        TradingConfig with values from .env or hardcoded defaults
+    """
+    return TradingConfig(
+        enabled=True,
+        entry_threshold=float(os.getenv("ENTRY_THRESHOLD", "60.0")),
+        exit_profit_target=float(os.getenv("EXIT_PROFIT_TARGET", "0.03")),
+        exit_stop_loss=float(os.getenv("EXIT_STOP_LOSS", "0.02")),
+        position_size_pct=float(os.getenv("POSITION_SIZE_PCT", "1.5")) / 100,  # Convert % to decimal
+        max_positions=int(os.getenv("MAX_POSITIONS", "5")),
+        max_daily_loss_pct=float(os.getenv("MAX_DAILY_LOSS_PCT", "5.0")),
+        loop_sleep_seconds=float(os.getenv("LOOP_SLEEP_SECONDS", "10.0")),
+        quality_gate_entry=float(os.getenv("QUALITY_GATE_ENTRY", "90.0")),
+        quality_gate_exit=float(os.getenv("QUALITY_GATE_EXIT", "60.0")),
+        symbols=os.getenv("TRADING_SYMBOLS", "BTCUSDT,ETHUSDT,BNBUSDT").split(","),
+    )
+
+
 class AutonomousTrader:
     """Monitors signals and executes trades automatically."""
 
     def __init__(self, config: TradingConfig = None):
-        self.config = config or TradingConfig()
+        self.config = config or load_trading_config_from_env()
         self.running = False
         self.trade_history: List[Dict] = []
         self.last_signal_time: Dict[str, datetime] = {}
