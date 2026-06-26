@@ -84,12 +84,12 @@ class VolatilityManager:
                 "trend": "stable",
             }
 
-        current_vol = float(vol_20.iloc[-1])
+        current_vol = vol_20.iloc[-1].item()
 
         # Percentile rank
         vol_history = vol_20.dropna()
         if len(vol_history) >= 20:
-            pct_rank = float((vol_history < current_vol).mean() * 100)
+            pct_rank = ((vol_history < current_vol).mean() * 100).item()
         else:
             pct_rank = 50.0
 
@@ -105,8 +105,8 @@ class VolatilityManager:
 
         # Trend: compare recent 5-day avg to prior 5 days
         if len(vol_20.dropna()) >= 10:
-            recent_avg = float(vol_20.dropna().iloc[-5:].mean())
-            prior_avg = float(vol_20.dropna().iloc[-10:-5].mean())
+            recent_avg = vol_20.dropna().iloc[-5:].mean().item()
+            prior_avg = vol_20.dropna().iloc[-10:-5].mean().item()
             trend_pct = (
                 (recent_avg - prior_avg) / prior_avg * 100 if prior_avg > 0 else 0.0
             )
@@ -152,9 +152,9 @@ class VolatilityManager:
 
         # ATR
         atr = tr.rolling(self.lookback_atr).mean()
-        atr_value = float(atr.iloc[-1]) if not atr.iloc[-1] != atr.iloc[-1] else 0.0
+        atr_value = atr.iloc[-1].item() if not atr.iloc[-1] != atr.iloc[-1] else 0.0
 
-        current_price = float(close.iloc[-1])
+        current_price = close.iloc[-1].item()
         if current_price <= 0:
             return 0.0, 0.02, 0.0
 
