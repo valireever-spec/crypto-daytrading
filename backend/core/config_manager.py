@@ -115,23 +115,19 @@ class ConfigManager:
 
     @staticmethod
     def sync_to_backup(backup_url: str, config: Dict[str, Any]) -> bool:
-        """Sync config to backup machine via SSH tunnel or local network.
+        """Sync config to backup machine via SSH using ~/.ssh/config alias.
 
-        Respects dual-path architecture:
-        1. Try local network (192.168.3.25:8002) for LAN access
-        2. Fall back to SSH tunnel (r33v3r.ddns.net) for remote access
+        Uses SSH alias 'backup' defined in ~/.ssh/config for passwordless auth.
+        SSH config: Host backup → 192.168.3.25, User claude, IdentityFile openhab_claude
 
         Uses SSH to update .env file on backup machine, which it then reloads.
         """
         import subprocess
         import time
-        import json
 
-        # Get backup SSH details from environment
-        backup_ssh_user = os.getenv("BACKUP_SSH_USER", "claude")
-        backup_ssh_host = os.getenv("BACKUP_SSH_HOST", "192.168.3.25")
-        backup_ssh_key = os.getenv("BACKUP_SSH_KEY", os.path.expanduser("~/.ssh/openhab_claude"))
-        backup_remote_path = os.getenv("BACKUP_REMOTE_PATH", "/home/claude/crypto-daytrading/.env")
+        # Use SSH alias from ~/.ssh/config for passwordless auth
+        backup_ssh_alias = "backup"
+        backup_remote_path = "/home/claude/crypto-daytrading/.env"
 
         # Convert config to .env format
         env_lines = ConfigManager._config_to_env_lines(config)
@@ -142,19 +138,11 @@ class ConfigManager:
 
         for attempt in range(max_retries):
             try:
-                # Try SSH sync via reverse tunnel
-                # Build SSH command to update .env file on backup
-                ssh_cmd = [
-                    "ssh",
-                    "-i", backup_ssh_key,
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "ConnectTimeout=5",
-                    f"{backup_ssh_user}@{backup_ssh_host}",
-                    f"cat > {backup_remote_path} << 'ENVEOF'\n{env_content}\nENVEOF"
-                ]
+                # Use SSH alias for passwordless authentication (defined in ~/.ssh/config)
+                ssh_cmd = f"ssh {backup_ssh_alias} 'cat > {backup_remote_path} << 'ENVEOF'\n{env_content}\nENVEOF\n'"
 
                 result = subprocess.run(
-                    " ".join(ssh_cmd),
+                    ssh_cmd,
                     shell=True,
                     timeout=10,
                     capture_output=True,
@@ -162,9 +150,9 @@ class ConfigManager:
                 )
 
                 if result.returncode == 0:
-                    logger.info(f"✅ Synced config to backup via SSH: {backup_ssh_host}")
+                    logger.info(f"✅ Synced config to backup via SSH (backup alias)")
                     # Also trigger backup API reload if possible
-                    ConfigManager._trigger_backup_reload(backup_ssh_user, backup_ssh_host, backup_ssh_key)
+                    ConfigManager._trigger_backup_reload()
                     return True
                 else:
                     logger.warning(
@@ -211,25 +199,21 @@ class ConfigManager:
         return env_lines
 
     @staticmethod
-    def _trigger_backup_reload(ssh_user: str, ssh_host: str, ssh_key: str) -> None:
-        """Attempt to trigger backup API reload via SSH (best-effort)."""
+    def _trigger_backup_reload() -> None:
+        """Attempt to trigger backup API reload via SSH (best-effort).
+
+        Uses SSH alias 'backup' from ~/.ssh/config for passwordless auth.
+        """
         try:
-            # Try to restart the backup API if possible
-            ssh_cmd = [
-                "ssh",
-                "-i", ssh_key,
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "ConnectTimeout=5",
-                f"{ssh_user}@{ssh_host}",
-                "pkill -f 'uvicorn.*8002' || true; sleep 2; cd ~/crypto-daytrading && source venv/bin/activate && nohup python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8002 > logs/api.log 2>&1 &"
-            ]
+            # Use SSH alias for passwordless authentication
+            ssh_cmd = "ssh backup 'pkill -f \"uvicorn.*8002\" || true; sleep 2; cd ~/crypto-daytrading && source venv/bin/activate && nohup python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8002 > logs/api.log 2>&1 &'"
             subprocess.run(
-                " ".join(ssh_cmd),
+                ssh_cmd,
                 shell=True,
                 timeout=15,
                 capture_output=True,
             )
-            logger.info("Triggered backup API reload via SSH")
+            logger.info("Triggered backup API reload via SSH (backup alias)")
         except Exception as e:
             logger.debug(f"Could not trigger backup reload (non-critical): {e}")
 
