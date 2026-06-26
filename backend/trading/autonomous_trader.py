@@ -1566,6 +1566,10 @@ class AutonomousTrader:
 
         return score
 
+    def is_running(self) -> bool:
+        """Check if trader is currently running."""
+        return self.running
+
     def get_status(self) -> Dict:
         """Get trader status (synced with paper trading engine)."""
         engine = get_paper_trading()

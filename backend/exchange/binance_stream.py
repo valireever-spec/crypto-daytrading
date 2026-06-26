@@ -252,6 +252,19 @@ class BinanceStreamClient:
 
         return fresh_prices
 
+    def get_last_update_time(self) -> Optional[datetime]:
+        """Get the most recent price update timestamp across all symbols."""
+        if not self.last_update:
+            return None
+        return max(self.last_update.values()) if self.last_update else None
+
+    def get_price_age_seconds(self, symbol: str) -> Optional[float]:
+        """Get age in seconds of the most recent price for a symbol."""
+        if symbol not in self.last_update:
+            return None
+        age = (datetime.utcnow() - self.last_update[symbol]).total_seconds()
+        return age
+
 
 # Global stream client instance
 _stream_client: Optional[BinanceStreamClient] = None

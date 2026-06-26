@@ -1,8 +1,14 @@
-"""Health check system for production monitoring."""
+"""Health check system for production monitoring.
+
+CRITICAL: These checks verify ACTUAL system functionality, not just "is it running."
+All thresholds are based on real trading requirements.
+"""
 
 import logging
-from typing import Dict, Optional
-from datetime import datetime
+import json
+from typing import Dict, Optional, Tuple
+from datetime import datetime, timedelta
+from pathlib import Path
 import psutil
 
 logger = logging.getLogger(__name__)
@@ -39,15 +45,15 @@ class HealthChecker:
         self.max_history = 100
 
     async def check_all(self) -> Dict:
-        """Run all health checks."""
+        """Run all health checks (CRITICAL CHECKS ONLY)."""
         checks = {
-            "api": await self._check_api(),
+            "websocket": await self._check_websocket(),
+            "trade_log": await self._check_trade_log(),
+            "price_feed": await self._check_price_feed(),
+            "autonomous_trader": await self._check_autonomous_trader(),
             "database": await self._check_database(),
             "memory": await self._check_memory(),
             "disk": await self._check_disk(),
-            "cpu": await self._check_cpu(),
-            "ml_model": await self._check_ml_model(),
-            "data_freshness": await self._check_data_freshness(),
         }
 
         # Store results
@@ -66,24 +72,209 @@ class HealthChecker:
             "summary": self._generate_summary(checks),
         }
 
-    async def _check_api(self) -> HealthStatus:
-        """Check API responsiveness."""
+    async def _check_websocket(self) -> HealthStatus:
+        """Check WebSocket connection and data freshness.
+
+        CRITICAL: WebSocket must have data within last 2 minutes.
+        Failure = stale price data = trading disabled.
+        """
         try:
-            # Would normally make a request to itself, but in this context
-            # we just check if the service is initialized
+            from backend.exchange.binance_stream import get_stream_client
+
+            client = get_stream_client()
+            if not client:
+                return HealthStatus(
+                    "websocket", False, "WebSocket not initialized"
+                )
+
+            # Get last update timestamp from cached prices
+            last_update = client.get_last_update_time()
+            if not last_update:
+                return HealthStatus(
+                    "websocket", False, "No price data received yet"
+                )
+
+            age_seconds = (datetime.utcnow() - last_update).total_seconds()
+            max_age_seconds = 120  # 2 minutes max
+
+            healthy = age_seconds < max_age_seconds
+            message = f"WebSocket data age: {age_seconds:.0f}s"
+
+            if not healthy:
+                message += f" ⚠️ STALE! Max allowed: {max_age_seconds}s"
+
             return HealthStatus(
-                "api", True, "API is responsive", {"response_time_ms": 0}
+                "websocket",
+                healthy,
+                message,
+                {
+                    "age_seconds": age_seconds,
+                    "max_age_seconds": max_age_seconds,
+                    "last_update": last_update.isoformat(),
+                }
             )
         except Exception as e:
-            return HealthStatus("api", False, f"API check failed: {str(e)}")
+            return HealthStatus("websocket", False, f"WebSocket check failed: {str(e)}")
+
+    async def _check_trade_log(self) -> HealthStatus:
+        """Check trade log freshness.
+
+        CRITICAL: Trade log must exist and be recent.
+        Failure = autonomous trader not executing = system stalled.
+        """
+        try:
+            log_file = Path("logs/trades.jsonl")
+            if not log_file.exists():
+                return HealthStatus(
+                    "trade_log", False, "Trade log not found"
+                )
+
+            # Get last line timestamp
+            with open(log_file, 'r') as f:
+                lines = f.readlines()
+
+            if not lines:
+                return HealthStatus(
+                    "trade_log", False, "Trade log is empty"
+                )
+
+            # Parse last trade timestamp
+            last_line = json.loads(lines[-1])
+            last_trade_time = datetime.fromisoformat(last_line['timestamp'].replace('Z', '+00:00'))
+
+            age_seconds = (datetime.utcnow() - last_trade_time).total_seconds()
+            max_age_seconds = 3600  # 1 hour max (no trades in 1 hour is OK if no signals)
+
+            healthy = age_seconds < max_age_seconds
+            message = f"Last trade: {age_seconds/60:.0f} minutes ago"
+
+            if not healthy:
+                message += f" ⚠️ STALE! No trades for {age_seconds/3600:.1f} hours"
+
+            return HealthStatus(
+                "trade_log",
+                healthy,
+                message,
+                {
+                    "age_seconds": age_seconds,
+                    "max_age_seconds": max_age_seconds,
+                    "last_trade": last_line.get('symbol', 'N/A'),
+                    "total_trades": len(lines),
+                }
+            )
+        except Exception as e:
+            return HealthStatus("trade_log", False, f"Trade log check failed: {str(e)}")
+
+    async def _check_price_feed(self) -> HealthStatus:
+        """Check if prices are being updated in real-time.
+
+        CRITICAL: Each symbol must have fresh price data.
+        Failure = price data disconnected = cannot calculate positions.
+        """
+        try:
+            from backend.exchange.binance_stream import get_stream_client
+
+            client = get_stream_client()
+            if not client:
+                return HealthStatus("price_feed", False, "Stream client not initialized")
+
+            # Check each symbol
+            symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+            stale_symbols = []
+            max_age = 120  # 2 minutes
+
+            for symbol in symbols:
+                age = client.get_price_age_seconds(symbol)
+                if age and age > max_age:
+                    stale_symbols.append((symbol, age))
+
+            if stale_symbols:
+                stale_msg = ", ".join([f"{s}({a:.0f}s)" for s, a in stale_symbols])
+                return HealthStatus(
+                    "price_feed",
+                    False,
+                    f"Stale prices: {stale_msg}",
+                    {"stale_symbols": stale_symbols}
+                )
+
+            return HealthStatus(
+                "price_feed",
+                True,
+                f"All {len(symbols)} symbols receiving live prices",
+                {
+                    "symbols": symbols,
+                    "max_age_seconds": max_age,
+                }
+            )
+        except Exception as e:
+            return HealthStatus("price_feed", False, f"Price feed check failed: {str(e)}")
+
+    async def _check_autonomous_trader(self) -> HealthStatus:
+        """Check if autonomous trader is running and responsive.
+
+        CRITICAL: Trader must be running and making decisions.
+        Failure = no new signals = manual intervention required.
+        """
+        try:
+            from backend.trading.autonomous_trader import get_autonomous_trader
+
+            trader = get_autonomous_trader()
+            if not trader:
+                return HealthStatus(
+                    "autonomous_trader", False, "Trader not initialized"
+                )
+
+            if not trader.is_running():
+                return HealthStatus(
+                    "autonomous_trader", False, "Trader is stopped"
+                )
+
+            # Check trader status and last signal time
+            status = trader.get_status()
+            if not status:
+                return HealthStatus(
+                    "autonomous_trader", False, "Cannot get trader status"
+                )
+
+            return HealthStatus(
+                "autonomous_trader",
+                True,
+                f"Trader running: {status.get('active_positions', 0)} positions",
+                {
+                    "active_positions": status.get('active_positions'),
+                    "total_trades": status.get('total_trades'),
+                    "daily_pnl": status.get('daily_pnl'),
+                }
+            )
+        except Exception as e:
+            return HealthStatus("autonomous_trader", False, f"Trader check failed: {str(e)}")
 
     async def _check_database(self) -> HealthStatus:
-        """Check database connectivity."""
+        """Check database connectivity and integrity.
+
+        CRITICAL: Database must be accessible and consistent.
+        Failure = cannot save/restore positions = data loss.
+        """
         try:
-            # Check if we can connect to database
-            # This would normally test actual DB connection
+            from backend.core.database import Database
+
+            db = Database()
+
+            # Test connection by querying
+            open_pos = db.get_open_positions()
+            if open_pos is None:
+                return HealthStatus(
+                    "database", False, "Cannot query open positions"
+                )
+
             return HealthStatus(
-                "database", True, "Database is connected", {"response_time_ms": 10}
+                "database",
+                True,
+                f"Database connected, {len(open_pos)} positions",
+                {
+                    "open_positions": len(open_pos),
+                    "db_path": str(db.db_path) if hasattr(db, 'db_path') else "unknown",
+                }
             )
         except Exception as e:
             return HealthStatus("database", False, f"Database check failed: {str(e)}")
@@ -167,35 +358,6 @@ class HealthChecker:
         except Exception as e:
             return HealthStatus("cpu", False, f"CPU check failed: {str(e)}")
 
-    async def _check_ml_model(self) -> HealthStatus:
-        """Check ML model availability (Ollama)."""
-        try:
-            # Would normally make a request to Ollama
-            # For now, assume it's available if service initialized
-            return HealthStatus(
-                "ml_model",
-                True,
-                "ML model is available",
-                {"model": "default", "response_time_ms": 0},
-            )
-        except Exception as e:
-            return HealthStatus("ml_model", False, f"ML model check failed: {str(e)}")
-
-    async def _check_data_freshness(self) -> HealthStatus:
-        """Check if market data is fresh."""
-        try:
-            # Would normally check last ingest timestamp
-            # For now, assume data is fresh
-            return HealthStatus(
-                "data_freshness",
-                True,
-                "Market data is current",
-                {"last_ingest": datetime.utcnow().isoformat(), "age_seconds": 0},
-            )
-        except Exception as e:
-            return HealthStatus(
-                "data_freshness", False, f"Data freshness check failed: {str(e)}"
-            )
 
     def _generate_summary(self, checks: Dict[str, HealthStatus]) -> Dict:
         """Generate health summary."""
