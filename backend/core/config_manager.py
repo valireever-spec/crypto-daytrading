@@ -155,12 +155,12 @@ class ConfigManager:
 
             for attempt in range(max_retries):
                 try:
-                    # SSH command to update .env on backup
-                    ssh_cmd = f"ssh {ssh_host} 'cat > {backup_remote_path} << 'ENVEOF'\n{env_content}\nENVEOF\n'"
+                    # SSH command to update .env on backup - use stdin piping instead of heredoc
+                    ssh_cmd = ["ssh", ssh_host, f"cat > {backup_remote_path}"]
 
                     result = subprocess.run(
                         ssh_cmd,
-                        shell=True,
+                        input=env_content,
                         timeout=10,
                         capture_output=True,
                         text=True
