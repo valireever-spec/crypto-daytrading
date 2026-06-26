@@ -143,6 +143,10 @@ class HealthChecker:
             last_line = json.loads(lines[-1])
             last_trade_time = datetime.fromisoformat(last_line['timestamp'].replace('Z', '+00:00'))
 
+            # Convert to naive UTC for comparison with utcnow()
+            if last_trade_time.tzinfo is not None:
+                last_trade_time = last_trade_time.replace(tzinfo=None)
+
             age_seconds = (datetime.utcnow() - last_trade_time).total_seconds()
             max_age_seconds = 3600  # 1 hour max (no trades in 1 hour is OK if no signals)
 
