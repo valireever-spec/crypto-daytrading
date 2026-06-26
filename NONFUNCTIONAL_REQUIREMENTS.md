@@ -417,6 +417,42 @@ The following 9 parameters define the autonomous trading system's behavior durin
 
 ---
 
+## HA Synchronization Requirements (Phase 1)
+
+### CFR-010: Automatic Config Sync (Primary → Backup)
+- **Requirement:** All parameter changes on primary automatically sync to backup when SSH connection available
+- **Mechanism:**
+  1. API config change triggers `ConfigManager.sync_to_backup()` immediately
+  2. Uses SSH alias `backup` for passwordless authentication
+  3. Updates `.env` file on backup machine
+  4. Triggers backup API reload to apply new config
+  5. Retries with exponential backoff (1s, 2s, 4s) if connection fails
+- **Validation:** Both machines always have identical parameter values
+- **Sync Method:** SSH reverse tunnel to backup (not HTTP, backup not internet-exposed)
+- **Acceptance:** Config mismatch between primary and backup ≤0 (no tolerance)
+
+### CFR-011: Startup Config Sync
+- **Requirement:** After git pull or .env file change, both machines must manually sync
+- **Current Process:**
+  1. Primary: Update `.env` file (or git pull)
+  2. Primary: Restart API (`pkill -9 uvicorn` + restart)
+  3. Backup: Manual `ssh backup 'cat > .env...'` to update `.env`
+  4. Backup: Restart API
+  5. Verify: Both machines respond with identical config
+- **Future Improvement:** Add automatic file sync from primary to backup on git pull
+- **Acceptance:** Both machines have identical `.env` + `trading_config.json` after startup
+
+### CFR-012: Critical Data Sync (Optional - Phase 2)
+- **In Scope (Phase 1):** Parameters only (CFR-001 to CFR-009)
+- **Future (Phase 2):** Also sync:
+  - Trade history (immutable append-only logs)
+  - Active positions (synced every 10s)
+  - P&L snapshots (synced every 1h)
+  - Circuit breaker status
+- **Note:** Can be added as background task using existing SSH tunnel
+
+---
+
 ## Success Metrics (Overall)
 
 | Metric | Target | Measurement |
