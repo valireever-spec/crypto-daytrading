@@ -299,6 +299,121 @@
 
 ---
 
+## Trading Configuration Requirements (Phase 1 - Paper Trading)
+
+### Overview
+The following 9 parameters define the autonomous trading system's behavior during Phase 1. These are stored in `.env` file and synced between primary and backup machines via SSH tunnel. All parameters are dynamically configurable via API without requiring system restart.
+
+---
+
+### CFR-001: Entry Signal Threshold
+- **Current Value:** 60.0 (on scale 0-100)
+- **Requirement:** Minimum signal strength (technical quality score) required to open a new position
+- **Rationale:** Crypto signals are noisy; 60 = balanced between capturing opportunities and filtering noise
+- **Source of Truth:** `ENTRY_THRESHOLD` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 0 ≤ value ≤ 100
+- **Acceptance:** System only opens new positions when signal strength ≥ configured threshold
+
+---
+
+### CFR-002: Position Size Per Trade
+- **Current Value:** 1.5% (of total equity)
+- **Requirement:** Maximum risk per individual trade
+- **Rationale:** 1.5% × €10,000 initial = €150 per trade; limits loss on bad signals
+- **Source of Truth:** `POSITION_SIZE_PCT` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 0.1 ≤ value ≤ 20 (%)
+- **Linkage:** Auto-linked to Max Positions to keep total portfolio risk ≤25%
+- **Acceptance:** Position size always matches configured percentage
+
+---
+
+### CFR-003: Maximum Concurrent Positions
+- **Current Value:** 5 (simultaneous open trades)
+- **Requirement:** Limit concentration risk and capital drawdown
+- **Rationale:** 5 positions × 1.5% = 7.5% total risk; leaves 92.5% capital for margin/volatility
+- **Source of Truth:** `MAX_POSITIONS` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 1 ≤ value ≤ 10
+- **Linkage:** Auto-linked to Position Size to keep total portfolio risk ≤25%
+- **Acceptance:** System never opens >5 positions simultaneously
+
+---
+
+### CFR-004: Exit Stop Loss
+- **Current Value:** 0.02 (2% loss per trade)
+- **Requirement:** Maximum acceptable loss before automatically closing position
+- **Rationale:** 2% loss per trade limits downside; standard risk management
+- **Source of Truth:** `EXIT_STOP_LOSS` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 0.001 ≤ value ≤ 0.5 (decimal, 0.1% to 50%)
+- **Linkage:** Auto-linked to Exit Profit Target to maintain 1:1.5 risk/reward ratio
+- **Acceptance:** All positions have stop loss ≤ configured value
+
+---
+
+### CFR-005: Exit Profit Target
+- **Current Value:** 0.03 (3% profit per trade)
+- **Requirement:** Automatic profit-taking level
+- **Rationale:** 3% profit target = 1.5× the 2% stop loss (favorable risk/reward)
+- **Source of Truth:** `EXIT_PROFIT_TARGET` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 0.001 ≤ value ≤ 0.5 (decimal, 0.1% to 50%)
+- **Linkage:** Auto-linked to Exit Stop Loss to maintain 1:1.5 risk/reward ratio
+- **Acceptance:** Exit profit target / stop loss = 1.5 (within 0.01 tolerance)
+
+---
+
+### CFR-006: Entry Quality Gate
+- **Current Value:** 90.0 (percent, 0-100%)
+- **Requirement:** Minimum data quality required to open new positions
+- **Rationale:** 90% = strict gate; only opens positions when price data is extremely fresh and reliable
+- **Source of Truth:** `QUALITY_GATE_ENTRY` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 0 ≤ value ≤ 100
+- **Behavior:** If data quality drops below 90%, system refuses to open NEW positions (but exits are still allowed)
+- **Acceptance:** New positions only opened when quality ≥ configured threshold
+
+---
+
+### CFR-007: Exit Quality Gate
+- **Current Value:** 60.0 (percent, 0-100%)
+- **Requirement:** Minimum data quality required to close existing positions
+- **Rationale:** 60% = permissive gate; allows exits even on degraded data (safety measure for stop losses)
+- **Source of Truth:** `QUALITY_GATE_EXIT` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 0 ≤ value ≤ 100
+- **Behavior:** If data quality drops below 60%, system cannot exit (orders rejected); waits for data recovery
+- **Note:** Exit gate is lower than entry gate (prioritize closing losses over opening new positions)
+- **Acceptance:** Positions exitable only when quality ≥ configured threshold
+
+---
+
+### CFR-008: Loop Sleep Seconds
+- **Current Value:** 10.0 (seconds)
+- **Requirement:** Time between consecutive trading loop iterations
+- **Rationale:** 10 seconds = ~6 trades/minute maximum; prevents excessive Binance API calls
+- **Source of Truth:** `LOOP_SLEEP_SECONDS` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 1 ≤ value ≤ 300 (seconds)
+- **Binance Constraint:** Stays well below 1200 req/min rate limit
+- **Acceptance:** System sleeps exactly configured seconds between trading cycle iterations
+
+---
+
+### CFR-009: Maximum Daily Loss Circuit Breaker
+- **Current Value:** 5.0 (percent of initial equity)
+- **Requirement:** Auto-stop trading if daily loss exceeds this percentage
+- **Rationale:** 5% of €10,000 = €500 max loss/day; protects capital from catastrophic streaks
+- **Source of Truth:** `MAX_DAILY_LOSS_PCT` in `.env`
+- **Sync Method:** SSH to backup machine when changed via API
+- **Validation:** 0.1 ≤ value ≤ 50 (%)
+- **Behavior:** Once triggered, system enters "circuit breaker" mode (no new trades) until next trading day resets
+- **Acceptance:** All trading halts if daily P&L < -(configured percentage × equity)
+
+---
+
 ## Success Metrics (Overall)
 
 | Metric | Target | Measurement |
