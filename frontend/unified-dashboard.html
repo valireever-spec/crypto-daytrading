@@ -1477,9 +1477,9 @@ function validateResponse(response, requiredFields = []) {
                 // Update sliders with fetched config values
                 if (fetchedConfig.position_size_pct) {
                     const sliderPos = document.getElementById('slider-position-size');
-                    if (sliderPos) sliderPos.value = Math.round(fetchedConfig.position_size_pct * 100);
+                    if (sliderPos) sliderPos.value = fetchedConfig.position_size_pct;
                     const displayPos = document.getElementById('config-size-display');
-                    if (displayPos) displayPos.textContent = (fetchedConfig.position_size_pct * 100).toFixed(1) + '%';
+                    if (displayPos) displayPos.textContent = fetchedConfig.position_size_pct.toFixed(1) + '%';
                 }
 
                 if (fetchedConfig.entry_threshold) {
@@ -1491,16 +1491,16 @@ function validateResponse(response, requiredFields = []) {
 
                 if (fetchedConfig.exit_profit_target) {
                     const sliderProfit = document.getElementById('slider-profit-target');
-                    if (sliderProfit) sliderProfit.value = (fetchedConfig.exit_profit_target * 100).toFixed(1);
+                    if (sliderProfit) sliderProfit.value = fetchedConfig.exit_profit_target;
                     const displayProfit = document.getElementById('config-profit-display');
-                    if (displayProfit) displayProfit.textContent = (fetchedConfig.exit_profit_target * 100).toFixed(1) + '%';
+                    if (displayProfit) displayProfit.textContent = fetchedConfig.exit_profit_target.toFixed(1) + '%';
                 }
 
                 if (fetchedConfig.exit_stop_loss) {
                     const sliderStop = document.getElementById('slider-stop-loss');
-                    if (sliderStop) sliderStop.value = (fetchedConfig.exit_stop_loss * 100).toFixed(1);
+                    if (sliderStop) sliderStop.value = fetchedConfig.exit_stop_loss;
                     const displayStop = document.getElementById('config-stop-display');
-                    if (displayStop) displayStop.textContent = (fetchedConfig.exit_stop_loss * 100).toFixed(1) + '%';
+                    if (displayStop) displayStop.textContent = fetchedConfig.exit_stop_loss.toFixed(1) + '%';
                 }
 
                 if (fetchedConfig.max_positions) {
@@ -1569,9 +1569,8 @@ function validateResponse(response, requiredFields = []) {
         async function updateTraderConfig(updates) {
             // Update display values
             if (updates.position_size_pct !== undefined) {
-                const pctVal = (updates.position_size_pct * 100).toFixed(1);
                 const el = document.getElementById('config-size-display');
-                if (el) el.textContent = pctVal + '%';
+                if (el) el.textContent = updates.position_size_pct.toFixed(1) + '%';
                 // Update risk calculation
                 updateRiskCalculation();
             }
@@ -1580,16 +1579,14 @@ function validateResponse(response, requiredFields = []) {
                 if (el) el.textContent = updates.entry_threshold;
             }
             if (updates.exit_profit_target !== undefined) {
-                const pctVal = (updates.exit_profit_target * 100).toFixed(1);
                 const el = document.getElementById('config-profit-display');
-                if (el) el.textContent = pctVal + '%';
+                if (el) el.textContent = updates.exit_profit_target.toFixed(1) + '%';
                 // Update risk/reward ratio
                 updateRiskCalculation();
             }
             if (updates.exit_stop_loss !== undefined) {
-                const pctVal = (updates.exit_stop_loss * 100).toFixed(1);
                 const el = document.getElementById('config-stop-display');
-                if (el) el.textContent = pctVal + '%';
+                if (el) el.textContent = updates.exit_stop_loss.toFixed(1) + '%';
                 // Update risk/reward ratio
                 updateRiskCalculation();
             }
@@ -1619,30 +1616,30 @@ function validateResponse(response, requiredFields = []) {
 
         // Auto-adjust Max Positions when Position Size changes (keep total risk ≤25%)
         function autoAdjustMaxPositions(posSize) {
-            const targetTotalRisk = 0.25; // 25% max
-            const maxPosSuggested = Math.max(1, Math.floor(targetTotalRisk / (posSize / 100)));
+            const targetTotalRisk = 25; // 25% max (in percentage format)
+            const maxPosSuggested = Math.max(1, Math.floor(targetTotalRisk / posSize));
             const maxPos = Math.min(10, maxPosSuggested);
 
             const sliderMaxPos = document.getElementById('slider-max-positions');
             if (sliderMaxPos) sliderMaxPos.value = maxPos;
 
             updateTraderConfig({
-                position_size_pct: posSize / 100,
+                position_size_pct: parseFloat(posSize),
                 max_positions: maxPos
             });
         }
 
         // Auto-adjust Position Size when Max Positions changes (keep total risk ≤25%)
         function autoAdjustPositionSize(maxPos) {
-            const targetTotalRisk = 0.25; // 25% max
-            const posSizeSuggested = (targetTotalRisk / maxPos) * 100;
-            const posSize = Math.max(1, Math.min(20, Math.round(posSizeSuggested)));
+            const targetTotalRisk = 25; // 25% max (in percentage format)
+            const posSizeSuggested = targetTotalRisk / maxPos;
+            const posSize = Math.max(1, Math.min(20, Math.round(posSizeSuggested * 10) / 10));
 
             const sliderPosSize = document.getElementById('slider-position-size');
             if (sliderPosSize) sliderPosSize.value = posSize;
 
             updateTraderConfig({
-                position_size_pct: posSize / 100,
+                position_size_pct: posSize,
                 max_positions: parseInt(maxPos)
             });
         }
@@ -1658,8 +1655,8 @@ function validateResponse(response, requiredFields = []) {
             if (sliderStopLoss) sliderStopLoss.value = stopLoss;
 
             updateTraderConfig({
-                exit_profit_target: profitTarget / 100,
-                exit_stop_loss: stopLoss / 100
+                exit_profit_target: parseFloat(profitTarget),
+                exit_stop_loss: stopLoss
             });
         }
 
@@ -1674,41 +1671,41 @@ function validateResponse(response, requiredFields = []) {
             if (sliderProfitTarget) sliderProfitTarget.value = profitTarget;
 
             updateTraderConfig({
-                exit_profit_target: profitTarget / 100,
-                exit_stop_loss: stopLoss / 100
+                exit_profit_target: profitTarget,
+                exit_stop_loss: parseFloat(stopLoss)
             });
         }
 
         // Update risk calculations and interactions
         function updateRiskCalculation() {
-            // Get current slider values
-            const posSize = parseFloat(document.getElementById('slider-position-size')?.value || 5) / 100;
+            // Get current slider values (already in percentage format)
+            const posSize = parseFloat(document.getElementById('slider-position-size')?.value || 5);
             const maxPos = parseInt(document.getElementById('slider-max-positions')?.value || 5);
-            const profitTarget = parseFloat(document.getElementById('slider-profit-target')?.value || 3) / 100;
-            const stopLoss = parseFloat(document.getElementById('slider-stop-loss')?.value || 2) / 100;
+            const profitTarget = parseFloat(document.getElementById('slider-profit-target')?.value || 3);
+            const stopLoss = parseFloat(document.getElementById('slider-stop-loss')?.value || 2);
 
             // Calculate total risk
-            const totalRisk = ((posSize * maxPos) * 100).toFixed(1);
+            const totalRisk = (posSize * maxPos).toFixed(1);
             const riskCalcEl = document.getElementById('risk-calc');
             if (riskCalcEl) {
-                riskCalcEl.textContent = (posSize * 100).toFixed(0) + '% × ' + maxPos + ' = ' + totalRisk + '%';
+                riskCalcEl.textContent = posSize.toFixed(1) + '% × ' + maxPos + ' = ' + totalRisk + '%';
             }
 
             // Calculate risk/reward ratio
             const ratio = (stopLoss / profitTarget).toFixed(2);
             const ratioEl = document.getElementById('ratio-calc');
             if (ratioEl) {
-                ratioEl.textContent = (stopLoss * 100).toFixed(1) + '% ÷ ' + (profitTarget * 100).toFixed(1) + '% = ' + ratio + ':1';
+                ratioEl.textContent = stopLoss.toFixed(1) + '% ÷ ' + profitTarget.toFixed(1) + '% = ' + ratio + ':1';
             }
         }
 
         // Save configuration to API
         async function saveTraderConfig() {
             try {
-                const posSize = parseFloat(document.getElementById('slider-position-size')?.value || 5) / 100;
+                const posSize = parseFloat(document.getElementById('slider-position-size')?.value || 5);
                 const entryThresh = parseFloat(document.getElementById('slider-entry-threshold')?.value || 60);
-                const profitTarget = parseFloat(document.getElementById('slider-profit-target')?.value || 3) / 100;
-                const stopLoss = parseFloat(document.getElementById('slider-stop-loss')?.value || 2) / 100;
+                const profitTarget = parseFloat(document.getElementById('slider-profit-target')?.value || 3);
+                const stopLoss = parseFloat(document.getElementById('slider-stop-loss')?.value || 2);
                 const maxPos = parseInt(document.getElementById('slider-max-positions')?.value || 5);
 
                 const response = await fetchWithRetry(`${API}/autonomous/config/update`, {
