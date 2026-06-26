@@ -1303,7 +1303,8 @@ class AutonomousTrader:
                 if hasattr(prices, "iloc"):
                     if len(prices.shape) > 1:
                         prices = prices.iloc[:, 0]
-            except:
+            except (KeyError, IndexError, AttributeError) as e:
+                logger.warning(f"GARP signal: Failed to extract prices from OHLCV: {e}")
                 return 0.0, {"garp": 0.0, "technical": 0.0}
 
             # RSI (14-period)
@@ -1319,7 +1320,8 @@ class AutonomousTrader:
             try:
                 rsi_value = float(rsi.iloc[-1])
                 rsi_value = 50.0 if pd.isna(rsi_value) else rsi_value
-            except:
+            except (ValueError, IndexError, AttributeError) as e:
+                logger.debug(f"GARP signal: RSI calculation failed: {e}, using default 50.0")
                 rsi_value = 50.0
 
             # MACD
@@ -1331,7 +1333,8 @@ class AutonomousTrader:
             try:
                 macd_value = float(macd_histogram.iloc[-1])
                 macd_value = 0.0 if pd.isna(macd_value) else macd_value
-            except:
+            except (ValueError, IndexError, AttributeError) as e:
+                logger.debug(f"GARP signal: MACD calculation failed: {e}, using default 0.0")
                 macd_value = 0.0
 
             # Bollinger Bands

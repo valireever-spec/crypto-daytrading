@@ -114,6 +114,7 @@ class HealthChecker:
                 }
             )
         except Exception as e:
+            logger.error(f"WebSocket health check failed: {type(e).__name__}: {e}")
             return HealthStatus("websocket", False, f"WebSocket check failed: {str(e)}")
 
     async def _check_trade_log(self) -> HealthStatus:
@@ -163,6 +164,7 @@ class HealthChecker:
                 }
             )
         except Exception as e:
+            logger.error(f"Trade log health check failed: {type(e).__name__}: {e}")
             return HealthStatus("trade_log", False, f"Trade log check failed: {str(e)}")
 
     async def _check_price_feed(self) -> HealthStatus:
@@ -207,6 +209,7 @@ class HealthChecker:
                 }
             )
         except Exception as e:
+            logger.error(f"Price feed health check failed: {type(e).__name__}: {e}")
             return HealthStatus("price_feed", False, f"Price feed check failed: {str(e)}")
 
     async def _check_autonomous_trader(self) -> HealthStatus:
@@ -247,6 +250,7 @@ class HealthChecker:
                 }
             )
         except Exception as e:
+            logger.error(f"Autonomous trader health check failed: {type(e).__name__}: {e}")
             return HealthStatus("autonomous_trader", False, f"Trader check failed: {str(e)}")
 
     async def _check_database(self) -> HealthStatus:
@@ -281,6 +285,7 @@ class HealthChecker:
                 }
             )
         except Exception as e:
+            logger.error(f"Database health check failed: {type(e).__name__}: {e}")
             return HealthStatus("database", False, f"Database check failed: {str(e)}")
 
     async def _check_memory(self) -> HealthStatus:
