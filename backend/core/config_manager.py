@@ -115,66 +115,88 @@ class ConfigManager:
 
     @staticmethod
     def sync_to_backup(backup_url: str, config: Dict[str, Any]) -> bool:
-        """Sync config to backup machine via SSH using ~/.ssh/config alias.
+        """Sync config to backup machine via SSH with automatic failover.
 
-        Uses SSH alias 'backup' defined in ~/.ssh/config for passwordless auth.
-        SSH config: Host backup → 192.168.3.25, User claude, IdentityFile openhab_claude
+        ARCHITECTURE (HA with Reverse SSH Tunnel):
+        ═══════════════════════════════════════════════════════════════════════
+        - Primary machine (internal): 192.168.30.137:8001
+        - Backup machine (internal): 192.168.3.25:8002 [NOT internet-exposed]
+        - Internet access: Primary ↔ r33v3r.ddns.net (reverse SSH tunnel)
 
-        Uses SSH to update .env file on backup machine, which it then reloads.
+        Sync Strategy:
+        1. Try direct LAN connection: ssh backup (192.168.3.25)
+        2. If fails: Fall back to reverse tunnel: ssh r33v3r.ddns.net
+        3. Both use passwordless auth (openhab_claude key via ~/.ssh/config)
+        4. Retry with exponential backoff (1s, 2s, 4s)
+
+        Returns:
+            bool: True if sync successful, False if all attempts fail
         """
         import subprocess
         import time
 
-        # Use SSH alias from ~/.ssh/config for passwordless auth
-        backup_ssh_alias = "backup"
         backup_remote_path = "/home/claude/crypto-daytrading/.env"
 
         # Convert config to .env format
         env_lines = ConfigManager._config_to_env_lines(config)
         env_content = "\n".join(env_lines)
 
+        # Two connection methods: LAN first, then reverse SSH tunnel
+        ssh_methods = [
+            ("backup", "Direct LAN connection (192.168.3.25)"),
+            ("r33v3r.ddns.net", "Reverse SSH tunnel (internet fallback)"),
+        ]
+
         max_retries = 3
         retry_delays = [1, 2, 4]  # exponential backoff: 1s, 2s, 4s
 
-        for attempt in range(max_retries):
-            try:
-                # Use SSH alias for passwordless authentication (defined in ~/.ssh/config)
-                ssh_cmd = f"ssh {backup_ssh_alias} 'cat > {backup_remote_path} << 'ENVEOF'\n{env_content}\nENVEOF\n'"
+        for method_idx, (ssh_host, method_desc) in enumerate(ssh_methods):
+            logger.info(f"Attempting SSH sync via {method_desc}...")
 
-                result = subprocess.run(
-                    ssh_cmd,
-                    shell=True,
-                    timeout=10,
-                    capture_output=True,
-                    text=True
-                )
+            for attempt in range(max_retries):
+                try:
+                    # SSH command to update .env on backup
+                    ssh_cmd = f"ssh {ssh_host} 'cat > {backup_remote_path} << 'ENVEOF'\n{env_content}\nENVEOF\n'"
 
-                if result.returncode == 0:
-                    logger.info(f"✅ Synced config to backup via SSH (backup alias)")
-                    # Also trigger backup API reload if possible
-                    ConfigManager._trigger_backup_reload()
-                    return True
-                else:
-                    logger.warning(
-                        f"SSH sync attempt {attempt + 1}/{max_retries} failed: {result.stderr}"
+                    result = subprocess.run(
+                        ssh_cmd,
+                        shell=True,
+                        timeout=10,
+                        capture_output=True,
+                        text=True
                     )
 
-            except subprocess.TimeoutExpired:
-                logger.warning(f"SSH sync attempt {attempt + 1}/{max_retries} timed out")
-            except Exception as e:
-                logger.warning(
-                    f"SSH sync attempt {attempt + 1}/{max_retries} failed: {e}"
-                )
+                    if result.returncode == 0:
+                        logger.info(f"✅ Synced config to backup via {method_desc} ({ssh_host})")
+                        # Also trigger backup API reload if possible
+                        ConfigManager._trigger_backup_reload()
+                        return True
+                    else:
+                        logger.warning(
+                            f"SSH sync via {method_desc} attempt {attempt + 1}/{max_retries} failed: {result.stderr}"
+                        )
 
-            # Retry with exponential backoff (except on last attempt)
-            if attempt < max_retries - 1:
-                delay = retry_delays[attempt]
-                logger.info(f"Retrying backup sync in {delay}s...")
-                time.sleep(delay)
-            else:
-                logger.error(f"SSH backup sync failed after {max_retries} attempts")
-                return False
+                except subprocess.TimeoutExpired:
+                    logger.warning(
+                        f"SSH sync via {method_desc} attempt {attempt + 1}/{max_retries} timed out"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"SSH sync via {method_desc} attempt {attempt + 1}/{max_retries} failed: {e}"
+                    )
 
+                # Retry with exponential backoff (except on last attempt of this method)
+                if attempt < max_retries - 1:
+                    delay = retry_delays[attempt]
+                    logger.info(f"Retrying via {method_desc} in {delay}s...")
+                    time.sleep(delay)
+
+            # If this method failed, try next method before giving up
+            if method_idx < len(ssh_methods) - 1:
+                logger.info(f"Direct LAN failed, trying reverse SSH tunnel as fallback...")
+                time.sleep(2)  # Brief pause before trying internet route
+
+        logger.error(f"SSH backup sync failed via all methods after {max_retries} attempts each")
         return False
 
     @staticmethod

@@ -423,12 +423,15 @@ The following 9 parameters define the autonomous trading system's behavior durin
 - **Requirement:** All parameter changes on primary automatically sync to backup when SSH connection available
 - **Mechanism:**
   1. API config change triggers `ConfigManager.sync_to_backup()` immediately
-  2. Uses SSH alias `backup` for passwordless authentication
-  3. Updates `.env` file on backup machine
-  4. Triggers backup API reload to apply new config
-  5. Retries with exponential backoff (1s, 2s, 4s) if connection fails
+  2. Attempts direct connection: `ssh backup` (192.168.3.25 via LAN)
+  3. If direct fails: Falls back to reverse SSH tunnel: `ssh r33v3r.ddns.net` (internet-accessible)
+  4. Uses SSH alias `backup` for passwordless authentication (openhab_claude key)
+  5. Updates `.env` file on backup machine
+  6. Triggers backup API reload to apply new config
+  7. Retries with exponential backoff (1s, 2s, 4s) if connection fails
 - **Validation:** Both machines always have identical parameter values
-- **Sync Method:** SSH reverse tunnel to backup (not HTTP, backup not internet-exposed)
+- **Sync Method:** SSH with automatic fallback (LAN first, then reverse tunnel)
+- **Architecture:** Backup is NOT internet-exposed on 192.168.3.25; reverse SSH tunnel via r33v3r.ddns.net is only access from internet
 - **Acceptance:** Config mismatch between primary and backup ≤0 (no tolerance)
 
 ### CFR-011: Startup Config Sync
