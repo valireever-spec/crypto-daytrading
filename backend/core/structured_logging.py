@@ -5,6 +5,8 @@ import logging
 import sys
 import uuid
 from datetime import datetime
+from pathlib import Path
+from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, Optional
 
 
@@ -52,12 +54,14 @@ class JSONFormatter(logging.Formatter):
 def setup_structured_logging(
     level: int = logging.INFO,
     json_format: bool = True,
+    log_dir: str = "logs",
 ) -> None:
     """Configure structured logging for entire application.
 
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         json_format: Use JSON format if True, else plain text
+        log_dir: Directory for log files (auto-created if missing)
     """
     # Remove all existing handlers
     root_logger = logging.getLogger()
@@ -78,6 +82,34 @@ def setup_structured_logging(
 
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
+
+    # Add rotating file handlers for persistent logging
+    if json_format:
+        log_path = Path(log_dir)
+        log_path.mkdir(exist_ok=True)
+
+        # Main API log file (100MB, keep 10 files = ~1GB)
+        api_log = log_path / "api.log"
+        api_handler = RotatingFileHandler(
+            str(api_log),
+            maxBytes=100 * 1024 * 1024,  # 100 MB
+            backupCount=10,
+        )
+        api_handler.setLevel(level)
+        api_handler.setFormatter(formatter)
+        root_logger.addHandler(api_handler)
+
+        # Trade execution log file (50MB, keep 5 files)
+        trades_log = log_path / "trades.jsonl"
+        trades_handler = RotatingFileHandler(
+            str(trades_log),
+            maxBytes=50 * 1024 * 1024,  # 50 MB
+            backupCount=5,
+        )
+        trades_handler.setLevel(logging.INFO)
+        trades_handler.setFormatter(formatter)
+        root_logger.addHandler(trades_handler)
+
     root_logger.setLevel(level)
 
 

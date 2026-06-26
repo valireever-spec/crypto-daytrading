@@ -1,0 +1,25 @@
+[Unit]
+Description=Crypto Daytrading Log Rotation Service
+After=crypto-trading.service
+
+[Service]
+Type=oneshot
+User=vali
+WorkingDirectory=/home/vali/projects/crypto-daytrading
+StandardOutput=journal
+StandardError=journal
+
+# Rotate logs using Python logrotate equivalent
+ExecStart=/bin/sh -c ' \
+    cd /home/vali/projects/crypto-daytrading && \
+    logs_dir="logs" && \
+    current_date=$(date +%Y%m%d) && \
+    for f in $logs_dir/*.log $logs_dir/*.jsonl; do \
+        [ -f "$f" ] && [ ! -f "$f.$current_date" ] && mv "$f" "$f.$current_date" && gzip "$f.$current_date"; \
+    done; \
+    find $logs_dir -name "*.log.*.gz" -mtime +7 -delete && \
+    find $logs_dir -name "*.jsonl.*.gz" -mtime +7 -delete && \
+    echo "Log rotation complete"'
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+[Unit]
+Description=Crypto Daytrading HA Failover Monitor
+After=network.target crypto-trading.service
+Wants=crypto-trading.service
+
+[Service]
+Type=simple
+User=vali
+WorkingDirectory=/home/vali/projects/crypto-daytrading
+Environment="PATH=/home/vali/projects/crypto-daytrading/venv/bin"
+EnvironmentFile=/home/vali/projects/crypto-daytrading/.env
+
+# Start failover monitor
+ExecStart=/home/vali/projects/crypto-daytrading/venv/bin/python -m backend.failover.ha_monitor
+
+# Restart if it dies
+Restart=always
+RestartSec=5
+
+# Process management
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crypto-failover
+
+# Watchdog monitoring
+WatchdogSec=60
+
+[Install]
+WantedBy=multi-user.target

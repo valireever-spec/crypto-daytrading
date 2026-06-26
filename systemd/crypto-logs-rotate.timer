@@ -1,0 +1,11 @@
+[Unit]
+Description=Crypto Daytrading Log Rotation Timer
+Requires=crypto-logs-rotate.service
+
+[Timer]
+# Run daily at 2 AM UTC
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
