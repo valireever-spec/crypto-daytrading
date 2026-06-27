@@ -6,7 +6,7 @@ If PRIMARY becomes unhealthy, it stops trading and alerts.
 
 import logging
 import asyncio
-from backend.failover.heartbeat import HeartbeatMonitor, get_heartbeat
+from backend.failover.heartbeat import get_heartbeat
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,7 @@ async def with_ha_check(trading_fn):
         async def place_orders():
             ...execute trades...
     """
+
     async def wrapper(*args, **kwargs):
         wrapper_instance = get_ha_wrapper()
 

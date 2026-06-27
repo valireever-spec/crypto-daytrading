@@ -112,16 +112,22 @@ class PaperTradingEngine:
         Returns:
             Order confirmation with fill details
         """
-        logger.info(f"📥 ORDER RECEIVED: {symbol} {side} {quantity} @ ${current_price:.2f} ({order_type})" + (f" from {strategy_name}" if strategy_name else ""))
+        logger.info(
+            f"📥 ORDER RECEIVED: {symbol} {side} {quantity} @ ${current_price:.2f} ({order_type})"
+            + (f" from {strategy_name}" if strategy_name else "")
+        )
         try:
             # 🚨 CRITICAL SAFETY GATE #1: Reject orders if price data is stale
             # This prevents trading with outdated prices (e.g., WebSocket disconnected)
             from backend.exchange.binance_websocket import get_websocket
+
             ws = get_websocket()
-            if ws and hasattr(ws, 'last_updates'):
+            if ws and hasattr(ws, "last_updates"):
                 last_update = ws.last_updates.get(symbol.lower(), datetime.utcnow())
                 age_seconds = (datetime.utcnow() - last_update).total_seconds()
-                if age_seconds > 60:  # Prices older than 60 seconds = CRITICAL SAFETY REJECT
+                if (
+                    age_seconds > 60
+                ):  # Prices older than 60 seconds = CRITICAL SAFETY REJECT
                     logger.critical(
                         f"🚨 SAFETY GATE TRIPPED: Rejecting {symbol} {side} order - price is {age_seconds:.0f}s old (max 60s allowed)"
                     )
@@ -132,7 +138,9 @@ class PaperTradingEngine:
 
             # Validate inputs
             if quantity <= 0:
-                logger.warning(f"❌ ORDER REJECTED: {symbol} {side} - Invalid quantity: {quantity}")
+                logger.warning(
+                    f"❌ ORDER REJECTED: {symbol} {side} - Invalid quantity: {quantity}"
+                )
                 return {
                     "status": "REJECTED",
                     "reason": "Quantity must be positive",
@@ -142,7 +150,11 @@ class PaperTradingEngine:
             # For BUY orders, must reserve cash for: price × qty × (1 + slippage) + fee
             if side == "BUY":
                 # Calculate required cash including slippage and fee
-                slippage_factor = 1 + (self.SLIPPAGE_MARKET if order_type == "MARKET" else self.SLIPPAGE_LIMIT)
+                slippage_factor = 1 + (
+                    self.SLIPPAGE_MARKET
+                    if order_type == "MARKET"
+                    else self.SLIPPAGE_LIMIT
+                )
                 estimated_fill_price = current_price * slippage_factor
                 estimated_gross = quantity * estimated_fill_price
                 estimated_fee = estimated_gross * self.FEE_RATE
@@ -286,9 +298,13 @@ class PaperTradingEngine:
 
             # Comprehensive trade logging
             if side == "BUY":
-                logger.info(f"✅ ORDER FILLED: {symbol} BUY {quantity} @ ${fill_price:.2f} | Fee: ${fee:.2f} | Cash before: ${self.cash + gross_amount + fee:.2f} → after: ${self.cash:.2f}")
+                logger.info(
+                    f"✅ ORDER FILLED: {symbol} BUY {quantity} @ ${fill_price:.2f} | Fee: ${fee:.2f} | Cash before: ${self.cash + gross_amount + fee:.2f} → after: ${self.cash:.2f}"
+                )
             else:  # SELL
-                logger.info(f"✅ ORDER FILLED: {symbol} SELL {quantity} @ ${fill_price:.2f} | P&L: ${realized_pnl:+.2f} | Fee: ${fee:.2f} | Cash before: ${self.cash - gross_amount + fee:.2f} → after: ${self.cash:.2f}")
+                logger.info(
+                    f"✅ ORDER FILLED: {symbol} SELL {quantity} @ ${fill_price:.2f} | P&L: ${realized_pnl:+.2f} | Fee: ${fee:.2f} | Cash before: ${self.cash - gross_amount + fee:.2f} → after: ${self.cash:.2f}"
+                )
 
             # Log trade to database (Pillar #5: State Persistence - audit trail)
             try:
@@ -308,9 +324,7 @@ class PaperTradingEngine:
                 )
                 # CRITICAL: Persist account state after each trade for crash recovery
                 db.save_account_state(
-                    cash=self.cash,
-                    total_pnl=self.total_pnl,
-                    daily_pnl=self.daily_pnl
+                    cash=self.cash, total_pnl=self.total_pnl, daily_pnl=self.daily_pnl
                 )
             except Exception as e:
                 logger.error(f"Failed to log trade to DB: {e}")
@@ -352,7 +366,9 @@ class PaperTradingEngine:
             }
 
         except Exception as e:
-            logger.error(f"🚨 CRITICAL: Order placement failed for {symbol} {side} {quantity} - {type(e).__name__}: {e}")
+            logger.error(
+                f"🚨 CRITICAL: Order placement failed for {symbol} {side} {quantity} - {type(e).__name__}: {e}"
+            )
             return {"status": "ERROR", "reason": str(e)}
 
     def mark_to_market(self, prices: Dict[str, float]) -> None:
@@ -476,10 +492,12 @@ class PaperTradingEngine:
             conn = sqlite3.connect(db.db_path)
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT symbol FROM open_positions
                 GROUP BY symbol HAVING COUNT(*) > 1
-            """)
+            """
+            )
             duplicate_symbols = [row[0] for row in cursor.fetchall()]
 
             if duplicate_symbols:
@@ -487,10 +505,12 @@ class PaperTradingEngine:
                     f"🧹 Cleaning up {len(duplicate_symbols)} orphaned positions: {duplicate_symbols}"
                 )
                 for symbol in duplicate_symbols:
-                    cursor.execute("DELETE FROM open_positions WHERE symbol = ?", (symbol,))
+                    cursor.execute(
+                        "DELETE FROM open_positions WHERE symbol = ?", (symbol,)
+                    )
 
                 conn.commit()
-                logger.info(f"✅ Orphaned positions cleaned")
+                logger.info("✅ Orphaned positions cleaned")
 
             conn.close()
         except Exception as e:
@@ -596,10 +616,12 @@ class PaperTradingEngine:
             for db_trade in db_trades:
                 try:
                     # Parse trade_time: convert string from database to datetime
-                    trade_time_str = db_trade.get('trade_time')
+                    trade_time_str = db_trade.get("trade_time")
                     if isinstance(trade_time_str, str):
                         try:
-                            timestamp = datetime.fromisoformat(trade_time_str.replace('Z', '+00:00'))
+                            timestamp = datetime.fromisoformat(
+                                trade_time_str.replace("Z", "+00:00")
+                            )
                         except:
                             timestamp = datetime.utcnow()
                     else:
@@ -607,20 +629,22 @@ class PaperTradingEngine:
 
                     trade = Trade(
                         timestamp=timestamp,
-                        symbol=db_trade['symbol'],
-                        side=db_trade['side'],
-                        quantity=db_trade['quantity'],
-                        price=db_trade['price'],
-                        fee=db_trade.get('fee', 0.0),
-                        realized_pnl=db_trade.get('realized_pnl', 0.0),
-                        order_id=db_trade['order_id'],
-                        mode='PAPER',
-                        status=db_trade.get('status', 'FILLED')
+                        symbol=db_trade["symbol"],
+                        side=db_trade["side"],
+                        quantity=db_trade["quantity"],
+                        price=db_trade["price"],
+                        fee=db_trade.get("fee", 0.0),
+                        realized_pnl=db_trade.get("realized_pnl", 0.0),
+                        order_id=db_trade["order_id"],
+                        mode="PAPER",
+                        status=db_trade.get("status", "FILLED"),
                     )
                     self.trade_history.append(trade)
                     trades_restored += 1
                 except Exception as e:
-                    logger.error(f"Failed to restore trade {db_trade.get('order_id')}: {e}")
+                    logger.error(
+                        f"Failed to restore trade {db_trade.get('order_id')}: {e}"
+                    )
                     continue
 
             if trades_restored > 0:
@@ -640,9 +664,9 @@ class PaperTradingEngine:
             db = get_database()
             state = db.load_account_state()
 
-            self.cash = state.get('cash', self.starting_capital)
-            self.total_pnl = state.get('total_pnl', 0.0)
-            self.daily_pnl = state.get('daily_pnl', 0.0)
+            self.cash = state.get("cash", self.starting_capital)
+            self.total_pnl = state.get("total_pnl", 0.0)
+            self.daily_pnl = state.get("daily_pnl", 0.0)
 
             if self.cash != self.starting_capital:
                 logger.critical(

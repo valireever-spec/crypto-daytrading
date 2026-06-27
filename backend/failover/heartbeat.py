@@ -5,7 +5,7 @@ Detects PRIMARY failure and initiates BACKUP takeover.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 import requests
 
@@ -15,9 +15,12 @@ logger = logging.getLogger(__name__)
 class HeartbeatMonitor:
     """Monitor PRIMARY health and trigger failover on failure."""
 
-    def __init__(self, primary_url: str = "http://127.0.0.1:8001",
-                 heartbeat_interval: int = 5,
-                 failure_threshold: int = 3):
+    def __init__(
+        self,
+        primary_url: str = "http://127.0.0.1:8001",
+        heartbeat_interval: int = 5,
+        failure_threshold: int = 3,
+    ):
         """Initialize heartbeat monitor.
 
         Args:
@@ -36,7 +39,9 @@ class HeartbeatMonitor:
     async def start(self):
         """Start heartbeat monitoring."""
         self._running = True
-        logger.info(f"🫀 Heartbeat monitor started (checking PRIMARY every {self.heartbeat_interval}s)")
+        logger.info(
+            f"🫀 Heartbeat monitor started (checking PRIMARY every {self.heartbeat_interval}s)"
+        )
 
         while self._running:
             await self.check_primary_health()
@@ -49,10 +54,7 @@ class HeartbeatMonitor:
             True if PRIMARY is healthy, False otherwise
         """
         try:
-            response = requests.get(
-                f"{self.primary_url}/api/paper/account",
-                timeout=3
-            )
+            response = requests.get(f"{self.primary_url}/api/paper/account", timeout=3)
 
             if response.status_code == 200:
                 self.consecutive_failures = 0
@@ -61,7 +63,9 @@ class HeartbeatMonitor:
                     logger.warning("🟢 PRIMARY recovered - back online")
                     self.is_primary_healthy = True
                 else:
-                    logger.debug(f"✓ PRIMARY healthy (cash: €{response.json().get('cash', 0):.2f})")
+                    logger.debug(
+                        f"✓ PRIMARY healthy (cash: €{response.json().get('cash', 0):.2f})"
+                    )
 
                 self.last_check = datetime.utcnow()
                 return True

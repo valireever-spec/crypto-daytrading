@@ -173,21 +173,27 @@ class ConfigManager:
                         input=env_content,
                         timeout=10,
                         capture_output=True,
-                        text=True
+                        text=True,
                     )
 
                     # Sync trading_config.json file
-                    ssh_cmd_config = ["/usr/bin/ssh", ssh_host, f"cat > {backup_config_path}"]
+                    ssh_cmd_config = [
+                        "/usr/bin/ssh",
+                        ssh_host,
+                        f"cat > {backup_config_path}",
+                    ]
                     result_config = subprocess.run(
                         ssh_cmd_config,
                         input=config_json,
                         timeout=10,
                         capture_output=True,
-                        text=True
+                        text=True,
                     )
 
                     if result_env.returncode == 0 and result_config.returncode == 0:
-                        logger.info(f"✅ Synced BOTH .env and trading_config.json to backup via {method_desc} ({ssh_host})")
+                        logger.info(
+                            f"✅ Synced BOTH .env and trading_config.json to backup via {method_desc} ({ssh_host})"
+                        )
                         # Also trigger backup API reload if possible
                         ConfigManager._trigger_backup_reload()
                         return True
@@ -218,10 +224,14 @@ class ConfigManager:
 
             # If this method failed, try next method before giving up
             if method_idx < len(ssh_methods) - 1:
-                logger.info(f"Direct LAN failed, trying reverse SSH tunnel as fallback...")
+                logger.info(
+                    "Direct LAN failed, trying reverse SSH tunnel as fallback..."
+                )
                 time.sleep(2)  # Brief pause before trying internet route
 
-        logger.error(f"SSH backup sync failed via all methods after {max_retries} attempts each")
+        logger.error(
+            f"SSH backup sync failed via all methods after {max_retries} attempts each"
+        )
         return False
 
     @staticmethod

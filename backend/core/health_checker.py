@@ -6,8 +6,8 @@ All thresholds are based on real trading requirements.
 
 import logging
 import json
-from typing import Dict, Optional, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, Optional
+from datetime import datetime
 from pathlib import Path
 import psutil
 
@@ -83,16 +83,12 @@ class HealthChecker:
 
             client = get_stream_client()
             if not client:
-                return HealthStatus(
-                    "websocket", False, "WebSocket not initialized"
-                )
+                return HealthStatus("websocket", False, "WebSocket not initialized")
 
             # Get last update timestamp from cached prices
             last_update = client.get_last_update_time()
             if not last_update:
-                return HealthStatus(
-                    "websocket", False, "No price data received yet"
-                )
+                return HealthStatus("websocket", False, "No price data received yet")
 
             age_seconds = (datetime.utcnow() - last_update).total_seconds()
             max_age_seconds = 120  # 2 minutes max
@@ -111,7 +107,7 @@ class HealthChecker:
                     "age_seconds": age_seconds,
                     "max_age_seconds": max_age_seconds,
                     "last_update": last_update.isoformat(),
-                }
+                },
             )
         except Exception as e:
             logger.error(f"WebSocket health check failed: {type(e).__name__}: {e}")
@@ -126,29 +122,29 @@ class HealthChecker:
         try:
             log_file = Path("logs/trades.jsonl")
             if not log_file.exists():
-                return HealthStatus(
-                    "trade_log", False, "Trade log not found"
-                )
+                return HealthStatus("trade_log", False, "Trade log not found")
 
             # Get last line timestamp
-            with open(log_file, 'r') as f:
+            with open(log_file, "r") as f:
                 lines = f.readlines()
 
             if not lines:
-                return HealthStatus(
-                    "trade_log", False, "Trade log is empty"
-                )
+                return HealthStatus("trade_log", False, "Trade log is empty")
 
             # Parse last trade timestamp
             last_line = json.loads(lines[-1])
-            last_trade_time = datetime.fromisoformat(last_line['timestamp'].replace('Z', '+00:00'))
+            last_trade_time = datetime.fromisoformat(
+                last_line["timestamp"].replace("Z", "+00:00")
+            )
 
             # Convert to naive UTC for comparison with utcnow()
             if last_trade_time.tzinfo is not None:
                 last_trade_time = last_trade_time.replace(tzinfo=None)
 
             age_seconds = (datetime.utcnow() - last_trade_time).total_seconds()
-            max_age_seconds = 3600  # 1 hour max (no trades in 1 hour is OK if no signals)
+            max_age_seconds = (
+                3600  # 1 hour max (no trades in 1 hour is OK if no signals)
+            )
 
             healthy = age_seconds < max_age_seconds
             message = f"Last trade: {age_seconds/60:.0f} minutes ago"
@@ -163,9 +159,9 @@ class HealthChecker:
                 {
                     "age_seconds": age_seconds,
                     "max_age_seconds": max_age_seconds,
-                    "last_trade": last_line.get('symbol', 'N/A'),
+                    "last_trade": last_line.get("symbol", "N/A"),
                     "total_trades": len(lines),
-                }
+                },
             )
         except Exception as e:
             logger.error(f"Trade log health check failed: {type(e).__name__}: {e}")
@@ -182,7 +178,9 @@ class HealthChecker:
 
             client = get_stream_client()
             if not client:
-                return HealthStatus("price_feed", False, "Stream client not initialized")
+                return HealthStatus(
+                    "price_feed", False, "Stream client not initialized"
+                )
 
             # Check each symbol
             symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
@@ -200,7 +198,7 @@ class HealthChecker:
                     "price_feed",
                     False,
                     f"Stale prices: {stale_msg}",
-                    {"stale_symbols": stale_symbols}
+                    {"stale_symbols": stale_symbols},
                 )
 
             return HealthStatus(
@@ -210,11 +208,13 @@ class HealthChecker:
                 {
                     "symbols": symbols,
                     "max_age_seconds": max_age,
-                }
+                },
             )
         except Exception as e:
             logger.error(f"Price feed health check failed: {type(e).__name__}: {e}")
-            return HealthStatus("price_feed", False, f"Price feed check failed: {str(e)}")
+            return HealthStatus(
+                "price_feed", False, f"Price feed check failed: {str(e)}"
+            )
 
     async def _check_autonomous_trader(self) -> HealthStatus:
         """Check if autonomous trader is running and responsive.
@@ -232,9 +232,7 @@ class HealthChecker:
                 )
 
             if not trader.is_running():
-                return HealthStatus(
-                    "autonomous_trader", False, "Trader is stopped"
-                )
+                return HealthStatus("autonomous_trader", False, "Trader is stopped")
 
             # Check trader status and last signal time
             status = trader.get_status()
@@ -248,14 +246,18 @@ class HealthChecker:
                 True,
                 f"Trader running: {status.get('active_positions', 0)} positions",
                 {
-                    "active_positions": status.get('active_positions'),
-                    "total_trades": status.get('total_trades'),
-                    "daily_pnl": status.get('daily_pnl'),
-                }
+                    "active_positions": status.get("active_positions"),
+                    "total_trades": status.get("total_trades"),
+                    "daily_pnl": status.get("daily_pnl"),
+                },
             )
         except Exception as e:
-            logger.error(f"Autonomous trader health check failed: {type(e).__name__}: {e}")
-            return HealthStatus("autonomous_trader", False, f"Trader check failed: {str(e)}")
+            logger.error(
+                f"Autonomous trader health check failed: {type(e).__name__}: {e}"
+            )
+            return HealthStatus(
+                "autonomous_trader", False, f"Trader check failed: {str(e)}"
+            )
 
     async def _check_database(self) -> HealthStatus:
         """Check database connectivity and integrity.
@@ -268,16 +270,12 @@ class HealthChecker:
 
             db = get_database()
             if not db:
-                return HealthStatus(
-                    "database", False, "Database not initialized"
-                )
+                return HealthStatus("database", False, "Database not initialized")
 
             # Test connection by querying
             open_pos = db.get_open_positions()
             if open_pos is None:
-                return HealthStatus(
-                    "database", False, "Cannot query open positions"
-                )
+                return HealthStatus("database", False, "Cannot query open positions")
 
             return HealthStatus(
                 "database",
@@ -285,8 +283,8 @@ class HealthChecker:
                 f"Database connected, {len(open_pos)} positions",
                 {
                     "open_positions": len(open_pos),
-                    "db_path": str(db.db_path) if hasattr(db, 'db_path') else "unknown",
-                }
+                    "db_path": str(db.db_path) if hasattr(db, "db_path") else "unknown",
+                },
             )
         except Exception as e:
             logger.error(f"Database health check failed: {type(e).__name__}: {e}")
@@ -370,7 +368,6 @@ class HealthChecker:
             )
         except Exception as e:
             return HealthStatus("cpu", False, f"CPU check failed: {str(e)}")
-
 
     def _generate_summary(self, checks: Dict[str, HealthStatus]) -> Dict:
         """Generate health summary."""

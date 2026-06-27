@@ -13,7 +13,12 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # Allow database path to be overridden via environment variable (for BACKUP failover on different machines)
-DB_PATH = Path(os.getenv("TRADING_DB_PATH", str(Path(__file__).parent.parent.parent / "data" / "trading.db")))
+DB_PATH = Path(
+    os.getenv(
+        "TRADING_DB_PATH",
+        str(Path(__file__).parent.parent.parent / "data" / "trading.db"),
+    )
+)
 VALID_SYMBOLS = {"BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "DOGEUSDT"}
 VALID_SIDES = {"BUY", "SELL"}
 VALID_STATUSES = {"OPEN", "CLOSED", "FILLED", "CANCELLED"}
@@ -72,7 +77,9 @@ class TradingDatabase:
 
         # Migration: Add realized_pnl column if it doesn't exist (for existing databases)
         try:
-            cursor.execute("ALTER TABLE trades ADD COLUMN realized_pnl REAL DEFAULT 0.0")
+            cursor.execute(
+                "ALTER TABLE trades ADD COLUMN realized_pnl REAL DEFAULT 0.0"
+            )
         except sqlite3.OperationalError:
             pass  # Column already exists
 
@@ -119,7 +126,9 @@ class TradingDatabase:
         """
         )
         # Ensure single row exists
-        cursor.execute("INSERT OR IGNORE INTO account_state (id, cash, total_pnl, daily_pnl) VALUES (1, 10000.0, 0.0, 0.0)")
+        cursor.execute(
+            "INSERT OR IGNORE INTO account_state (id, cash, total_pnl, daily_pnl) VALUES (1, 10000.0, 0.0, 0.0)"
+        )
 
         conn.commit()
         conn.close()
@@ -601,7 +610,9 @@ class TradingDatabase:
 
         logger.info(f"Config snapshot saved: {config_json[:100]}...")
 
-    def save_account_state(self, cash: float, total_pnl: float, daily_pnl: float) -> None:
+    def save_account_state(
+        self, cash: float, total_pnl: float, daily_pnl: float
+    ) -> None:
         """Save account state (cash and P&L) for recovery after restart.
 
         Critical for BACKUP failover - persists synced state across restarts.
@@ -614,8 +625,9 @@ class TradingDatabase:
                 UPDATE account_state
                 SET cash = ?, total_pnl = ?, daily_pnl = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = 1
-                """
-            , (cash, total_pnl, daily_pnl))
+                """,
+                (cash, total_pnl, daily_pnl),
+            )
             conn.commit()
             conn.close()
             logger.info(f"Account state saved: €{cash} cash, €{total_pnl} P&L")
@@ -631,16 +643,14 @@ class TradingDatabase:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute("SELECT cash, total_pnl, daily_pnl FROM account_state WHERE id = 1")
+            cursor.execute(
+                "SELECT cash, total_pnl, daily_pnl FROM account_state WHERE id = 1"
+            )
             row = cursor.fetchone()
             conn.close()
 
             if row:
-                return {
-                    "cash": row[0],
-                    "total_pnl": row[1],
-                    "daily_pnl": row[2]
-                }
+                return {"cash": row[0], "total_pnl": row[1], "daily_pnl": row[2]}
             return {"cash": 10000.0, "total_pnl": 0.0, "daily_pnl": 0.0}
         except Exception as e:
             logger.error(f"Failed to load account state: {e}")

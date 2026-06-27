@@ -1,0 +1,32 @@
+{
+  "start_time": "2026-06-27T18:39:21.239344",
+  "tests_passed": 4,
+  "tests_failed": 0,
+  "details": [
+    {
+      "test": "health_check",
+      "status": "PASSED"
+    },
+    {
+      "test": "account_snapshot",
+      "status": "PASSED",
+      "cash": 1220.41,
+      "positions": 0,
+      "pnl": 221.56
+    },
+    {
+      "test": "signal_generation",
+      "status": "PASSED",
+      "signals": 0
+    },
+    {
+      "test": "trade_execution",
+      "status": "WAITING"
+    },
+    {
+      "test": "ha_status",
+      "status": "PASSED",
+      "primary_healthy": null
+    }
+  ]
+}

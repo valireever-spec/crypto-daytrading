@@ -44,10 +44,12 @@ class HistoricalDataService:
             cache_key = f"{yf_symbol}_{start_date.date()}_{end_date.date()}_{interval}"
             if cache_key in self.cache:
                 cached_entry = self.cache[cache_key]
-                age = (datetime.now() - cached_entry['time']).total_seconds()
+                age = (datetime.now() - cached_entry["time"]).total_seconds()
                 if age < self.cache_ttl:
-                    logger.info(f"✓ Cache hit: {yf_symbol} ({age:.0f}s old, next refresh in {self.cache_ttl - age:.0f}s)")
-                    return cached_entry['data']
+                    logger.info(
+                        f"✓ Cache hit: {yf_symbol} ({age:.0f}s old, next refresh in {self.cache_ttl - age:.0f}s)"
+                    )
+                    return cached_entry["data"]
                 else:
                     del self.cache[cache_key]  # Expired, remove from cache
 
@@ -79,7 +81,7 @@ class HistoricalDataService:
                 return None
 
             # Store in cache for future calls
-            self.cache[cache_key] = {'data': ticker, 'time': datetime.now()}
+            self.cache[cache_key] = {"data": ticker, "time": datetime.now()}
 
             logger.info(f"Fetched {len(ticker)} candles for {yf_symbol}")
             return ticker

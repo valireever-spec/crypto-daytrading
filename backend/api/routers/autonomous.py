@@ -132,7 +132,9 @@ async def update_trading_config(request: ConfigUpdateRequest):
     if total_risk > 25.0:
         if request.position_size_pct is not None and request.max_positions is None:
             # User changed position_size_pct; adjust max_positions down
-            trader.config.max_positions = max(1, int(25.0 / trader.config.position_size_pct))
+            trader.config.max_positions = max(
+                1, int(25.0 / trader.config.position_size_pct)
+            )
             logger.info(
                 f"Auto-adjusted max_positions to {trader.config.max_positions} "
                 f"to keep total risk ≤25% (position_size_pct={trader.config.position_size_pct}%)"
@@ -233,7 +235,9 @@ async def sync_config_from_backup(request: ConfigUpdateRequest):
     if total_risk > 25.0:
         if request.position_size_pct is not None and request.max_positions is None:
             # Sync sent position_size_pct; adjust max_positions down
-            trader.config.max_positions = max(1, int(25.0 / trader.config.position_size_pct))
+            trader.config.max_positions = max(
+                1, int(25.0 / trader.config.position_size_pct)
+            )
             logger.info(
                 f"[SYNC] Auto-adjusted max_positions to {trader.config.max_positions} "
                 f"to keep total risk ≤25%"

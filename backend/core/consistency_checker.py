@@ -6,7 +6,6 @@ This is critical for HA failover correctness.
 
 import logging
 from typing import Dict, List, Tuple
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,9 @@ class ConsistencyChecker:
         self.errors: List[str] = []
         self.warnings: List[str] = []
 
-    def check_trade_consistency(self, primary_trades: List[Dict], backup_trades: List[Dict]) -> bool:
+    def check_trade_consistency(
+        self, primary_trades: List[Dict], backup_trades: List[Dict]
+    ) -> bool:
         """Verify trade lists are identical across PRIMARY and BACKUP.
 
         Args:
@@ -40,7 +41,9 @@ class ConsistencyChecker:
             return False
 
         # Check each trade
-        for i, (primary_trade, backup_trade) in enumerate(zip(primary_trades, backup_trades)):
+        for i, (primary_trade, backup_trade) in enumerate(
+            zip(primary_trades, backup_trades)
+        ):
             if not self._compare_trades(primary_trade, backup_trade, index=i):
                 return False
 
@@ -49,7 +52,13 @@ class ConsistencyChecker:
     def _compare_trades(self, primary: Dict, backup: Dict, index: int) -> bool:
         """Compare individual trades from PRIMARY and BACKUP."""
         critical_fields = [
-            "symbol", "side", "quantity", "price", "realized_pnl", "order_id", "status"
+            "symbol",
+            "side",
+            "quantity",
+            "price",
+            "realized_pnl",
+            "order_id",
+            "status",
         ]
 
         for field in critical_fields:
@@ -178,22 +187,19 @@ def verify_platform_consistency(
 
     # Check account state
     if not checker.check_account_state_consistency(
-        primary_state.get("account", {}),
-        backup_state.get("account", {})
+        primary_state.get("account", {}), backup_state.get("account", {})
     ):
         return False, checker.get_error_report()
 
     # Check trades
     if not checker.check_trade_consistency(
-        primary_state.get("trades", []),
-        backup_state.get("trades", [])
+        primary_state.get("trades", []), backup_state.get("trades", [])
     ):
         return False, checker.get_error_report()
 
     # Check positions
     if not checker.check_positions_consistency(
-        primary_state.get("positions", []),
-        backup_state.get("positions", [])
+        primary_state.get("positions", []), backup_state.get("positions", [])
     ):
         return False, checker.get_error_report()
 

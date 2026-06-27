@@ -205,7 +205,9 @@ class DataQualityMeasurer:
                     100 if age_seconds < 5 else max(0, 100 - (age_seconds * 10))
                 )
             except (ValueError, TypeError, AttributeError) as e:
-                logger.error(f"Could not calculate WebSocket active score: {type(e).__name__}: {e}")
+                logger.error(
+                    f"Could not calculate WebSocket active score: {type(e).__name__}: {e}"
+                )
                 active_score = 50
         else:
             active_score = 0
@@ -261,7 +263,9 @@ class DataQualityMeasurer:
 
             return 100.0
         except (ValueError, TypeError, KeyError, AttributeError) as e:
-            logger.error(f"Could not measure price freshness variance: {type(e).__name__}: {e}")
+            logger.error(
+                f"Could not measure price freshness variance: {type(e).__name__}: {e}"
+            )
             return 50.0
 
     def _measure_volume_validity(self, current_prices: Dict[str, float]) -> float:
