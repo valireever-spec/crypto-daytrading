@@ -1,15 +1,19 @@
 {
-  "entry_threshold": 60.0,
+  "entry_threshold": 30.0,
   "exit_profit_target": 0.03,
   "exit_stop_loss": 0.02,
   "position_size_pct": 0.1,
   "max_positions": 5,
   "max_daily_loss_pct": 5.0,
-  "symbols": [],
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT"
+  ],
   "enabled": false,
   "loop_sleep_seconds": 10.0,
   "quality_gate_entry": 90.0,
   "quality_gate_exit": 60.0,
-  "_last_updated": "2026-06-26T08:25:26.118632Z",
+  "_last_updated": "2026-06-27T14:46:01.132623Z",
   "_source": "api_update"
 }

@@ -1,0 +1,57 @@
+{
+  "_comment": "OPERATIONAL PARAMETERS - Synced between primary and backup",
+  "_last_updated": "2026-06-26T20:45:00Z",
+  "_source": "manual",
+
+  "websocket": {
+    "subscriptions": [
+      "btcusdt@kline_1m",
+      "btcusdt@trade",
+      "ethusdt@kline_1m",
+      "ethusdt@trade",
+      "bnbusdt@kline_1m",
+      "bnbusdt@trade"
+    ],
+    "reconnect_max_attempts": 5,
+    "reconnect_backoff_seconds": [1, 2, 4, 8, 16]
+  },
+
+  "price_freshness": {
+    "max_age_seconds": 5,
+    "health_check_max_age_seconds": 120,
+    "warning_age_seconds": 3
+  },
+
+  "health_checks": {
+    "interval_seconds": 10,
+    "trade_log_max_age_seconds": 3600,
+    "websocket_timeout_seconds": 30,
+    "database_timeout_seconds": 5
+  },
+
+  "safety_gates": {
+    "quality_gate_entry": 90.0,
+    "quality_gate_exit": 60.0,
+    "circuit_breaker_threshold": 3,
+    "daily_loss_limit_pct": 5.0
+  },
+
+  "trader": {
+    "loop_sleep_seconds": 10,
+    "max_concurrent_orders": 3,
+    "order_timeout_seconds": 30
+  },
+
+  "systemd": {
+    "restart_max_attempts": 3,
+    "restart_interval_seconds": 60,
+    "restart_backoff_seconds": 10,
+    "shutdown_timeout_seconds": 30
+  },
+
+  "logging": {
+    "rotation_interval_days": 1,
+    "retention_days": 7,
+    "level": "INFO"
+  }
+}

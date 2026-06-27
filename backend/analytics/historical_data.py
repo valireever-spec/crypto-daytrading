@@ -39,6 +39,18 @@ class HistoricalDataService:
             # Normalize symbol for yfinance
             yf_symbol = self._normalize_symbol(symbol)
 
+            # Check cache first (avoid expensive yfinance calls)
+            # Use only date (not time) so multiple calls on same day hit cache
+            cache_key = f"{yf_symbol}_{start_date.date()}_{end_date.date()}_{interval}"
+            if cache_key in self.cache:
+                cached_entry = self.cache[cache_key]
+                age = (datetime.now() - cached_entry['time']).total_seconds()
+                if age < self.cache_ttl:
+                    logger.info(f"✓ Cache hit: {yf_symbol} ({age:.0f}s old, next refresh in {self.cache_ttl - age:.0f}s)")
+                    return cached_entry['data']
+                else:
+                    del self.cache[cache_key]  # Expired, remove from cache
+
             logger.info(
                 f"Fetching {yf_symbol} data from {start_date.date()} to {end_date.date()}"
             )
@@ -65,6 +77,9 @@ class HistoricalDataService:
             if ticker.empty:
                 logger.warning(f"No valid OHLCV data for {yf_symbol}")
                 return None
+
+            # Store in cache for future calls
+            self.cache[cache_key] = {'data': ticker, 'time': datetime.now()}
 
             logger.info(f"Fetched {len(ticker)} candles for {yf_symbol}")
             return ticker

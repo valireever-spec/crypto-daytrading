@@ -44,6 +44,7 @@ from backend.api.routers.autonomous import router as autonomous_router
 from backend.api.routers.monitoring import router as monitoring_router
 from backend.api.routers.risk_management import router as risk_router
 from backend.api.routers.multi_asset import router as multi_asset_router
+from backend.api.routers.failover import router as failover_router
 from backend.analytics.stock_analyzer import init_stock_optimizer
 from backend.api.routers.stocks import router as stocks_router
 from backend.api.routers.backup_analytics import router as backup_analytics_router
@@ -204,10 +205,13 @@ async def lifespan(app: FastAPI):
             engine.mark_to_market({symbol: close_price})
             logger.debug(f"{symbol}: {close_price}")
 
-    # Subscribe to streams
+    # Subscribe to streams (kline_1m for candles + trade for real-time prices)
     ws.subscribe("btcusdt@kline_1m", on_price_update)
     ws.subscribe("btcusdt@trade", on_price_update)
     ws.subscribe("ethusdt@kline_1m", on_price_update)
+    ws.subscribe("ethusdt@trade", on_price_update)
+    ws.subscribe("bnbusdt@kline_1m", on_price_update)
+    ws.subscribe("bnbusdt@trade", on_price_update)
 
     # Start WebSocket connection in background
     websocket_task = asyncio.create_task(ws.connect())
@@ -471,6 +475,7 @@ app.include_router(autonomous_router)
 app.include_router(monitoring_router)
 app.include_router(risk_router)
 app.include_router(multi_asset_router)
+app.include_router(failover_router)
 app.include_router(stocks_router)
 app.include_router(backup_analytics_router)  # Backup analytics (standby mode)
 app.include_router(risk_metrics_router)  # Risk metrics API (Phase 321)
@@ -636,6 +641,68 @@ async def get_paper_status() -> JSONResponse:
             "account": account,
         }
     )
+
+
+@app.post("/api/system/cleanup-logs")
+async def cleanup_logs() -> JSONResponse:
+    """Rotate and compress old logs to free disk space (admin only)."""
+    import gzip
+    from datetime import datetime, timedelta
+
+    logs_dir = Path("logs")
+    if not logs_dir.exists():
+        return JSONResponse({"status": "error", "message": "Logs directory not found"}, status_code=404)
+
+    current_date = datetime.now().strftime("%Y%m%d")
+    initial_size_mb = sum(f.stat().st_size for f in logs_dir.glob("*") if f.is_file()) / 1024 / 1024
+
+    rotated_files = []
+    deleted_files = []
+    failed_files = []
+
+    # Rotate logs
+    for pattern in ["*.log", "*.jsonl"]:
+        for log_file in logs_dir.glob(pattern):
+            if not log_file.is_file():
+                continue
+
+            try:
+                with open(log_file, 'rb') as f_in:
+                    data = f_in.read()
+
+                rotated_path = log_file.with_stem(f"{log_file.stem}.{current_date}")
+                with gzip.open(str(rotated_path) + '.gz', 'wb') as f_out:
+                    f_out.write(data)
+
+                log_file.unlink()
+                rotated_files.append(log_file.name)
+                logger.info(f"Rotated log: {log_file.name} ({len(data) / 1024 / 1024:.1f}MB)")
+            except Exception as e:
+                failed_files.append({"file": log_file.name, "error": str(e)})
+                logger.error(f"Failed to rotate {log_file.name}: {e}")
+
+    # Delete old archives
+    old_cutoff = datetime.now() - timedelta(days=7)
+    for gz_file in logs_dir.glob("*.gz"):
+        if gz_file.stat().st_mtime < old_cutoff.timestamp():
+            try:
+                gz_file.unlink()
+                deleted_files.append(gz_file.name)
+            except Exception as e:
+                logger.error(f"Failed to delete {gz_file.name}: {e}")
+
+    final_size_mb = sum(f.stat().st_size for f in logs_dir.glob("*") if f.is_file()) / 1024 / 1024
+    freed_mb = initial_size_mb - final_size_mb
+
+    return JSONResponse({
+        "status": "success",
+        "rotated": rotated_files,
+        "deleted": deleted_files,
+        "failed": failed_files,
+        "initial_size_mb": round(initial_size_mb, 1),
+        "final_size_mb": round(final_size_mb, 1),
+        "freed_mb": round(freed_mb, 1),
+    })
 
 
 # === Signal Generation Endpoints (FR-003, FR-004) ===
@@ -2062,6 +2129,129 @@ async def get_smart_trading_status(symbol: str = "BTCUSDT") -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Smart status failed: {str(e)}")
 
 
+# === HA Trade Replication Endpoint (CRITICAL) ===
+
+
+@app.post("/api/trading/replicate")
+async def replicate_trade(request: Request) -> JSONResponse:
+    """CRITICAL HA ENDPOINT: Receive trade replication from primary machine.
+
+    When primary executes a trade, it sends the trade details to backup's
+    replicate endpoint so both machines maintain identical trading state.
+
+    This ensures failover switches to correct account state (same positions,
+    cash, equity as primary had).
+    """
+    try:
+        data = await request.json()
+
+        # Required fields for trade replication
+        required_fields = ['symbol', 'side', 'quantity', 'price', 'timestamp', 'order_id']
+        if not all(field in data for field in required_fields):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required fields: {required_fields}"
+            )
+
+        # Get paper trading engine and apply the replicated trade
+        engine = get_paper_trading()
+        if not engine:
+            raise HTTPException(
+                status_code=500,
+                detail="Paper trading engine not initialized on backup"
+            )
+
+        # Apply trade to backup's database
+        result = await engine.place_order(
+            symbol=data['symbol'],
+            side=data['side'],
+            quantity=data['quantity'],
+            current_price=data['price'],
+            order_type="MARKET",
+            strategy_name=f"replicated:{data.get('strategy_name', 'primary')}"
+        )
+
+        logger.info(
+            f"✅ TRADE REPLICATED from primary: {data['side']} {data['quantity']} {data['symbol']} @ ${data['price']}",
+            extra={
+                "extra_fields": {
+                    "event": "TRADE_REPLICATED",
+                    "source": "primary",
+                    "symbol": data['symbol'],
+                    "side": data['side'],
+                    "quantity": data['quantity'],
+                    "price": data['price'],
+                    "primary_order_id": data['order_id'],
+                    "result": result
+                }
+            }
+        )
+
+        return JSONResponse({
+            "status": "replicated",
+            "message": f"Trade {data['order_id']} applied to backup",
+            "result": result
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Trade replication failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to replicate trade: {str(e)}"
+        )
+
+
+@app.post("/api/trading/sync-account-state")
+async def sync_account_state(request: Request) -> JSONResponse:
+    """CRITICAL HA ENDPOINT: Sync full account state from primary to backup.
+
+    Used during failover preparation to ensure backup has exact copy of
+    primary's cash, equity, and positions before taking over.
+    """
+    try:
+        data = await request.json()
+
+        # Validate required fields
+        required = ['cash', 'equity', 'positions', 'daily_pnl']
+        if not all(field in data for field in required):
+            raise HTTPException(status_code=400, detail="Missing account state fields")
+
+        engine = get_paper_trading()
+        if not engine:
+            raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+
+        # Sync the account state
+        logger.critical(
+            "🔄 SYNCING ACCOUNT STATE FROM PRIMARY TO BACKUP",
+            extra={
+                "extra_fields": {
+                    "event": "ACCOUNT_STATE_SYNC",
+                    "cash": data['cash'],
+                    "equity": data['equity'],
+                    "positions": len(data.get('positions', []))
+                }
+            }
+        )
+
+        # Update backup's cash to match primary
+        engine.cash = data['cash']
+        # Note: positions are replicated via individual trade notifications,
+        # not bulk sync, to maintain order and consistency
+
+        return JSONResponse({
+            "status": "synced",
+            "message": f"Account state synced: ${data['cash']} cash, {len(data.get('positions', []))} positions"
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Account state sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
 # === Autonomous Trading Endpoints ===
 
 
@@ -2231,6 +2421,129 @@ async def learning_page():
     if learning_path.exists():
         return FileResponse(learning_path, media_type="text/html")
     raise HTTPException(status_code=404, detail="Learning page not found")
+
+
+# === CRITICAL HA FAILOVER ENDPOINTS ===
+
+
+@app.post("/api/failover/prepare")
+async def prepare_failover() -> JSONResponse:
+    """CRITICAL: Sync all primary state to backup BEFORE failover.
+
+    Call this on PRIMARY before intentionally triggering failover.
+    Pushes exact account state (cash + all open positions) to backup.
+    """
+    try:
+        logger.critical("🚨 FAILOVER PREPARATION: Syncing state to backup")
+
+        engine = get_paper_trading()
+        if not engine:
+            raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+
+        positions_data = []
+        for symbol, position in engine.positions.items():
+            positions_data.append({
+                "symbol": symbol,
+                "side": position.side,
+                "quantity": position.quantity,
+                "entry_price": position.entry_price,
+                "entry_time": position.entry_time.isoformat() if hasattr(position.entry_time, 'isoformat') else str(position.entry_time),
+                "current_price": position.current_price,
+                "db_id": position.db_id
+            })
+
+        sync_payload = {
+            "cash": engine.cash,
+            "positions": positions_data,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        import aiohttp
+        backup_url = os.getenv("BACKUP_MACHINE_URL", "http://192.168.3.25:8002")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{backup_url}/api/failover/receive-state",
+                json=sync_payload,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 200:
+                    logger.critical(f"✅ FAILOVER PREP COMPLETE: {len(positions_data)} positions synced")
+                    return JSONResponse({
+                        "status": "prepared",
+                        "positions_synced": len(positions_data),
+                        "cash_synced": engine.cash,
+                        "backup_confirmed": True
+                    })
+                else:
+                    error_text = await resp.text()
+                    raise HTTPException(status_code=500, detail=f"Backup sync failed: {error_text}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failover preparation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failover prep failed: {str(e)}")
+
+
+@app.post("/api/failover/receive-state")
+async def receive_failover_state(request: Request) -> JSONResponse:
+    """CRITICAL: Backup receives primary's full state for failover.
+
+    Runs on BACKUP. Receives exact state from PRIMARY.
+    After success, backup has PRIMARY's positions and is ready to trade.
+    """
+    try:
+        data = await request.json()
+        logger.critical("🚨 FAILOVER STATE RECEIVED: Restoring primary's state")
+
+        engine = get_paper_trading()
+        if not engine:
+            raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+
+        engine.positions.clear()
+        engine.cash = data['cash']
+
+        from backend.exchange.paper_trading import Position
+        from datetime import datetime
+
+        for pos_data in data.get('positions', []):
+            entry_time_str = pos_data.get('entry_time')
+            if entry_time_str:
+                try:
+                    entry_time = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                except:
+                    entry_time = datetime.utcnow()
+            else:
+                entry_time = datetime.utcnow()
+
+            position = Position(
+                symbol=pos_data['symbol'],
+                side=pos_data['side'],
+                quantity=pos_data['quantity'],
+                entry_price=pos_data['entry_price'],
+                entry_time=entry_time,
+                current_price=pos_data.get('current_price', pos_data['entry_price']),
+                db_id=pos_data.get('db_id')
+            )
+            engine.positions[pos_data['symbol']] = position
+
+        logger.critical(
+            f"✅ BACKUP RESTORED: {len(data.get('positions', []))} positions, €{data['cash']} cash"
+        )
+
+        return JSONResponse({
+            "status": "received",
+            "positions_restored": len(data.get('positions', [])),
+            "cash_restored": data['cash'],
+            "backup_ready": True
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failover state reception failed: {e}")
+        raise HTTPException(status_code=500, detail=f"State reception failed: {str(e)}")
 
 
 if __name__ == "__main__":

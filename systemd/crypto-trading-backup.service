@@ -1,0 +1,46 @@
+[Unit]
+Description=Crypto Daytrading Backup Trader (HA Failover)
+After=network.target
+Wants=crypto-trading-backup-port-cleanup.service
+
+[Service]
+Type=simple
+User=claude
+WorkingDirectory=/home/claude/crypto-daytrading
+Environment="PATH=/home/claude/crypto-daytrading/venv/bin"
+EnvironmentFile=/home/claude/crypto-daytrading/.env
+
+# Start command (port 8002 for backup)
+ExecStart=/home/claude/crypto-daytrading/venv/bin/python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8002
+
+# Pre-start cleanup: kill any hung processes on port 8002 (portable approach)
+ExecStartPre=/bin/sh -c "fuser -k 8002/tcp 2>/dev/null || true"
+ExecStartPre=/bin/sleep 1
+
+# Restart policy: auto-restart on crash
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Startup timeout: fail if not ready within 30 seconds
+TimeoutStartSec=30
+
+# Process management
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crypto-trading-backup
+
+# Resource limits
+MemoryMax=500M
+MemoryAccounting=true
+
+# Graceful shutdown: give process 30 seconds to exit before SIGKILL
+TimeoutStopSec=30
+
+# Signal handling: send SIGTERM first, then SIGKILL
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

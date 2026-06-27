@@ -27,8 +27,8 @@ SyslogIdentifier=crypto-trading
 MemoryMax=500M
 MemoryAccounting=true
 
-# Watchdog: systemd monitors process, auto-restarts if it hangs
-WatchdogSec=30
+# Watchdog disabled for Type=simple (no startup notification)
+# Use Restart=always + RestartSec=10 instead for auto-recovery
 TimeoutStopSec=30
 
 # Signal handling: graceful shutdown on systemctl stop

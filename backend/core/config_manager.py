@@ -128,18 +128,29 @@ class ConfigManager:
         2. If fails: Fall back to reverse tunnel: ssh r33v3r.ddns.net
         3. Both use passwordless auth (openhab_claude key via ~/.ssh/config)
         4. Retry with exponential backoff (1s, 2s, 4s)
+        5. Sync BOTH .env AND trading_config.json to ensure consistency
 
         Returns:
             bool: True if sync successful, False if all attempts fail
         """
         import subprocess
         import time
+        import json
 
-        backup_remote_path = "/home/claude/crypto-daytrading/.env"
+        backup_env_path = "/home/claude/crypto-daytrading/.env"
+        backup_config_path = "/home/claude/crypto-daytrading/logs/trading_config.json"
 
         # Convert config to .env format
         env_lines = ConfigManager._config_to_env_lines(config)
         env_content = "\n".join(env_lines)
+
+        # Convert config to JSON format with metadata
+        config_with_meta = {
+            **config,
+            "_last_updated": datetime.utcnow().isoformat() + "Z",
+            "_source": "HA_sync_to_backup",
+        }
+        config_json = json.dumps(config_with_meta, indent=2)
 
         # Two connection methods: LAN first, then reverse SSH tunnel
         ssh_methods = [
@@ -155,25 +166,39 @@ class ConfigManager:
 
             for attempt in range(max_retries):
                 try:
-                    # SSH command to update .env on backup - use full path to ssh
-                    ssh_cmd = ["/usr/bin/ssh", ssh_host, f"cat > {backup_remote_path}"]
-
-                    result = subprocess.run(
-                        ssh_cmd,
+                    # Sync .env file
+                    ssh_cmd_env = ["/usr/bin/ssh", ssh_host, f"cat > {backup_env_path}"]
+                    result_env = subprocess.run(
+                        ssh_cmd_env,
                         input=env_content,
                         timeout=10,
                         capture_output=True,
                         text=True
                     )
 
-                    if result.returncode == 0:
-                        logger.info(f"✅ Synced config to backup via {method_desc} ({ssh_host})")
+                    # Sync trading_config.json file
+                    ssh_cmd_config = ["/usr/bin/ssh", ssh_host, f"cat > {backup_config_path}"]
+                    result_config = subprocess.run(
+                        ssh_cmd_config,
+                        input=config_json,
+                        timeout=10,
+                        capture_output=True,
+                        text=True
+                    )
+
+                    if result_env.returncode == 0 and result_config.returncode == 0:
+                        logger.info(f"✅ Synced BOTH .env and trading_config.json to backup via {method_desc} ({ssh_host})")
                         # Also trigger backup API reload if possible
                         ConfigManager._trigger_backup_reload()
                         return True
                     else:
+                        errors = []
+                        if result_env.returncode != 0:
+                            errors.append(f".env: {result_env.stderr}")
+                        if result_config.returncode != 0:
+                            errors.append(f"config: {result_config.stderr}")
                         logger.warning(
-                            f"SSH sync via {method_desc} attempt {attempt + 1}/{max_retries} failed: {result.stderr}"
+                            f"SSH sync via {method_desc} attempt {attempt + 1}/{max_retries} failed: {', '.join(errors)}"
                         )
 
                 except subprocess.TimeoutExpired:

@@ -137,16 +137,45 @@ class TradingConfig:
 
 
 def load_trading_config_from_env() -> TradingConfig:
-    """Load TradingConfig from environment variables (source of truth for both machines).
+    """Load TradingConfig from persisted config file, env vars, or hardcoded defaults.
 
-    Environment variables override hardcoded defaults. Both primary and backup load from same .env.
-    Changes via API are synced to backup immediately via /api/autonomous/config/sync.
+    Priority:
+    1. Persisted config file (logs/trading_config.json) - API updates save here
+    2. Environment variables - set via .env
+    3. Hardcoded defaults
 
     STANDARDIZED: All percentage values stored as percentages (e.g., 2.5 = 2.5%), not decimals.
 
     Returns:
-        TradingConfig with values from .env or hardcoded defaults
+        TradingConfig with values from file, .env, or hardcoded defaults
     """
+    import json
+    from pathlib import Path
+
+    # Try to load from persisted config file first
+    config_file = Path(__file__).parent.parent.parent / "logs" / "trading_config.json"
+    if config_file.exists():
+        try:
+            with open(config_file) as f:
+                saved_config = json.load(f)
+            logger.info(f"✅ Loaded trading config from {config_file}")
+            return TradingConfig(
+                enabled=saved_config.get("enabled", True),
+                entry_threshold=float(saved_config.get("entry_threshold", 60.0)),
+                exit_profit_target=float(saved_config.get("exit_profit_target", 4.5)),
+                exit_stop_loss=float(saved_config.get("exit_stop_loss", 3.0)),
+                position_size_pct=float(saved_config.get("position_size_pct", 2.5)),
+                max_positions=int(saved_config.get("max_positions", 8)),
+                max_daily_loss_pct=float(saved_config.get("max_daily_loss_pct", 5.0)),
+                loop_sleep_seconds=float(saved_config.get("loop_sleep_seconds", 10.0)),
+                quality_gate_entry=float(saved_config.get("quality_gate_entry", 90.0)),
+                quality_gate_exit=float(saved_config.get("quality_gate_exit", 60.0)),
+                symbols=saved_config.get("symbols", ["BTCUSDT", "ETHUSDT", "BNBUSDT"]),
+            )
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to load config from {config_file}: {e} - falling back to env/defaults")
+
+    # Fall back to environment variables
     return TradingConfig(
         enabled=True,
         entry_threshold=float(os.getenv("ENTRY_THRESHOLD", "60.0")),
@@ -1140,6 +1169,12 @@ class AutonomousTrader:
                         }
                     },
                 )
+
+                # HA SYNC: Send complete position state to backup (non-blocking, non-critical)
+                asyncio.create_task(
+                    self._sync_positions_to_backup()
+                )
+
                 # Clear failure count on success
                 self.order_failures[signal.symbol] = 0
                 return True
@@ -1245,6 +1280,12 @@ class AutonomousTrader:
                         }
                     },
                 )
+
+                # HA SYNC: Send complete position state to backup (non-blocking, non-critical)
+                asyncio.create_task(
+                    self._sync_positions_to_backup()
+                )
+
                 return True
             else:
                 # Structured exit failure log
@@ -1630,6 +1671,83 @@ class AutonomousTrader:
                 "symbols": self.config.symbols,
             },
         }
+
+    async def _sync_positions_to_backup(self) -> bool:
+        """Sync complete position state to BACKUP for HA (fire-and-forget).
+
+        After each trade execution, sends entire account state to BACKUP:
+        - Current cash balance
+        - All open positions with prices
+        - P&L counters
+        - Position values
+
+        Much more reliable than individual trade replication because:
+        - Atomic: sends complete snapshot
+        - Idempotent: safe to call multiple times
+        - Audit-friendly: BACKUP has full state, not just trades
+        - Failover-safe: BACKUP can take over with exact state
+
+        Non-blocking: failure doesn't affect trading
+        """
+        try:
+            import aiohttp
+
+            engine = get_paper_trading()
+            if not engine:
+                return False
+
+            backup_url = os.getenv("BACKUP_MACHINE_URL", "http://192.168.3.25:8002")
+            sync_endpoint = f"{backup_url}/api/failover/sync-position"
+
+            # Collect current account state
+            account_state = engine.get_account_state()
+            positions_data = []
+
+            # Serialize positions
+            for symbol, position in engine.positions.items():
+                positions_data.append({
+                    "symbol": position.symbol,
+                    "side": position.side,
+                    "quantity": position.quantity,
+                    "entry_price": position.entry_price,
+                    "entry_time": position.entry_time.isoformat() if hasattr(position.entry_time, 'isoformat') else str(position.entry_time),
+                    "current_price": position.current_price,
+                    "unrealized_pnl": position.unrealized_pnl,
+                    "db_id": position.db_id
+                })
+
+            sync_payload = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "state": {
+                    "cash": account_state['cash'],
+                    "total_equity": account_state['total_equity'],
+                    "positions_value": account_state['positions_value'],
+                    "total_pnl": account_state['total_pnl'],
+                    "daily_pnl": account_state['daily_pnl'],
+                },
+                "positions": positions_data,
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    sync_endpoint, json=sync_payload, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        logger.info(
+                            f"✅ Position state synced to backup: {len(positions_data)} positions, "
+                            f"€{account_state['cash']:.2f} cash"
+                        )
+                        return True
+                    else:
+                        logger.error(f"🔴 Position sync failed (HTTP {resp.status})")
+                        return False
+
+        except asyncio.TimeoutError:
+            logger.error("🔴 Position sync timeout - backup may be unreachable")
+            return False
+        except Exception as e:
+            logger.error(f"🔴 Position sync error: {type(e).__name__}: {e}", exc_info=True)
+            return False
 
 
 # Global instance

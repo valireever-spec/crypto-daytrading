@@ -1423,14 +1423,16 @@ function validateResponse(response, requiredFields = []) {
 
                 // Use fetchWithRetry for resilience
                 const health = await fetchWithRetry(`${API}/health`);
+                const account = await fetchWithRetry(`${API}/paper/account`);
+
                 const healthEl = document.getElementById('health-status');
-                if (healthEl) healthEl.textContent = health.status || 'unknown';
+                if (healthEl) healthEl.textContent = (health.summary && health.summary.status) || 'unknown';
 
                 const modeEl = document.getElementById('health-mode');
-                if (modeEl) modeEl.textContent = health.mode || 'unknown';
+                if (modeEl) modeEl.textContent = (account && account.mode) || 'unknown';
 
                 const wsEl = document.getElementById('health-ws');
-                if (wsEl) wsEl.textContent = (health.websocket && health.websocket.connected) ? 'Connected' : 'Disconnected';
+                if (wsEl) wsEl.textContent = (health.checks && health.checks.websocket && health.checks.websocket.healthy) ? 'Connected' : 'Disconnected';
 
                 const detailsEl = document.getElementById('health-details');
                 if (detailsEl) detailsEl.textContent = JSON.stringify(health || {}, null, 2);
