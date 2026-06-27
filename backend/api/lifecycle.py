@@ -15,6 +15,7 @@ stream_task = None
 simulator_task = None
 autonomous_trader_task = None
 sync_task = None
+failover_task = None
 ws = None
 
 
@@ -73,14 +74,107 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize Binance stream: {e}")
 
-    # Initialize autonomous trader
-    try:
-        trader = init_autonomous_trader()
-        global autonomous_trader_task
-        autonomous_trader_task = asyncio.create_task(trader.start())
-        logger.info("Autonomous trader initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize autonomous trader: {e}")
+    # Initialize autonomous trader (disabled on BACKUP)
+    machine_id = os.getenv("MACHINE_ID", "main")
+    if machine_id == "backup":
+        logger.info("⏸️  BACKUP mode: Autonomous trading DISABLED (will enable on failover)")
+    else:
+        try:
+            trader = init_autonomous_trader()
+            global autonomous_trader_task
+            autonomous_trader_task = asyncio.create_task(trader.start())
+            logger.info("Autonomous trader initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize autonomous trader: {e}")
+
+    # Add sync task for PRIMARY or failover monitor for BACKUP
+    machine_id = os.getenv("MACHINE_ID", "main")
+    backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
+
+    async def sync_to_backup():
+        """PRIMARY: Periodically sync state to BACKUP."""
+        import httpx
+        from backend.exchange.paper_trading import get_paper_trading
+
+        while True:
+            try:
+                await asyncio.sleep(5)  # Sync every 5 seconds
+                engine = get_paper_trading()
+                if not engine:
+                    continue
+
+                state = {
+                    "cash": engine.cash,
+                    "total_pnl": engine.total_pnl,
+                    "positions": [p for p in engine.get_positions() if p["status"] == "open"]
+                }
+
+                async with httpx.AsyncClient(timeout=3) as client:
+                    resp = await client.post(f"{backup_url}/api/ha/sync-from-primary", json=state)
+                    if resp.status_code == 200:
+                        logger.debug(f"✅ Synced to BACKUP: {len(state['positions'])} positions, €{state['cash']:.2f} cash")
+                    else:
+                        logger.warning(f"⚠️  BACKUP sync failed: {resp.status_code}")
+            except Exception as e:
+                logger.debug(f"BACKUP sync error (will retry): {e}")
+
+    async def failover_monitor():
+        """BACKUP: Monitor PRIMARY health, enable trading on failure."""
+        import httpx
+        from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
+
+        primary_url = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
+        primary_failed = False
+        trader = None
+
+        while True:
+            try:
+                await asyncio.sleep(10)  # Check every 10 seconds
+
+                # Check if PRIMARY is healthy
+                try:
+                    async with httpx.AsyncClient(timeout=2) as client:
+                        resp = await client.get(f"{primary_url}/api/health")
+                        primary_healthy = resp.status_code == 200
+                except:
+                    primary_healthy = False
+
+                if not primary_healthy and not primary_failed:
+                    # PRIMARY just failed, enable trading on BACKUP
+                    logger.critical("🚨 PRIMARY FAILURE DETECTED - Enabling BACKUP trading")
+                    try:
+                        trader = init_autonomous_trader()
+                        global autonomous_trader_task
+                        autonomous_trader_task = asyncio.create_task(trader.start())
+                        logger.info("✅ BACKUP autonomous trader ACTIVATED")
+                        primary_failed = True
+                    except Exception as e:
+                        logger.error(f"Failed to activate BACKUP trader: {e}")
+
+                elif primary_healthy and primary_failed:
+                    # PRIMARY recovered, disable trading on BACKUP
+                    logger.info("✅ PRIMARY RECOVERED - Disabling BACKUP trading")
+                    try:
+                        if trader:
+                            await trader.stop()
+                        if autonomous_trader_task:
+                            autonomous_trader_task.cancel()
+                        logger.info("BACKUP autonomous trader DEACTIVATED")
+                        primary_failed = False
+                    except Exception as e:
+                        logger.error(f"Failed to deactivate BACKUP trader: {e}")
+
+            except Exception as e:
+                logger.error(f"Failover monitor error: {e}")
+
+    if machine_id == "main":
+        global sync_task
+        sync_task = asyncio.create_task(sync_to_backup())
+        logger.info("📤 PRIMARY sync task started (→ BACKUP every 5s)")
+    else:
+        global failover_task
+        failover_task = asyncio.create_task(failover_monitor())
+        logger.info("📡 BACKUP failover monitor started (check every 10s)")
 
     # Startup complete
     logger.info("✅ Crypto daytrading platform started successfully")
@@ -107,6 +201,12 @@ async def lifespan(app: FastAPI):
 
     if simulator_task:
         simulator_task.cancel()
+
+    if sync_task:
+        sync_task.cancel()
+
+    if failover_task:
+        failover_task.cancel()
 
     logger.info("✅ Crypto daytrading platform shut down complete")
 

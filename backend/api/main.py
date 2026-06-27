@@ -1,7 +1,9 @@
 """FastAPI main application for crypto daytrading platform."""
 
 import logging
+import os
 from pathlib import Path
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -267,6 +269,85 @@ async def get_current_metrics() -> JSONResponse:
     except Exception as e:
         logger.error(f"Error getting metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ha/sync-from-primary")
+async def sync_state_from_primary(state: dict = None) -> JSONResponse:
+    """BACKUP: Receive state sync from PRIMARY."""
+    try:
+        machine_id = os.getenv("MACHINE_ID", "main")
+        if machine_id != "backup":
+            return JSONResponse(
+                status_code=403,
+                content={"error": "This endpoint is for BACKUP only"}
+            )
+
+        if not state:
+            return JSONResponse(status_code=400, content={"error": "State required"})
+
+        from backend.exchange.paper_trading import get_paper_trading
+        from backend.core.database import Database
+
+        engine = get_paper_trading()
+        db = Database()
+
+        # Apply state: cash, positions, config
+        if "cash" in state:
+            engine.cash = state["cash"]
+
+        if "total_pnl" in state:
+            engine.total_pnl = state["total_pnl"]
+
+        # Sync positions
+        if "positions" in state:
+            db.conn.execute("DELETE FROM open_positions")
+            for pos in state["positions"]:
+                db.conn.execute(
+                    "INSERT INTO open_positions VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (pos["id"], pos["symbol"], pos["entry_price"],
+                     pos["quantity"], pos["entry_time"], pos["status"], pos.get("metadata", "{}"))
+                )
+            db.conn.commit()
+
+        logger.info(f"✅ BACKUP synced: cash={state.get('cash')}, positions={len(state.get('positions', []))}")
+        return JSONResponse({"status": "synced", "timestamp": datetime.now().isoformat()})
+
+    except Exception as e:
+        logger.error(f"Sync error: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/ha/status")
+async def get_ha_status() -> JSONResponse:
+    """Get HA status (PRIMARY or BACKUP, health)."""
+    try:
+        machine_id = os.getenv("MACHINE_ID", "main")
+        primary_url = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
+
+        from backend.exchange.paper_trading import get_paper_trading
+
+        engine = get_paper_trading()
+
+        # Check if PRIMARY is reachable
+        primary_healthy = False
+        try:
+            import httpx
+            resp = httpx.get(f"{primary_url}/api/health", timeout=2)
+            primary_healthy = resp.status_code == 200
+        except:
+            pass
+
+        return JSONResponse({
+            "machine_id": machine_id,
+            "role": "PRIMARY" if machine_id == "main" else "BACKUP",
+            "primary_healthy": primary_healthy,
+            "account": engine.get_account_state() if engine else None,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"HA status error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 # Mount static files if they exist
