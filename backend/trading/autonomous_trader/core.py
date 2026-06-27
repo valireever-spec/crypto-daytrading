@@ -516,6 +516,7 @@ class AutonomousTrader:
         return {
             "running": self.running,
             "config": {
+                "enabled": self.config.enabled,
                 "entry_threshold": self.config.entry_threshold,
                 "exit_profit_target": self.config.exit_profit_target,
                 "exit_stop_loss": self.config.exit_stop_loss,
@@ -523,6 +524,9 @@ class AutonomousTrader:
                 "max_positions": self.config.max_positions,
                 "max_daily_loss_pct": self.config.max_daily_loss_pct,
                 "symbols": self.config.symbols,
+                "loop_sleep_seconds": self.config.loop_sleep_seconds,
+                "quality_gate_entry": self.config.quality_gate_entry,
+                "quality_gate_exit": self.config.quality_gate_exit,
             },
             "account_state": engine.get_account_state(),
             "hardening_status": {

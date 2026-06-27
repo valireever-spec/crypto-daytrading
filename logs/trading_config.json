@@ -14,6 +14,6 @@
   "loop_sleep_seconds": 10.0,
   "quality_gate_entry": 50.0,
   "quality_gate_exit": 30.0,
-  "_last_updated": "2026-06-27T20:36:19.362863Z",
+  "_last_updated": "2026-06-27T20:38:07.499980Z",
   "_source": "api_update"
 }
