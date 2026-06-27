@@ -459,6 +459,7 @@ class TradingDatabase:
         order_id: Optional[str] = None,
         slippage_pct: Optional[float] = None,
         realized_pnl: float = 0.0,
+        fee: float = 0.0,
     ) -> int:
         """Log executed trade to audit trail (anti-poisoning validated).
 
@@ -513,8 +514,8 @@ class TradingDatabase:
 
             cursor.execute(
                 """
-                INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, realized_pnl, status, hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'FILLED', ?)
+                INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, realized_pnl, fee, status, hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'FILLED', ?)
                 """,
                 (
                     symbol,
@@ -525,6 +526,7 @@ class TradingDatabase:
                     order_id,
                     slippage_pct,
                     realized_pnl,
+                    fee,
                     trade_hash,
                 ),
             )

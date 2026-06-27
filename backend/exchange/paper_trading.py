@@ -300,6 +300,7 @@ class PaperTradingEngine:
                         abs(fill_price - current_price) / current_price * 100
                     ),
                     realized_pnl=realized_pnl,
+                    fee=fee,
                 )
                 # CRITICAL: Persist account state after each trade for crash recovery
                 db.save_account_state(
