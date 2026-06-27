@@ -515,6 +515,7 @@ class AutonomousTrader:
 
         return {
             "running": self.running,
+            "enabled": self.config.enabled,
             "config": {
                 "enabled": self.config.enabled,
                 "entry_threshold": self.config.entry_threshold,
