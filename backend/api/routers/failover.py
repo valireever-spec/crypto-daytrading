@@ -84,7 +84,7 @@ async def sync_position_to_backup():
             async with session.post(
                 f"{backup_url}/api/failover/receive-position",
                 json=sync_payload,
-                timeout=aiohttp.ClientTimeout(total=5)
+                timeout=aiohttp.ClientTimeout(total=30)  # Increased from 5s for network reliability
             ) as resp:
                 if resp.status == 200:
                     logger.info(
