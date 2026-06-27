@@ -240,6 +240,37 @@
 
 ---
 
+### NFR-016A: Code Quality Excellence (Lifetime Commitment)
+- **Requirement:** Code quality must be maintained at highest standards throughout entire project lifetime
+- **Why:** Technical debt spirals; high quality prevents bugs, reduces maintenance cost, enables rapid iteration
+- **Standards:**
+  - Type hints: 100% (mypy 0 errors, not optional)
+  - Linting: black + ruff 0 issues (auto-format on every commit)
+  - Cyclomatic complexity: <10 per function
+  - File size: <300 lines (split at 400 lines)
+  - Duplication: <5% (DRY principle)
+  - Test coverage: ≥85% on critical paths
+  - Documentation: Every public function has docstring
+  - Dependencies: <20 external packages (lean)
+- **Implementation:**
+  - Pre-commit hook runs mypy + black + ruff (blocks bad code)
+  - CI/CD rejects pull requests if:
+    - mypy finds errors
+    - Coverage drops below 85%
+    - File exceeds 500 lines
+    - Duplicate code detected
+  - Weekly code review for quality (not just functionality)
+  - Refactor debt logged and prioritized
+- **Measurement:**
+  - Codacy/SonarQube score ≥A grade
+  - No warnings in any linting tool
+  - Test coverage always ≥85%
+  - Zero "tech debt" debt warnings in PR reviews
+- **Acceptance:** Code passes ALL quality gates before merge
+- **Lifetime Enforcement:** These standards apply to EVERY commit, EVERY PR, for entire project lifetime
+
+---
+
 ### NFR-017A: Implementation Testing (No Claims Without Tests)
 - **Requirement:** EVERY code change must have passing tests BEFORE claiming success
 - **Why:** Prevents false claims (e.g., "realized_pnl is persisted" when it wasn't)
