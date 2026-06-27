@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+import sqlite3
 from datetime import datetime
 from typing import Dict, List, Optional, Literal
 from dataclasses import dataclass, asdict
@@ -74,6 +75,9 @@ class PaperTradingEngine:
 
         # Ensure logs directory exists
         self.AUDIT_LOG.parent.mkdir(exist_ok=True)
+
+        # HARDENING: Clean up orphaned positions first (prevents corruption recovery)
+        self._cleanup_orphaned_positions()
 
         # Restore positions from database (Pillar #5: State Persistence)
         self._restore_positions_from_db()
@@ -458,6 +462,39 @@ class PaperTradingEngine:
         """Check if datetime is today."""
         today = datetime.utcnow().date()
         return dt.date() == today
+
+    def _cleanup_orphaned_positions(self) -> None:
+        """Remove orphaned/duplicate positions from database on startup (BUG FIX).
+
+        Prevents corruption where same symbol has multiple entries due to crashes
+        before position closure was persisted. This cleanup happens BEFORE
+        restoration, so orphaned entries are removed before we load state.
+        """
+        try:
+            db = get_database()
+            # Find symbols with multiple position entries
+            conn = sqlite3.connect(db.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT symbol FROM open_positions
+                GROUP BY symbol HAVING COUNT(*) > 1
+            """)
+            duplicate_symbols = [row[0] for row in cursor.fetchall()]
+
+            if duplicate_symbols:
+                logger.warning(
+                    f"🧹 Cleaning up {len(duplicate_symbols)} orphaned positions: {duplicate_symbols}"
+                )
+                for symbol in duplicate_symbols:
+                    cursor.execute("DELETE FROM open_positions WHERE symbol = ?", (symbol,))
+
+                conn.commit()
+                logger.info(f"✅ Orphaned positions cleaned")
+
+            conn.close()
+        except Exception as e:
+            logger.error(f"⚠️ Failed to cleanup orphaned positions: {e}")
 
     def _restore_positions_from_db(self) -> None:
         """Restore open positions from database on startup (Pillar #5 hardening).
