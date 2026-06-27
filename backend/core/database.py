@@ -118,7 +118,7 @@ class TradingDatabase:
             """
             CREATE TABLE IF NOT EXISTS account_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                cash REAL DEFAULT 10000.0,
+                cash REAL DEFAULT 1000.0,
                 total_pnl REAL DEFAULT 0.0,
                 daily_pnl REAL DEFAULT 0.0,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -127,7 +127,7 @@ class TradingDatabase:
         )
         # Ensure single row exists
         cursor.execute(
-            "INSERT OR IGNORE INTO account_state (id, cash, total_pnl, daily_pnl) VALUES (1, 10000.0, 0.0, 0.0)"
+            "INSERT OR IGNORE INTO account_state (id, cash, total_pnl, daily_pnl) VALUES (1, 1000.0, 0.0, 0.0)"
         )
 
         conn.commit()
@@ -651,10 +651,10 @@ class TradingDatabase:
 
             if row:
                 return {"cash": row[0], "total_pnl": row[1], "daily_pnl": row[2]}
-            return {"cash": 10000.0, "total_pnl": 0.0, "daily_pnl": 0.0}
+            return {"cash": 1000.0, "total_pnl": 0.0, "daily_pnl": 0.0}
         except Exception as e:
             logger.error(f"Failed to load account state: {e}")
-            return {"cash": 10000.0, "total_pnl": 0.0, "daily_pnl": 0.0}
+            return {"cash": 1000.0, "total_pnl": 0.0, "daily_pnl": 0.0}
 
     def close(self) -> None:
         """Close database connection."""

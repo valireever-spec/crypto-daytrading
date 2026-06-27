@@ -763,9 +763,9 @@
             // Header info
             const equity = account.total_equity;
             document.getElementById('accountValue').textContent = formatCurrency(equity);
-            document.getElementById('accountValue').className = `info-value ${equity >= 10000 ? 'positive' : 'negative'}`;
+            document.getElementById('accountValue').className = `info-value ${equity >= 1000 ? 'positive' : 'negative'}`;
 
-            const dailyPnL = equity - 10000; // Assuming starting capital is 10000
+            const dailyPnL = account.daily_pnl || 0;
             document.getElementById('dailyPnL').textContent = formatCurrency(dailyPnL);
             document.getElementById('dailyPnL').className = `info-value ${dailyPnL >= 0 ? 'positive' : 'negative'}`;
 

@@ -62,7 +62,7 @@ async def _check_daily_loss_limit_impl(trader_self) -> bool:
 
         account = engine.get_account_state()
         daily_pnl = account.get("daily_pnl", 0.0)
-        total_equity = account.get("total_equity", 10000.0)
+        total_equity = account.get("total_equity", 1000.0)
 
         if total_equity <= 0:
             return False
@@ -104,8 +104,8 @@ async def _validate_risk_before_order_impl(
 
         account = engine.get_account_state()
         daily_pnl = account.get("daily_pnl", 0.0)
-        total_equity = account.get("total_equity", 10000.0)
-        cash = account.get("cash", 10000.0)
+        total_equity = account.get("total_equity", 1000.0)
+        cash = account.get("cash", 1000.0)
 
         if total_equity <= 0:
             return False, "Invalid account equity"

@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # Trading Configuration
     trading_mode: Literal["paper", "live"] = "paper"
-    initial_capital: float = 10000.0  # €10,000 for paper trading
+    initial_capital: float = 1000.0  # €1,000 for paper trading
     max_daily_loss_pct: float = 5.0  # Stop trading if loss > 5%
     max_positions: int = 5
     position_size_pct: float = 1.5  # Base position size

@@ -1225,40 +1225,45 @@ function validateResponse(response, requiredFields = []) {
                 const dashEl = document.getElementById('dashboard-content');
                 if (dashEl) dashEl.style.opacity = '0.6';
 
-                // Use fetchWithRetry for resilience + Promise.allSettled for partial failures
+                // Fetch health (includes account) + positions + trades
                 const results = await Promise.allSettled([
-                    fetchWithRetry(`${API}/dashboard`),
+                    fetchWithRetry(`${API}/health`),
                     fetchWithRetry(`${API}/paper/positions`),
                     fetchWithRetry(`${API}/paper/trades?limit=10`)
                 ]);
 
                 // Extract results with fallbacks
-                const dash = results[0].status === 'fulfilled' ? results[0].value : { account: {}, metrics: {}, positions: [] };
-                const pos = results[1].status === 'fulfilled' ? results[1].value : { positions: [] };
-                const trades = results[2].status === 'fulfilled' ? results[2].value : { trades: [] };
+                const health = results[0].status === 'fulfilled' ? results[0].value : { account: {} };
+                const positions = results[1].status === 'fulfilled' ? results[1].value : [];
+                const trades = results[2].status === 'fulfilled' ? results[2].value : [];
 
                 updateBotStatus(true);
-                const account = dash.account;
+                const account = health.account || {};
 
-                document.getElementById('cash').textContent = fmt(account.cash);
-                document.getElementById('equity').textContent = fmt(account.total_equity);
-                document.getElementById('positions-value').textContent = fmt(account.positions_value);
-                document.getElementById('active-positions').textContent = account.active_positions;
-                document.getElementById('total-pnl').textContent = fmt(account.total_pnl);
-                document.getElementById('mode').textContent = account.mode;
-                document.getElementById('pos-count').textContent = account.active_positions;
-                document.getElementById('trading-paused').textContent = dash.trading_paused ? 'Yes' : 'No';
+                // Update account metrics
+                document.getElementById('cash').textContent = fmt(account.cash || 0);
+                document.getElementById('equity').textContent = fmt(account.total_equity || 0);
+                document.getElementById('positions-value').textContent = fmt(account.positions_value || 0);
+                document.getElementById('active-positions').textContent = account.active_positions || 0;
+                document.getElementById('total-pnl').textContent = fmt(account.total_pnl || 0);
+                document.getElementById('mode').textContent = account.mode || 'PAPER';
+                document.getElementById('pos-count').textContent = account.active_positions || 0;
+                document.getElementById('trading-paused').textContent = 'No';
 
-                const metrics = dash.metrics;
-                document.getElementById('total-trades').textContent = metrics.total_trades;
-                document.getElementById('winning-trades').textContent = metrics.winning_trades;
-                document.getElementById('win-rate').textContent = (metrics.win_rate_pct).toFixed(1) + '%';
-                document.getElementById('avg-win').textContent = fmt(metrics.avg_win);
-                document.getElementById('trades-today').textContent = account.trades_today;
-                document.getElementById('daily-pnl').textContent = fmt(account.daily_pnl);
+                // Calculate metrics from available data
+                const trades_count = trades.length || 0;
+                const winning_trades = trades.filter(t => (t.pnl || 0) > 0).length;
+                const win_rate = trades_count > 0 ? (winning_trades / trades_count * 100) : 0;
 
-                updatePositions(dash.positions);
-                updateTrades(trades.trades || []);
+                document.getElementById('total-trades').textContent = trades_count;
+                document.getElementById('winning-trades').textContent = winning_trades;
+                document.getElementById('win-rate').textContent = win_rate.toFixed(1) + '%';
+                document.getElementById('avg-win').textContent = fmt(trades_count > 0 ? trades.reduce((sum, t) => sum + (t.pnl || 0), 0) / trades_count : 0);
+                document.getElementById('trades-today').textContent = account.trades_today || 0;
+                document.getElementById('daily-pnl').textContent = fmt(account.daily_pnl || 0);
+
+                updatePositions(positions);
+                updateTrades(trades || []);
                 document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
 
                 // Clear loading state
@@ -1266,6 +1271,7 @@ function validateResponse(response, requiredFields = []) {
             } catch (e) {
                 console.error('Dashboard error:', e);
                 updateBotStatus(false);
+                const dashEl = document.getElementById('dashboard-content');
                 if (dashEl) dashEl.style.opacity = '1';
             }
         }

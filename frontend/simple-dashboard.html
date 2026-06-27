@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crypto Trading Dashboard</title>
+    <style>
+        body { font-family: Arial; background: #f5f5f5; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+        .metric { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .metric-label { color: #999; font-size: 12px; font-weight: bold; margin-bottom: 5px; }
+        .metric-value { font-size: 24px; font-weight: bold; color: #333; }
+        .positive { color: #4CAF50; }
+        .negative { color: #f44336; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th { background: #f5f5f5; padding: 12px; text-align: left; font-weight: bold; border-bottom: 1px solid #ddd; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:hover { background: #f9f9f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h2 { margin: 0 0 15px 0; color: #333; }
+        .status { padding: 10px 15px; border-radius: 4px; display: inline-block; }
+        .status.healthy { background: #4CAF50; color: white; }
+        .status.error { background: #f44336; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Crypto Trading Dashboard</h1>
+            <p id="status" class="status healthy">✅ Loading...</p>
+        </div>
+
+        <div class="metrics">
+            <div class="metric">
+                <div class="metric-label">Available Cash</div>
+                <div class="metric-value" id="cash">$0.00</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Total Equity</div>
+                <div class="metric-value" id="equity">$0.00</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Total P&L</div>
+                <div class="metric-value" id="pnl">$0.00</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Active Positions</div>
+                <div class="metric-value" id="positions">0</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📍 Positions</h2>
+            <table id="positionsTable">
+                <thead>
+                    <tr><th>Symbol</th><th>Qty</th><th>Entry Price</th><th>Current Price</th><th>P&L</th></tr>
+                </thead>
+                <tbody id="positionsBody">
+                    <tr><td colspan="5" style="text-align:center; color:#999;">No open positions</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>📝 Recent Trades</h2>
+            <table id="tradesTable">
+                <thead>
+                    <tr><th>Time</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>P&L</th></tr>
+                </thead>
+                <tbody id="tradesBody">
+                    <tr><td colspan="6" style="text-align:center; color:#999;">No trades yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API = 'http://localhost:8001/api';
+
+        async function updateDashboard() {
+            try {
+                // Fetch data
+                const [health, positions, trades] = await Promise.all([
+                    fetch(`${API}/health`).then(r => r.json()),
+                    fetch(`${API}/paper/positions`).then(r => r.json()),
+                    fetch(`${API}/paper/trades?limit=10`).then(r => r.json())
+                ]);
+
+                // Update metrics
+                const account = health.account;
+                document.getElementById('cash').textContent = `$${(account.cash || 0).toFixed(2)}`;
+                document.getElementById('equity').textContent = `$${(account.total_equity || 0).toFixed(2)}`;
+                document.getElementById('pnl').textContent = `$${(account.total_pnl || 0).toFixed(2)}`;
+                document.getElementById('positions').textContent = account.active_positions || 0;
+                document.getElementById('status').textContent = '✅ Healthy';
+                document.getElementById('status').className = 'status healthy';
+
+                // Update positions
+                const posBody = document.getElementById('positionsBody');
+                if (positions.length === 0) {
+                    posBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">No open positions</td></tr>';
+                } else {
+                    posBody.innerHTML = positions.map(p => `
+                        <tr>
+                            <td><strong>${p.symbol}</strong></td>
+                            <td>${p.quantity.toFixed(4)}</td>
+                            <td>$${p.entry_price.toFixed(2)}</td>
+                            <td>$${p.current_price.toFixed(2)}</td>
+                            <td class="${p.unrealized_pnl >= 0 ? 'positive' : 'negative'}">$${p.unrealized_pnl.toFixed(2)}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                // Update trades
+                const tradeBody = document.getElementById('tradesBody');
+                if (trades.length === 0) {
+                    tradeBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999;">No trades yet</td></tr>';
+                } else {
+                    tradeBody.innerHTML = trades.map(t => `
+                        <tr>
+                            <td>${new Date(t.timestamp).toLocaleTimeString()}</td>
+                            <td><strong>${t.symbol}</strong></td>
+                            <td>${t.side}</td>
+                            <td>${t.quantity.toFixed(4)}</td>
+                            <td>$${t.price.toFixed(2)}</td>
+                            <td class="${t.realized_pnl >= 0 ? 'positive' : 'negative'}">$${t.realized_pnl.toFixed(2)}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                document.getElementById('status').textContent = '❌ Error';
+                document.getElementById('status').className = 'status error';
+                console.error('Dashboard error:', e);
+            }
+        }
+
+        // Update on load and every 5 seconds
+        updateDashboard();
+        setInterval(updateDashboard, 5000);
+    </script>
+</body>
+</html>

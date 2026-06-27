@@ -244,7 +244,7 @@ class ConfigManager:
         env_lines = [
             "# Trading Configuration - SOURCE OF TRUTH FOR BOTH MACHINES",
             "TRADING_MODE=paper",
-            f"INITIAL_CAPITAL={config.get('initial_capital', 10000.0)}",
+            f"INITIAL_CAPITAL={config.get('initial_capital', 1000.0)}",
             "",
             "# 9 Adjustable Parameters (critical for HA sync)",
             "# IMPORTANT: All percentages stored as percentages (e.g., 2.5 = 2.5%), NOT decimals",

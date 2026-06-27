@@ -44,6 +44,7 @@ from backend.api.routers.user import router as user_router
 from backend.api.routers.portfolio import router as portfolio_router
 from backend.api.routers.redundancy import router as redundancy_router
 from backend.api.routers.ha_postgres import router as ha_postgres_router
+from backend.api.routers.dashboard_wrapper import router as dashboard_wrapper_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -109,6 +110,7 @@ routers = [
     portfolio_router,
     redundancy_router,
     ha_postgres_router,
+    dashboard_wrapper_router,
 ]
 
 for router in routers:

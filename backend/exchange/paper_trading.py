@@ -59,11 +59,11 @@ class PaperTradingEngine:
     FEE_RATE = 0.001  # 0.1% trading fee (Binance)
     AUDIT_LOG = Path("logs/trades.jsonl")
 
-    def __init__(self, starting_capital: float = 10000.0):
+    def __init__(self, starting_capital: float = 1000.0):
         """Initialize paper trading engine.
 
         Args:
-            starting_capital: Starting balance in EUR
+            starting_capital: Starting balance in EUR (€1,000)
         """
         self.starting_capital = starting_capital
         self.cash = starting_capital
@@ -681,7 +681,7 @@ _paper_engine: Optional[PaperTradingEngine] = None
 
 
 def init_paper_trading(
-    starting_capital: float = 10000.0,
+    starting_capital: float = 1000.0,
 ) -> PaperTradingEngine:
     """Initialize global paper trading engine."""
     global _paper_engine
