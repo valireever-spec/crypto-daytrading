@@ -90,6 +90,28 @@
 
 ---
 
+### NFR-010A: Platform-Wide Data Consistency
+- **Requirement:** All platform components (PRIMARY API, BACKUP API, SQLite database, in-memory engine) MUST have identical state
+- **Why:** Data divergence causes trading errors, incorrect P&L, failed failover
+- **Scope:** Every trade, cash balance, P&L, position must be identical across:
+  - `PRIMARY.memory` (in-memory engine state)
+  - `PRIMARY.database` (SQLite on PRIMARY machine)
+  - `BACKUP.memory` (in-memory engine state)
+  - `BACKUP.database` (SQLite on BACKUP machine)
+- **Implementation:**
+  - Every field persisted to database MUST be loaded on restart
+  - Sync endpoint transmits ALL state including trade details and P&L
+  - Database schema includes all required fields (realized_pnl, fee, etc.)
+- **Measurement:**
+  - Execute 10 trades on PRIMARY
+  - Compare PRIMARY.memory with BACKUP.memory: 100% match
+  - Compare PRIMARY.database with BACKUP.database: 100% match
+  - Kill BACKUP, restart, verify state recovered exactly
+- **Test:** Automated consistency checks in CI
+- **Acceptance:** ✅ All fields match across all components
+
+---
+
 ### NFR-010: Database Durability (API-Database Sync)
 - **Requirement:** In-memory state MUST sync permanently with SQLite database
 - **Why:** API crashes/restarts would lose account state (cash, P&L) without this
