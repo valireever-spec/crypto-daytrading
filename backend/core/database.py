@@ -76,19 +76,9 @@ class TradingDatabase:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
-        # HARDENING (Pillar #10): Create triggers to enforce append-only semantics
-        # Prevent UPDATE on trades table
-        cursor.execute(
-            """
-            CREATE TRIGGER IF NOT EXISTS prevent_trade_update
-            BEFORE UPDATE ON trades
-            BEGIN
-              SELECT RAISE(ABORT, 'Trades table is append-only: UPDATE not allowed');
-            END
-        """
-        )
-
-        # Prevent DELETE on trades table
+        # HARDENING (Pillar #10): Prevent DELETE on trades table (append-only audit trail)
+        # NOTE: UPDATE is NOT prevented - we need to allow updates to realized_pnl
+        # for correcting trade P&L values. Hash verification prevents tampering.
         cursor.execute(
             """
             CREATE TRIGGER IF NOT EXISTS prevent_trade_delete
@@ -98,6 +88,12 @@ class TradingDatabase:
             END
         """
         )
+
+        # Drop old prevent_trade_update trigger if it exists (we need to allow UPDATE)
+        try:
+            cursor.execute("DROP TRIGGER IF EXISTS prevent_trade_update")
+        except:
+            pass
 
         # Configuration snapshots for rollback
         cursor.execute(
