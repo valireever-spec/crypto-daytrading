@@ -1371,9 +1371,9 @@ function validateResponse(response, requiredFields = []) {
         }
 
         async function refreshStrategies() {
+            const stratEl = document.getElementById('strategies-content');
             try {
                 // Show loading state
-                const stratEl = document.getElementById('strategies-content');
                 if (stratEl) stratEl.style.opacity = '0.6';
 
                 // Use fetchWithRetry for resilience + Promise.allSettled for partial failures
@@ -1390,27 +1390,28 @@ function validateResponse(response, requiredFields = []) {
                 const rows = Object.entries(stats.strategies || {}).map(([name, s]) => `
                     <tr>
                         <td class="symbol">${name}</td>
-                        <td>${s.total_trades}</td>
-                        <td>${s.winning_trades}</td>
-                        <td>${s.losing_trades}</td>
-                        <td class="${s.win_rate_pct > 50 ? 'positive' : 'negative'}">${s.win_rate_pct.toFixed(1)}%</td>
-                        <td class="${s.total_pnl > 0 ? 'positive' : 'negative'}">${fmt(s.total_pnl)}</td>
-                        <td class="${s.expectancy > 0 ? 'positive' : 'negative'}">${fmt(s.expectancy)}</td>
-                        <td>${s.profit_factor.toFixed(2)}</td>
+                        <td>${s.total_trades || 0}</td>
+                        <td>${s.winning_trades || 0}</td>
+                        <td>${s.losing_trades || 0}</td>
+                        <td class="${(s.win_rate_pct || 0) > 50 ? 'positive' : 'negative'}">${(s.win_rate_pct || 0).toFixed(1)}%</td>
+                        <td class="${(s.total_pnl || 0) > 0 ? 'positive' : 'negative'}">${fmt(s.total_pnl || 0)}</td>
+                        <td class="${(s.expectancy || 0) > 0 ? 'positive' : 'negative'}">${fmt(s.expectancy || 0)}</td>
+                        <td>${(s.profit_factor || 1).toFixed(2)}</td>
                     </tr>
                 `);
                 tbody.innerHTML = rows.length > 0 ? rows.join('') : '<tr><td colspan="8" class="empty">No strategy data yet</td></tr>';
 
                 const allocBody = document.getElementById('allocation-table');
+                const allocPct = alloc.allocation ? (alloc.allocation.crypto && alloc.allocation.crypto.pct) || 0 : 0;
                 const allocRows = [
-                    ['Momentum', alloc.momentum],
-                    ['Reversion', alloc.reversion],
-                    ['Grid', alloc.grid]
+                    ['Momentum', Math.round(allocPct / 3) || 0],
+                    ['Reversion', Math.round(allocPct / 3) || 0],
+                    ['Grid', Math.round(allocPct / 3) || 0]
                 ].map(([name, pct]) => `
                     <tr>
                         <td class="symbol">${name}</td>
                         <td>${pct}%</td>
-                        <td><span class="positive">Active</span></td>
+                        <td><span class="${pct > 0 ? 'positive' : 'empty'}">Active</span></td>
                     </tr>
                 `);
                 allocBody.innerHTML = allocRows.join('');

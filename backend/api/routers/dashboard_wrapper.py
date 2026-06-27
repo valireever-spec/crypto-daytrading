@@ -93,7 +93,8 @@ async def get_strategies_stats():
                         "losing_trades": 0,
                         "win_rate_pct": 0.0,
                         "total_pnl": 0.0,
-                        "expectancy": 0.0
+                        "expectancy": 0.0,
+                        "profit_factor": 1.0
                     },
                     "mean_reversion": {
                         "total_trades": 0,
@@ -101,7 +102,8 @@ async def get_strategies_stats():
                         "losing_trades": 0,
                         "win_rate_pct": 0.0,
                         "total_pnl": 0.0,
-                        "expectancy": 0.0
+                        "expectancy": 0.0,
+                        "profit_factor": 1.0
                     },
                     "grid": {
                         "total_trades": 0,
@@ -109,7 +111,8 @@ async def get_strategies_stats():
                         "losing_trades": 0,
                         "win_rate_pct": 0.0,
                         "total_pnl": 0.0,
-                        "expectancy": 0.0
+                        "expectancy": 0.0,
+                        "profit_factor": 1.0
                     }
                 },
                 "summary": {
@@ -125,6 +128,8 @@ async def get_strategies_stats():
             if strategy_name not in strategies:
                 strategies[strategy_name] = {
                     'trades': [],
+                    'winning_pnl': 0.0,
+                    'losing_pnl': 0.0,
                     'winning': 0,
                     'losing': 0
                 }
@@ -133,8 +138,10 @@ async def get_strategies_stats():
             pnl = trade.get('realized_pnl', 0)
             if pnl > 0:
                 strategies[strategy_name]['winning'] += 1
+                strategies[strategy_name]['winning_pnl'] += pnl
             elif pnl < 0:
                 strategies[strategy_name]['losing'] += 1
+                strategies[strategy_name]['losing_pnl'] += abs(pnl)
 
         # Format response
         formatted = {}
@@ -147,13 +154,19 @@ async def get_strategies_stats():
             win_rate = (winning / total * 100) if total > 0 else 0
             expectancy = total_pnl / total if total > 0 else 0
 
+            # Profit factor = gross profit / gross loss
+            gross_profit = data['winning_pnl']
+            gross_loss = data['losing_pnl']
+            profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (1.0 if gross_profit == 0 else float('inf'))
+
             formatted[strat_name] = {
                 'total_trades': total,
                 'winning_trades': winning,
                 'losing_trades': losing,
                 'win_rate_pct': win_rate,
                 'total_pnl': total_pnl,
-                'expectancy': expectancy
+                'expectancy': expectancy,
+                'profit_factor': profit_factor
             }
             total_winning += winning
 
