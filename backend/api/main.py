@@ -207,8 +207,8 @@ async def get_paper_trades(limit: int = 100) -> JSONResponse:
 
 
 @app.post("/api/paper/reset")
-async def reset_paper_trading() -> JSONResponse:
-    """Reset paper trading (DANGEROUS - for testing only)."""
+async def reset_paper_trading(capital: float = None) -> JSONResponse:
+    """Reset paper trading with optional custom capital (DANGEROUS - for testing only)."""
     try:
         from backend.exchange.paper_trading import get_paper_trading
 
@@ -216,9 +216,16 @@ async def reset_paper_trading() -> JSONResponse:
         if not engine:
             raise HTTPException(status_code=503, detail="Paper trading engine not initialized")
 
-        engine.reset()
-        logger.warning("⚠️ Paper trading reset by API call")
-        return JSONResponse({"status": "reset", "account": engine.get_account_state()})
+        if capital and capital > 0:
+            engine.starting_capital = capital
+            engine.cash = capital
+            logger.warning(f"⚠️ Paper trading capital set to: €{capital:.2f}")
+        else:
+            engine.reset()
+            logger.warning("⚠️ Paper trading reset by API call")
+            capital = engine.starting_capital
+
+        return JSONResponse({"status": "reset", "capital": capital, "account": engine.get_account_state()})
     except Exception as e:
         logger.error(f"Error resetting paper trading: {e}")
         raise HTTPException(status_code=500, detail=str(e))
