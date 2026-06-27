@@ -299,6 +299,7 @@ class PaperTradingEngine:
                     slippage_pct=(
                         abs(fill_price - current_price) / current_price * 100
                     ),
+                    realized_pnl=realized_pnl,
                 )
                 # CRITICAL: Persist account state after each trade for crash recovery
                 db.save_account_state(
@@ -573,7 +574,7 @@ class PaperTradingEngine:
                         quantity=db_trade['quantity'],
                         price=db_trade['price'],
                         fee=db_trade.get('fee', 0.0),
-                        realized_pnl=0.0,  # Can be recalculated if needed
+                        realized_pnl=db_trade.get('realized_pnl', 0.0),
                         order_id=db_trade['order_id'],
                         mode='PAPER',
                         status=db_trade.get('status', 'FILLED')

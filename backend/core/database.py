@@ -63,11 +63,18 @@ class TradingDatabase:
                 order_id TEXT UNIQUE,
                 status TEXT DEFAULT 'FILLED',
                 slippage_pct REAL,
+                realized_pnl REAL DEFAULT 0.0,
                 hash TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """
         )
+
+        # Migration: Add realized_pnl column if it doesn't exist (for existing databases)
+        try:
+            cursor.execute("ALTER TABLE trades ADD COLUMN realized_pnl REAL DEFAULT 0.0")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
         # HARDENING (Pillar #10): Create triggers to enforce append-only semantics
         # Prevent UPDATE on trades table
@@ -455,6 +462,7 @@ class TradingDatabase:
         trade_time: datetime,
         order_id: Optional[str] = None,
         slippage_pct: Optional[float] = None,
+        realized_pnl: float = 0.0,
     ) -> int:
         """Log executed trade to audit trail (anti-poisoning validated).
 
@@ -466,6 +474,7 @@ class TradingDatabase:
             trade_time: Fill timestamp
             order_id: Optional order ID for deduplication
             slippage_pct: Slippage percentage
+            realized_pnl: Realized P&L from this trade (for SELL orders)
 
         Returns:
             Trade ID (rowid)
@@ -508,8 +517,8 @@ class TradingDatabase:
 
             cursor.execute(
                 """
-                INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, status, hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'FILLED', ?)
+                INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, realized_pnl, status, hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'FILLED', ?)
                 """,
                 (
                     symbol,
@@ -519,6 +528,7 @@ class TradingDatabase:
                     trade_time.isoformat(),
                     order_id,
                     slippage_pct,
+                    realized_pnl,
                     trade_hash,
                 ),
             )
@@ -556,7 +566,7 @@ class TradingDatabase:
 
         cursor.execute(
             """
-            SELECT id, symbol, side, quantity, price, trade_time, slippage_pct, order_id, status
+            SELECT id, symbol, side, quantity, price, trade_time, slippage_pct, realized_pnl, order_id, status
             FROM trades
             WHERE DATE(trade_time) = DATE('now')
             ORDER BY trade_time ASC
