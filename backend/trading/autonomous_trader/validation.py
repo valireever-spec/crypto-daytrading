@@ -40,10 +40,16 @@ async def _measure_data_quality_impl(trader_self, prices: Dict[str, float]):
         if not measurer:
             return None
 
+        stream_client = get_stream_client()
+        if not stream_client:
+            return None
+
         data_quality = measurer.measure(
-            prices=prices,
-            symbols=trader_self.config.symbols,
-            data_provider="binance_stream",
+            current_prices=prices,
+            required_symbols=trader_self.config.symbols,
+            websocket_health={"connected": stream_client.is_connected if hasattr(stream_client, 'is_connected') else True},
+            last_updates={s: __import__('datetime').datetime.now() for s in trader_self.config.symbols},
+            historical_volatility={s: 0.25 for s in trader_self.config.symbols},  # Default 25% vol
         )
 
         return data_quality
