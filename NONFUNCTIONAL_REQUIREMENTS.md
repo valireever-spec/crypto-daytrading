@@ -240,6 +240,29 @@
 
 ---
 
+### NFR-017A: Implementation Testing (No Claims Without Tests)
+- **Requirement:** EVERY code change must have passing tests BEFORE claiming success
+- **Why:** Prevents false claims (e.g., "realized_pnl is persisted" when it wasn't)
+- **Rule:** If you can't show a test that verifies it, it's NOT implemented
+- **Scope:**
+  - New feature → unit test + integration test
+  - Bug fix → test that reproduces bug, then test that fix works
+  - Refactor → all existing tests must pass
+  - Data change → verify before + after state in database
+- **Verification Checklist Before Claiming "Done":**
+  - [ ] Write test case that would fail without this change
+  - [ ] Implement the change
+  - [ ] Run test: VERIFY IT PASSES
+  - [ ] If on HA system: test on PRIMARY
+  - [ ] If on HA system: test on BACKUP (restart if needed)
+  - [ ] If database involved: dump schema and verify data actually persisted
+  - [ ] Screenshot or output showing test passing
+  - [ ] NO claims of "implementation complete" without test proof
+- **Test:** Every commit must have associated tests in CI/CD
+- **Acceptance:** Zero "false positives" (claimed features that don't work)
+
+---
+
 ### NFR-018: Test Coverage
 - **Requirement:** ≥85% test coverage for critical paths
 - **Critical paths:**
