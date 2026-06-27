@@ -1,15 +1,22 @@
 {
-  "entry_threshold": 60.0,
-  "exit_profit_target": 0.03,
-  "exit_stop_loss": 0.02,
-  "position_size_pct": 0.1,
+  "entry_threshold": 40.0,
+  "exit_profit_target": 0.015,
+  "exit_stop_loss": 0.01,
+  "position_size_pct": 2.0,
   "max_positions": 5,
   "max_daily_loss_pct": 5.0,
-  "symbols": [],
-  "enabled": false,
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT",
+    "EQ_AAPL",
+    "EQ_MSFT",
+    "EQ_TSLA"
+  ],
+  "enabled": true,
   "loop_sleep_seconds": 10.0,
   "quality_gate_entry": 90.0,
   "quality_gate_exit": 60.0,
-  "_last_updated": "2026-06-27T17:30:49.213993Z",
+  "_last_updated": "2026-06-27T20:13:37.862799Z",
   "_source": "api_update"
 }
