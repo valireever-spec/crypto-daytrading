@@ -90,6 +90,38 @@
 
 ---
 
+### NFR-010: Database Durability (API-Database Sync)
+- **Requirement:** In-memory state MUST sync permanently with SQLite database
+- **Why:** API crashes/restarts would lose account state (cash, P&L) without this
+- **Scope:**
+  - Every trade execution → write to `trades` table ✅
+  - Every trade execution → update `account_state` row (cash, total_pnl, daily_pnl) ✅
+  - Every position change → persist to database ✅
+  - On API startup → restore state from database ✅
+- **Implementation:**
+  - `db.insert_trade()` called after order fills
+  - `db.save_account_state()` called immediately after `insert_trade()`
+  - `_restore_trades_from_db()` called on engine init
+  - `_restore_account_state_from_db()` called on engine init
+- **Measurement:** 
+  - Before: Execute 10 trades, kill API, restart → state lost
+  - After: Execute 10 trades, kill API, restart → state recovered exactly
+- **Test:** 
+  1. Execute trade (BUY BTCUSDT, €5,000 cost)
+  2. Verify in-memory: €4,790 cash (€10,000 - €5,000 - fee)
+  3. Kill API process
+  4. Restart API
+  5. Verify restored state: €4,790 cash, 1 trade in history
+  6. Execute SELL order
+  7. Repeat 5 times with different trades
+- **Acceptance:** 
+  - ✅ Cash survives restart (within €0.01)
+  - ✅ P&L survives restart (within €0.01)
+  - ✅ Trade count survives restart (must match)
+  - ✅ Trade details match database exactly
+
+---
+
 ## Security Requirements
 
 ### NFR-010: API Key Protection
