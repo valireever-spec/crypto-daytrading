@@ -286,10 +286,10 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
             return JSONResponse(status_code=400, content={"error": "State required"})
 
         from backend.exchange.paper_trading import get_paper_trading
-        from backend.core.database import Database
+        from backend.core.database import get_database
 
         engine = get_paper_trading()
-        db = Database()
+        db = get_database()
 
         # Apply state: cash, positions, config
         if "cash" in state:
@@ -300,14 +300,14 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
 
         # Sync positions
         if "positions" in state:
-            db.conn.execute("DELETE FROM open_positions")
+            db.clear_all_positions()
             for pos in state["positions"]:
-                db.conn.execute(
-                    "INSERT INTO open_positions VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (pos["id"], pos["symbol"], pos["entry_price"],
-                     pos["quantity"], pos["entry_time"], pos["status"], pos.get("metadata", "{}"))
+                db.insert_position(
+                    symbol=pos["symbol"],
+                    quantity=pos["quantity"],
+                    entry_price=pos["entry_price"],
+                    entry_time=pos["entry_time"]
                 )
-            db.conn.commit()
 
         logger.info(f"✅ BACKUP synced: cash={state.get('cash')}, positions={len(state.get('positions', []))}")
         return JSONResponse({"status": "synced", "timestamp": datetime.now().isoformat()})
