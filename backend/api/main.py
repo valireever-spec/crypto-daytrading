@@ -271,6 +271,62 @@ async def get_current_metrics() -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/ha/heartbeat")
+async def receive_heartbeat(data: dict = None) -> JSONResponse:
+    """BACKUP: Receive heartbeat from PRIMARY.
+
+    Heartbeat proves PRIMARY is alive and tunnel is healthy.
+    Used for explicit failover detection (not just HTTP checks).
+    """
+    try:
+        machine_id = os.getenv("MACHINE_ID", "main")
+        if machine_id != "backup":
+            return JSONResponse(
+                status_code=403,
+                content={"error": "This endpoint is for BACKUP only"}
+            )
+
+        if not data:
+            return JSONResponse(status_code=400, content={"error": "Heartbeat data required"})
+
+        # Get heartbeat monitor from global state
+        from backend.core.heartbeat import get_heartbeat_monitor
+        monitor = get_heartbeat_monitor()
+        if monitor:
+            monitor.on_heartbeat_received(data)
+
+        return JSONResponse({
+            "status": "received",
+            "timestamp": datetime.now().isoformat(),
+            "message": "Heartbeat recorded"
+        })
+
+    except Exception as e:
+        logger.error(f"Heartbeat receive error: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/ha/heartbeat-status")
+async def get_heartbeat_status() -> JSONResponse:
+    """Get heartbeat monitor status (BACKUP only)."""
+    try:
+        machine_id = os.getenv("MACHINE_ID", "main")
+        from backend.core.heartbeat import get_heartbeat_monitor, get_heartbeat_sender
+
+        if machine_id == "backup":
+            # BACKUP: show monitor status
+            monitor = get_heartbeat_monitor()
+            return JSONResponse(monitor.get_status() if monitor else {"status": "not_initialized"})
+        else:
+            # PRIMARY: show sender status
+            sender = get_heartbeat_sender()
+            return JSONResponse(sender.get_status() if sender else {"status": "not_initialized"})
+
+    except Exception as e:
+        logger.error(f"Heartbeat status error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.post("/api/ha/sync-from-primary")
 async def sync_state_from_primary(state: dict = None) -> JSONResponse:
     """BACKUP: Receive state sync from PRIMARY."""
@@ -328,14 +384,14 @@ async def get_ha_status() -> JSONResponse:
 
         engine = get_paper_trading()
 
-        # Check if PRIMARY is reachable
+        # Check if PRIMARY is reachable (fast check, fail quickly)
         primary_healthy = False
         try:
             import httpx
-            resp = httpx.get(f"{primary_url}/api/health", timeout=2)
+            resp = httpx.get(f"{primary_url}/api/health", timeout=0.5)
             primary_healthy = resp.status_code == 200
         except:
-            pass
+            primary_healthy = False
 
         return JSONResponse({
             "machine_id": machine_id,

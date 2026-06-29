@@ -4,8 +4,20 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+
+# Load .env file if it exists (python-dotenv alternative)
+env_file = Path.cwd() / ".env"
+if env_file.exists():
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                key, _, value = line.partition("=")
+                if key and key not in os.environ:
+                    os.environ[key] = value.strip('"').strip("'")
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +28,14 @@ simulator_task = None
 autonomous_trader_task = None
 sync_task = None
 failover_task = None
+heartbeat_task = None
 ws = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
-    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task, ws
+    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task, heartbeat_task, ws
 
     logger.info("Starting crypto daytrading platform...")
 
@@ -119,19 +132,26 @@ async def lifespan(app: FastAPI):
                 logger.debug(f"BACKUP sync error (will retry): {e}")
 
     async def failover_monitor():
-        """BACKUP: Monitor PRIMARY health, enable trading on failure."""
+        """BACKUP: Monitor PRIMARY health via heartbeat + HTTP, enable trading on failure."""
         import httpx
         from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
+        from backend.core.heartbeat import init_heartbeat_monitor, get_heartbeat_monitor
 
         primary_url = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
-        primary_failed = False
         trader = None
+
+        # Initialize heartbeat monitor (5s checks, 3 misses = 15s timeout)
+        monitor = init_heartbeat_monitor(check_interval=5, failure_threshold=3)
+        logger.info("💓 BACKUP heartbeat monitor initialized (3 misses = 15s timeout)")
 
         while True:
             try:
-                await asyncio.sleep(10)  # Check every 10 seconds
+                await asyncio.sleep(5)  # Check every 5 seconds (matches heartbeat interval)
 
-                # Check if PRIMARY is healthy
+                # Check heartbeat timeout (PRIMARY sends heartbeat every 5s)
+                primary_failed = monitor.check_timeout()
+
+                # Fallback: Check HTTP health (in case heartbeat isn't implemented yet)
                 try:
                     async with httpx.AsyncClient(timeout=2) as client:
                         resp = await client.get(f"{primary_url}/api/health")
@@ -139,20 +159,23 @@ async def lifespan(app: FastAPI):
                 except:
                     primary_healthy = False
 
-                if not primary_healthy and not primary_failed:
-                    # PRIMARY just failed, enable trading on BACKUP
-                    logger.critical("🚨 PRIMARY FAILURE DETECTED - Enabling BACKUP trading")
+                # Trigger failover if PRIMARY failed (either heartbeat or HTTP check)
+                if (primary_failed or not primary_healthy) and not (trader and trader.running):
+                    logger.critical(
+                        "🚨 PRIMARY FAILURE DETECTED - "
+                        f"Heartbeat: {primary_failed}, HTTP: {not primary_healthy} - "
+                        "Enabling BACKUP trading"
+                    )
                     try:
                         trader = init_autonomous_trader()
                         global autonomous_trader_task
                         autonomous_trader_task = asyncio.create_task(trader.start())
                         logger.info("✅ BACKUP autonomous trader ACTIVATED")
-                        primary_failed = True
                     except Exception as e:
                         logger.error(f"Failed to activate BACKUP trader: {e}")
 
-                elif primary_healthy and primary_failed:
-                    # PRIMARY recovered, disable trading on BACKUP
+                # Disable trading if PRIMARY recovered (both heartbeat and HTTP healthy)
+                elif primary_healthy and (trader and trader.running):
                     logger.info("✅ PRIMARY RECOVERED - Disabling BACKUP trading")
                     try:
                         if trader:
@@ -160,21 +183,32 @@ async def lifespan(app: FastAPI):
                         if autonomous_trader_task:
                             autonomous_trader_task.cancel()
                         logger.info("BACKUP autonomous trader DEACTIVATED")
-                        primary_failed = False
                     except Exception as e:
                         logger.error(f"Failed to deactivate BACKUP trader: {e}")
 
             except Exception as e:
                 logger.error(f"Failover monitor error: {e}")
 
+    # Heartbeat sender (PRIMARY) and heartbeat monitor (BACKUP)
+    async def heartbeat_sender():
+        """PRIMARY: Send heartbeat to BACKUP every 5 seconds."""
+        from backend.core.heartbeat import init_heartbeat_sender
+
+        backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
+        sender = init_heartbeat_sender(backup_url, interval=5)
+        await sender.start()
+
     if machine_id == "main":
-        global sync_task
+        global sync_task, heartbeat_task
         sync_task = asyncio.create_task(sync_to_backup())
         logger.info("📤 PRIMARY sync task started (→ BACKUP every 5s)")
+
+        heartbeat_task = asyncio.create_task(heartbeat_sender())
+        logger.info(f"💓 PRIMARY heartbeat sender started (→ {os.getenv('BACKUP_API_URL', 'http://192.168.3.25:8002')} every 5s)")
     else:
         global failover_task
         failover_task = asyncio.create_task(failover_monitor())
-        logger.info("📡 BACKUP failover monitor started (check every 10s)")
+        logger.info("📡 BACKUP failover monitor started (check every 5s with heartbeat detection)")
 
     # Startup complete
     logger.info("✅ Crypto daytrading platform started successfully")
@@ -207,6 +241,9 @@ async def lifespan(app: FastAPI):
 
     if failover_task:
         failover_task.cancel()
+
+    if heartbeat_task:
+        heartbeat_task.cancel()
 
     logger.info("✅ Crypto daytrading platform shut down complete")
 
