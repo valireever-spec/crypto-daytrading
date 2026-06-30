@@ -436,6 +436,36 @@ async def get_ha_status() -> JSONResponse:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.get("/api/ha/split-brain-status")
+async def get_split_brain_status() -> JSONResponse:
+    """Get split-brain detection status (Phase 2 HA Hardening)."""
+    try:
+        from backend.failover.ha_wrapper import get_ha_wrapper
+
+        wrapper = get_ha_wrapper()
+        if not wrapper:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "HA wrapper not initialized"}
+            )
+
+        status = wrapper.split_brain_prevention.get_status()
+        can_trade = wrapper.split_brain_prevention.can_trade()
+
+        return JSONResponse({
+            "status": "ok",
+            "machine_id": status["machine_id"],
+            "current_state": status["current_state"],
+            "is_split_brain": status["is_split_brain"],
+            "can_trade": can_trade,
+            "failover_status": status,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Split-brain status error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 # Mount static files if they exist
 static_path = Path(__file__).parent.parent.parent / "frontend"
 if static_path.exists():
