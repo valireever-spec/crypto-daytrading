@@ -15,12 +15,12 @@
 9. Click "Add New Webhook to Workspace"
 10. Select channel: #trading-alerts (or create one)
 11. Click "Allow"
-12. Copy the webhook URL (looks like: `https://hooks.slack.com/services/[YOUR_WEBHOOK_URL]`)
+12. Copy the webhook URL (format: `https://hooks.slack.com/services/[TEAM_ID]/[BOT_ID]/[TOKEN]`)
 
 ### Step 2: Set Environment Variable
 
 ```bash
-export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/[YOUR_WEBHOOK_URL]"
+export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/[YOUR_TEAM_ID]/[YOUR_BOT_ID]/[YOUR_TOKEN]"
 ```
 
 ### Step 3: Restart Trading System
