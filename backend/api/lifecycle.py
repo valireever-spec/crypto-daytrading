@@ -207,14 +207,30 @@ async def lifespan(app: FastAPI):
                     "positions": open_positions
                 }
 
+                # Try HTTP sync first
+                sync_succeeded = False
                 async with httpx.AsyncClient(timeout=constants.HEALTH_CHECK_TIMEOUT) as client:
-                    resp = await client.post(f"{constants.BACKUP_API_URL}/api/ha/sync-from-primary", json=state)
-                    if resp.status_code == 200:
-                        logger.debug(f"✅ Synced to BACKUP: {len(state['positions'])} positions, €{state['cash']:.2f} cash")
+                    try:
+                        resp = await client.post(f"{constants.BACKUP_API_URL}/api/ha/sync-from-primary", json=state)
+                        if resp.status_code == 200:
+                            logger.debug(f"✅ Synced to BACKUP (HTTP): {len(state['positions'])} positions, €{state['cash']:.2f} cash")
+                            sync_succeeded = True
+                            consecutive_failures = 0
+                    except Exception as http_err:
+                        logger.debug(f"HTTP sync failed: {http_err}")
+
+                # Fallback to SSH tunnel if HTTP failed
+                if not sync_succeeded and backup_healthy:
+                    logger.info("🌐 Attempting SSH tunnel fallback sync...")
+                    from backend.core.ssh_tunnel_sync import SSHTunnelSync
+                    ssh_sync = SSHTunnelSync()
+                    if await ssh_sync.sync_via_ssh_tunnel(state):
+                        logger.info(f"✅ Synced to BACKUP (SSH tunnel): {len(state['positions'])} positions, €{state['cash']:.2f} cash")
+                        sync_succeeded = True
                         consecutive_failures = 0
                     else:
                         consecutive_failures += 1
-                        logger.warning(f"⚠️  BACKUP sync POST failed: {resp.status_code}")
+                        logger.warning(f"⚠️ Both HTTP and SSH sync failed")
 
             except Exception as e:
                 consecutive_failures += 1

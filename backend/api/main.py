@@ -483,6 +483,116 @@ async def get_ha_status() -> JSONResponse:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.post("/api/ha/sync-from-backup")
+async def sync_state_from_backup(state: dict = None) -> JSONResponse:
+    """PRIMARY: Receive state sync from BACKUP after PRIMARY recovery (Phase 2 Component 3).
+
+    Used when PRIMARY comes back online to get latest state from BACKUP.
+    Merges BACKUP state with PRIMARY's recovered state.
+    """
+    try:
+        machine_id = os.getenv("MACHINE_ID", "main")
+        if machine_id != "main":
+            return JSONResponse(
+                status_code=403,
+                content={"error": "This endpoint is for PRIMARY only"}
+            )
+
+        if not state:
+            return JSONResponse(status_code=400, content={"error": "State required"})
+
+        from backend.exchange.paper_trading import get_paper_trading
+        from backend.core.database import get_database
+
+        engine = get_paper_trading()
+        db = get_database()
+
+        # Strategy: If PRIMARY recovered with stale state, use BACKUP's state
+        # (BACKUP was actively trading while PRIMARY was down)
+        logger.info(f"📥 PRIMARY receiving state sync from BACKUP recovery...")
+
+        # Merge strategy: BACKUP state overrides PRIMARY's stale state
+        if "cash" in state:
+            logger.info(f"  Cash: {engine.cash:.2f} → {state['cash']:.2f}")
+            engine.cash = state["cash"]
+
+        if "total_pnl" in state:
+            logger.info(f"  P&L: {engine.total_pnl:.2f} → {state['total_pnl']:.2f}")
+            engine.total_pnl = state["total_pnl"]
+
+        # Sync positions from BACKUP
+        if "positions" in state:
+            synced_count = 0
+            try:
+                conn = None
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect(db.db_path)
+                    conn.execute("BEGIN TRANSACTION")
+                    conn.execute("DELETE FROM open_positions WHERE status = 'OPEN'")
+
+                    for pos in state["positions"]:
+                        entry_time_str = pos.get("entry_time")
+                        if isinstance(entry_time_str, str):
+                            entry_time = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                        else:
+                            entry_time = entry_time_str or datetime.utcnow()
+
+                        db.insert_position(
+                            symbol=pos["symbol"],
+                            quantity=pos["quantity"],
+                            entry_price=pos["entry_price"],
+                            entry_time=entry_time
+                        )
+                        synced_count += 1
+
+                    conn.commit()
+                    logger.info(f"  Positions: 0 → {synced_count} (from BACKUP)")
+
+                except Exception as tx_err:
+                    if conn:
+                        conn.rollback()
+                    logger.error(f"Position sync from BACKUP rolled back: {tx_err}")
+                    raise tx_err
+                finally:
+                    if conn:
+                        conn.close()
+
+                # Update in-memory cache
+                engine.positions.clear()
+                from backend.exchange.paper_trading import Position
+                for pos in state["positions"]:
+                    entry_time_str = pos.get("entry_time")
+                    if isinstance(entry_time_str, str):
+                        entry_time = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                    else:
+                        entry_time = entry_time_str or datetime.utcnow()
+
+                    engine.positions[pos["symbol"]] = Position(
+                        symbol=pos["symbol"],
+                        side="LONG",
+                        quantity=pos["quantity"],
+                        entry_price=pos["entry_price"],
+                        entry_time=entry_time,
+                        current_price=pos.get("current_price", pos["entry_price"])
+                    )
+
+            except Exception as pos_err:
+                logger.error(f"Failed to sync positions from BACKUP: {pos_err}")
+                return JSONResponse(status_code=500, content={"error": str(pos_err)})
+
+        logger.info(f"✅ PRIMARY recovered and merged BACKUP state: cash={state.get('cash'):.2f}, positions={len(state.get('positions', []))}")
+        return JSONResponse({
+            "status": "merged",
+            "message": "PRIMARY merged BACKUP state after recovery",
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Sync from BACKUP error: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.get("/api/ha/split-brain-status")
 async def get_split_brain_status() -> JSONResponse:
     """Get split-brain detection status (Phase 2 HA Hardening)."""
