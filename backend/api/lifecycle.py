@@ -154,9 +154,12 @@ async def lifespan(app: FastAPI):
     # Add sync task for PRIMARY or failover monitor for BACKUP
 
     async def sync_to_backup():
-        """PRIMARY: Periodically sync state to BACKUP."""
+        """PRIMARY: Periodically sync state to BACKUP with health monitoring."""
         import httpx
         from backend.exchange.paper_trading import get_paper_trading
+
+        consecutive_failures = 0
+        backup_last_healthy = False
 
         while True:
             try:
@@ -165,20 +168,62 @@ async def lifespan(app: FastAPI):
                 if not engine:
                     continue
 
+                # Step 1: Check BACKUP health first
+                backup_healthy = False
+                try:
+                    async with httpx.AsyncClient(timeout=constants.HEALTH_CHECK_TIMEOUT) as client:
+                        health_resp = await client.get(f"{constants.BACKUP_API_URL}/api/health")
+                        backup_healthy = health_resp.status_code == 200
+                except Exception as health_err:
+                    backup_healthy = False
+
+                # Log health status change at INFO level for visibility
+                if backup_healthy != backup_last_healthy:
+                    if backup_healthy:
+                        logger.info(f"✅ BACKUP health restored - sync resuming")
+                        consecutive_failures = 0
+                    else:
+                        logger.warning(f"⚠️  BACKUP unhealthy (connection failed)")
+                    backup_last_healthy = backup_healthy
+
+                if not backup_healthy:
+                    consecutive_failures += 1
+                    if consecutive_failures % 6 == 0:  # Log every 30 seconds at default 5s interval
+                        logger.warning(f"🔴 BACKUP unhealthy for {consecutive_failures * constants.STATE_SYNC_INTERVAL}s - systemd may have crashed")
+                    continue
+
+                # Step 2: Sync state only if BACKUP is healthy
+                try:
+                    positions = engine.get_positions()
+                    open_positions = [
+                        p for p in positions
+                        if isinstance(p, dict) and p.get("status") == "open"
+                    ]
+                except Exception as pos_err:
+                    logger.debug(f"Failed to filter positions: {pos_err}")
+                    open_positions = []
+
                 state = {
                     "cash": engine.cash,
                     "total_pnl": engine.total_pnl,
-                    "positions": [p for p in engine.get_positions() if p["status"] == "open"]
+                    "positions": open_positions
                 }
 
                 async with httpx.AsyncClient(timeout=constants.HEALTH_CHECK_TIMEOUT) as client:
                     resp = await client.post(f"{constants.BACKUP_API_URL}/api/ha/sync-from-primary", json=state)
                     if resp.status_code == 200:
                         logger.debug(f"✅ Synced to BACKUP: {len(state['positions'])} positions, €{state['cash']:.2f} cash")
+                        consecutive_failures = 0
                     else:
-                        logger.warning(f"⚠️  BACKUP sync failed: {resp.status_code}")
+                        consecutive_failures += 1
+                        logger.warning(f"⚠️  BACKUP sync POST failed: {resp.status_code}")
+
             except Exception as e:
-                logger.debug(f"BACKUP sync error (will retry): {e}")
+                consecutive_failures += 1
+                if consecutive_failures == 1:
+                    logger.warning(f"⚠️  BACKUP sync error: {e}")
+                elif consecutive_failures % 10 == 0:
+                    logger.warning(f"🔴 BACKUP sync error recurring ({consecutive_failures} failures): {e}")
 
     async def failover_monitor():
         """BACKUP: Monitor PRIMARY health via heartbeat + HTTP, enable trading on failure."""
