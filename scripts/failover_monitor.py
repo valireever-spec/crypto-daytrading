@@ -51,16 +51,35 @@ class FailoverMonitor:
         logger.critical("🚨 FAILOVER TRIGGERED - Primary is down!")
 
         try:
-            # Restart backup trader (promotes to active mode)
-            subprocess.run(
-                ["sudo", "systemctl", "restart", "backup-trader"],
-                check=True,
-                timeout=30
-            )
+            # Method 1: Try systemd service (if configured)
+            try:
+                subprocess.run(
+                    ["sudo", "systemctl", "restart", "backup-trader"],
+                    check=True,
+                    timeout=30
+                )
+                self.is_failed_over = True
+                logger.critical("✅ Backup trader activated via systemd")
+                return
+            except Exception as e:
+                logger.warning(f"Systemd activation failed: {e}")
+
+            # Method 2: Activate via SSH to remote backup machine
+            logger.info("Attempting SSH activation of backup trader...")
+            ssh_cmd = [
+                "ssh",
+                "-i", "/home/vali/.ssh/openhab_claude",
+                "-p", "2347",
+                "claude@192.168.3.25",
+                "cd /home/claude/crypto-daytrading && "
+                "/home/claude/venv/bin/python -m uvicorn backend.api.main:app "
+                "--host 0.0.0.0 --port 8002 > /tmp/backup-trader.log 2>&1 &"
+            ]
+            subprocess.run(ssh_cmd, check=True, timeout=30)
             self.is_failed_over = True
-            logger.critical("✅ Backup trader is now ACTIVE")
+            logger.critical("✅ Backup trader activated via SSH (192.168.3.25:8002)")
         except Exception as e:
-            logger.error(f"Failover activation failed: {e}")
+            logger.error(f"Failover activation failed (both methods): {e}")
 
     def run(self):
         """Main monitoring loop."""
