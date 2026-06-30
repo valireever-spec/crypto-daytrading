@@ -47,6 +47,9 @@ from backend.api.routers.portfolio import router as portfolio_router
 from backend.api.routers.redundancy import router as redundancy_router
 from backend.api.routers.ha_postgres import router as ha_postgres_router
 from backend.api.routers.dashboard_wrapper import router as dashboard_wrapper_router
+from backend.api.routers.trading_control import router as trading_control_router
+from backend.api.routers.dashboard_integration import router as dashboard_integration_router
+from backend.api.routers.allocation_management import router as allocation_management_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -113,6 +116,9 @@ routers = [
     redundancy_router,
     ha_postgres_router,
     dashboard_wrapper_router,
+    trading_control_router,
+    dashboard_integration_router,
+    allocation_management_router,
 ]
 
 for router in routers:

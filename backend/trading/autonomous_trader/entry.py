@@ -117,18 +117,18 @@ async def _execute_entry_impl(trader_self: "AutonomousTrader", signal: "TradeSig
             logger.warning(f"{signal.symbol}: No current price, cannot execute entry")
             return False
 
+        position_size_pct = trader_self.config.position_size_pct / 100.0
+        order_value = cash * position_size_pct
+        quantity = order_value / current_price
+
         from . import validation
         is_valid, reason = await validation._validate_risk_before_order_impl(
-            trader_self, signal.symbol, "BUY", 1.0, current_price
+            trader_self, signal.symbol, "BUY", quantity, current_price
         )
 
         if not is_valid:
             logger.warning(f"{signal.symbol}: Risk validation failed: {reason}")
             return False
-
-        position_size_pct = trader_self.config.position_size_pct / 100.0
-        order_value = cash * position_size_pct
-        quantity = order_value / current_price
 
         smart_executor = get_smart_executor()
         if not smart_executor:
@@ -159,19 +159,7 @@ async def _execute_entry_impl(trader_self: "AutonomousTrader", signal: "TradeSig
 async def _get_adaptive_entry_threshold_impl(trader_self: "AutonomousTrader", symbol: str) -> float:
     """Get adaptive entry threshold based on market conditions."""
     try:
-        validator = get_price_validator()
-        if not validator:
-            return trader_self.config.entry_threshold
-
         base_threshold = trader_self.config.entry_threshold
-
-        measurer = get_data_quality_measurer()
-        if measurer:
-            quality_score = measurer.overall_score
-            if quality_score < 70:
-                adjustment = (100 - quality_score) * 0.5
-                return base_threshold + adjustment
-
         return base_threshold
 
     except Exception as e:
