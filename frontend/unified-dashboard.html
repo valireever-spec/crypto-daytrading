@@ -1179,9 +1179,10 @@ function validateResponse(response, requiredFields = []) {
 
     <script>
         // Use dynamic base URL to support any host/IP
-        // API is on port 8001, dashboard may be on different port
+        // API is on the same host/port as dashboard
         const API_HOST = window.location.hostname;
-        const API = `${window.location.protocol}//${API_HOST}:8001/api`;
+        const API_PORT = window.location.port || (window.location.protocol === 'https:' ? 443 : 80);
+        const API = `${window.location.protocol}//${API_HOST}:${API_PORT}/api`;
         let autoRefreshEnabled = true;
         let autoRefreshInterval = null;
 
