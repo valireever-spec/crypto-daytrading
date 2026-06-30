@@ -195,12 +195,10 @@ async def lifespan(app: FastAPI):
                 # Step 2: Sync state only if BACKUP is healthy
                 try:
                     positions = engine.get_positions()
-                    open_positions = [
-                        p for p in positions
-                        if isinstance(p, dict) and p.get("status") == "open"
-                    ]
+                    # get_positions() already returns only open positions, no filtering needed
+                    open_positions = [p for p in positions if isinstance(p, dict)]
                 except Exception as pos_err:
-                    logger.debug(f"Failed to filter positions: {pos_err}")
+                    logger.debug(f"Failed to get positions: {pos_err}")
                     open_positions = []
 
                 state = {

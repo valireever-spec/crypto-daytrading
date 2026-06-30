@@ -364,12 +364,22 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
         if "positions" in state:
             db.clear_all_positions()
             for pos in state["positions"]:
-                db.insert_position(
-                    symbol=pos["symbol"],
-                    quantity=pos["quantity"],
-                    entry_price=pos["entry_price"],
-                    entry_time=pos["entry_time"]
-                )
+                try:
+                    entry_time_str = pos.get("entry_time")
+                    if isinstance(entry_time_str, str):
+                        # Parse ISO format string to datetime
+                        entry_time = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                    else:
+                        entry_time = entry_time_str or datetime.utcnow()
+
+                    db.insert_position(
+                        symbol=pos["symbol"],
+                        quantity=pos["quantity"],
+                        entry_price=pos["entry_price"],
+                        entry_time=entry_time
+                    )
+                except Exception as pos_err:
+                    logger.warning(f"Failed to sync position {pos.get('symbol')}: {pos_err}")
 
         logger.info(f"✅ BACKUP synced: cash={state.get('cash')}, positions={len(state.get('positions', []))}")
         return JSONResponse({"status": "synced", "timestamp": datetime.now().isoformat()})
