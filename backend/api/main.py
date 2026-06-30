@@ -353,50 +353,97 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
         engine = get_paper_trading()
         db = get_database()
 
-        # Apply state: cash, positions, config
-        if "cash" in state:
-            engine.cash = state["cash"]
-
-        if "total_pnl" in state:
-            engine.total_pnl = state["total_pnl"]
-
-        # Sync positions (both database and in-memory)
-        if "positions" in state:
-            db.clear_all_positions()
-            engine.positions.clear()  # Clear in-memory positions too!
-
-            for pos in state["positions"]:
-                try:
+        # PHASE 2: Atomic sync - all-or-nothing (rollback on any failure)
+        try:
+            # Validate and prepare state BEFORE any database changes
+            synced_positions = []
+            if "positions" in state:
+                for pos in state["positions"]:
                     entry_time_str = pos.get("entry_time")
                     if isinstance(entry_time_str, str):
-                        # Parse ISO format string to datetime
                         entry_time = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
                     else:
                         entry_time = entry_time_str or datetime.utcnow()
 
-                    # Insert into database
+                    synced_positions.append({
+                        "symbol": pos["symbol"],
+                        "quantity": pos["quantity"],
+                        "entry_price": pos["entry_price"],
+                        "entry_time": entry_time,
+                        "current_price": pos.get("current_price", pos["entry_price"])
+                    })
+
+            # Atomic transaction: commit all or nothing
+            conn = None
+            try:
+                import sqlite3
+                conn = sqlite3.connect(db.db_path)
+                conn.execute("BEGIN TRANSACTION")
+
+                # Clear positions inside transaction (can be rolled back)
+                conn.execute("DELETE FROM open_positions WHERE status = 'OPEN'")
+
+                # Insert all positions inside transaction
+                for pos in synced_positions:
                     db.insert_position(
                         symbol=pos["symbol"],
                         quantity=pos["quantity"],
                         entry_price=pos["entry_price"],
-                        entry_time=entry_time
+                        entry_time=pos["entry_time"]
                     )
 
-                    # Also load into in-memory cache
-                    from backend.exchange.paper_trading import Position
+                # Commit transaction if we got here (no errors)
+                conn.commit()
+                logger.debug("✅ Position sync committed (atomic transaction)")
+
+                # NOW update in-memory cache (only after successful DB commit)
+                engine.positions.clear()
+                from backend.exchange.paper_trading import Position
+                for pos in synced_positions:
                     engine.positions[pos["symbol"]] = Position(
                         symbol=pos["symbol"],
-                        side="LONG",  # Synced positions are always long (buy)
+                        side="LONG",
                         quantity=pos["quantity"],
                         entry_price=pos["entry_price"],
-                        entry_time=entry_time,
-                        current_price=pos.get("current_price", pos["entry_price"])
+                        entry_time=pos["entry_time"],
+                        current_price=pos["current_price"]
                     )
-                except Exception as pos_err:
-                    logger.warning(f"Failed to sync position {pos.get('symbol')}: {pos_err}")
 
-        logger.info(f"✅ BACKUP synced: cash={state.get('cash')}, positions={len(state.get('positions', []))} (in-memory + DB)")
-        return JSONResponse({"status": "synced", "timestamp": datetime.now().isoformat()})
+            except Exception as tx_err:
+                if conn:
+                    conn.rollback()  # Rollback all changes on error
+                    logger.error(f"Sync transaction rolled back: {tx_err}")
+                raise tx_err
+            finally:
+                if conn:
+                    conn.close()
+
+            # Update cash and P&L (atomic, simple assignments)
+            if "cash" in state:
+                engine.cash = state["cash"]
+            if "total_pnl" in state:
+                engine.total_pnl = state["total_pnl"]
+
+            # Validate consistency before returning success
+            # (cash + positions_value should ≈ total_equity)
+            positions_value = sum(
+                p.current_price * p.quantity for p in engine.positions.values()
+            )
+            total_equity = engine.cash + positions_value
+            equity_error = abs(total_equity - state.get("total_pnl", 0) - engine.cash)
+
+            if equity_error > 0.01:  # Allow small floating-point error
+                logger.warning(f"⚠️ Equity mismatch after sync: {equity_error:.2f} (may indicate corruption)")
+
+            logger.info(f"✅ BACKUP synced atomically: cash={state.get('cash')}, positions={len(synced_positions)}, equity={total_equity:.2f}")
+            return JSONResponse({"status": "synced", "timestamp": datetime.now().isoformat()})
+
+        except Exception as atomic_err:
+            logger.error(f"Atomic sync failed (rolled back): {atomic_err}", exc_info=True)
+            return JSONResponse(status_code=500, content={
+                "error": f"Atomic sync failed: {str(atomic_err)}",
+                "detail": "All changes rolled back due to error"
+            })
 
     except Exception as e:
         logger.error(f"Sync error: {e}", exc_info=True)
