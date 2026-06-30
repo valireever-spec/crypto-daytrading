@@ -1307,44 +1307,53 @@ function validateResponse(response, requiredFields = []) {
                 document.getElementById('regime-rsi').textContent = (regime.rsi || 0).toFixed(1);
                 document.getElementById('support-level').textContent = fmt(regime.support_level || 0);
 
-                const rules = await fetch(`${API}/regime/trading-rules/${regime.regime}`).then(r => r.json());
-                document.getElementById('trading-rules').innerHTML = `
+                const safeRegime = encodeURIComponent(regime.regime || '');
+                const rules = await fetch(`${API}/regime/trading-rules/${safeRegime}`).then(r => r.json()).catch(() => ({}));
+                const rulesContainer = document.getElementById('trading-rules');
+                rulesContainer.innerHTML = `
                     <div class="metric-row">
                         <div class="metric">
                             <div class="metric-label">Position Size</div>
-                            <div class="metric-value">${((rules.position_size_multiplier || 0) * 100).toFixed(0)}%</div>
+                            <div class="metric-value ps-value"></div>
                         </div>
                         <div class="metric">
                             <div class="metric-label">Stop Loss</div>
-                            <div class="metric-value">${rules.stop_loss_pct || 0}%</div>
+                            <div class="metric-value sl-value"></div>
                         </div>
                         <div class="metric">
                             <div class="metric-label">Take Profit</div>
-                            <div class="metric-value">${rules.take_profit_pct || 0}%</div>
+                            <div class="metric-value tp-value"></div>
                         </div>
                     </div>
                 `;
+                rulesContainer.querySelector('.ps-value').textContent = ((rules.position_size_multiplier || 0) * 100).toFixed(0) + '%';
+                rulesContainer.querySelector('.sl-value').textContent = (rules.stop_loss_pct || 0) + '%';
+                rulesContainer.querySelector('.tp-value').textContent = (rules.take_profit_pct || 0) + '%';
 
-                const impact = await fetch(`${API}/regime/strategy-impact?symbol=BTCUSDT`, { method: 'POST' }).then(r => r.json());
+                const impact = await fetch(`${API}/regime/strategy-impact?symbol=BTCUSDT`, { method: 'POST' }).then(r => r.json()).catch(() => null);
+                const impactContainer = document.getElementById('strategy-impact');
                 if (impact && impact.strategy_adjustments) {
-                    document.getElementById('strategy-impact').innerHTML = `
+                    impactContainer.innerHTML = `
                         <div class="metric-row">
                             <div class="metric">
                                 <div class="metric-label">Momentum</div>
-                                <div class="metric-value">${(impact.strategy_adjustments.momentum || 1).toFixed(2)}x</div>
+                                <div class="metric-value momentum-value"></div>
                             </div>
                             <div class="metric">
                                 <div class="metric-label">Reversion</div>
-                                <div class="metric-value">${(impact.strategy_adjustments.reversion || 1).toFixed(2)}x</div>
+                                <div class="metric-value reversion-value"></div>
                             </div>
                             <div class="metric">
                                 <div class="metric-label">Grid</div>
-                                <div class="metric-value">${(impact.strategy_adjustments.grid || 1).toFixed(2)}x</div>
+                                <div class="metric-value grid-value"></div>
                             </div>
                         </div>
                     `;
+                    impactContainer.querySelector('.momentum-value').textContent = (impact.strategy_adjustments.momentum || 1).toFixed(2) + 'x';
+                    impactContainer.querySelector('.reversion-value').textContent = (impact.strategy_adjustments.reversion || 1).toFixed(2) + 'x';
+                    impactContainer.querySelector('.grid-value').textContent = (impact.strategy_adjustments.grid || 1).toFixed(2) + 'x';
                 } else {
-                    document.getElementById('strategy-impact').innerHTML = '<div class="empty">Unable to load strategy impact</div>';
+                    impactContainer.textContent = 'Unable to load strategy impact';
                 }
 
                 // Update WebSocket status
@@ -1387,9 +1396,12 @@ function validateResponse(response, requiredFields = []) {
                 const alloc = results[1].status === 'fulfilled' ? results[1].value : { allocation: {} };
 
                 const tbody = document.getElementById('strategies-table');
-                const rows = Object.entries(stats.strategies || {}).map(([name, s]) => `
-                    <tr>
-                        <td class="symbol">${name}</td>
+                const rows = Object.entries(stats.strategies || {}).map(([name, s]) => {
+                    const safeName = (name || '').replace(/[&<>"']/g, m => ({
+                        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;'
+                    }[m]));
+                    return `<tr>
+                        <td class="symbol">${safeName}</td>
                         <td>${s.total_trades || 0}</td>
                         <td>${s.winning_trades || 0}</td>
                         <td>${s.losing_trades || 0}</td>
@@ -1398,7 +1410,9 @@ function validateResponse(response, requiredFields = []) {
                         <td class="${(s.expectancy || 0) > 0 ? 'positive' : 'negative'}">${fmt(s.expectancy || 0)}</td>
                         <td>${(s.profit_factor || 1).toFixed(2)}</td>
                     </tr>
-                `);
+                `;
+                    });
+
                 tbody.innerHTML = rows.length > 0 ? rows.join('') : '<tr><td colspan="8" class="empty">No strategy data yet</td></tr>';
 
                 const allocBody = document.getElementById('allocation-table');

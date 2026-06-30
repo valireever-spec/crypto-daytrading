@@ -135,6 +135,19 @@ function setLoadingState(elementId, isLoading) {
   }
 }
 
+// HTML Escape - CRITICAL: Prevent XSS vulnerabilities
+function escapeHtml(text) {
+  if (text === null || text === undefined) return '';
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;'
+  };
+  return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
 // Safe JSON parsing
 function safeParseJSON(jsonString, fallback = {}) {
   try {

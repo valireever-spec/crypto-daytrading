@@ -555,9 +555,12 @@
 
             for (const [service, check] of Object.entries(health)) {
                 const statusClass = check.healthy ? 'healthy' : 'unhealthy';
+                const safeService = (service || '').replace(/[&<>"']/g, m => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;'
+                }[m]));
                 html += `
                     <div class="health-item">
-                        <div class="health-label">${service}</div>
+                        <div class="health-label">${safeService}</div>
                         <div class="health-status">
                             <span class="status-indicator-small ${statusClass}"></span>
                             ${check.healthy ? 'OK' : 'FAILED'}
@@ -572,13 +575,18 @@
             let tableHtml = '';
             for (const [service, check] of Object.entries(health)) {
                 const statusClass = check.healthy ? 'healthy' : 'unhealthy';
+                const safeService = (service || '').replace(/[&<>"']/g, m => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;'
+                }[m]));
                 const details = JSON.stringify(check.details)
                     .substring(0, 100)
-                    .replace(/[{}":]/g, '');
+                    .replace(/[&<>"'{}]/g, m => ({
+                        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;', '{': '', '}': '', ':': ''
+                    }[m] || ''));
 
                 tableHtml += `
                     <tr>
-                        <td><strong>${service}</strong></td>
+                        <td><strong>${safeService}</strong></td>
                         <td>
                             <span class="status-indicator-small ${statusClass}"></span>
                             ${check.healthy ? '✓ Healthy' : '✗ Failed'}

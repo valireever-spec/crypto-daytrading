@@ -75,7 +75,7 @@
     </div>
 
     <script>
-        const API = 'http://localhost:8001/api';
+        const API = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api` || 'http://localhost:8001/api';
 
         async function updateDashboard() {
             try {
@@ -100,15 +100,19 @@
                 if (positions.length === 0) {
                     posBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">No open positions</td></tr>';
                 } else {
-                    posBody.innerHTML = positions.map(p => `
-                        <tr>
-                            <td><strong>${p.symbol}</strong></td>
+                    posBody.innerHTML = positions.map(p => {
+                        const symbol = (p.symbol || '').replace(/[&<>"']/g, m => ({
+                            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;'
+                        }[m]));
+                        const pnlClass = p.unrealized_pnl >= 0 ? 'positive' : 'negative';
+                        return `<tr>
+                            <td><strong>${symbol}</strong></td>
                             <td>${p.quantity.toFixed(4)}</td>
                             <td>$${p.entry_price.toFixed(2)}</td>
                             <td>$${p.current_price.toFixed(2)}</td>
-                            <td class="${p.unrealized_pnl >= 0 ? 'positive' : 'negative'}">$${p.unrealized_pnl.toFixed(2)}</td>
-                        </tr>
-                    `).join('');
+                            <td class="${pnlClass}">$${p.unrealized_pnl.toFixed(2)}</td>
+                        </tr>`;
+                    }).join('');
                 }
 
                 // Update trades

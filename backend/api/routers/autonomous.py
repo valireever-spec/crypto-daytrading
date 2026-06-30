@@ -293,18 +293,32 @@ async def sync_config_from_backup(request: ConfigUpdateRequest):
 @router.get("/api/autonomous/trades")
 async def get_trade_history(limit: int = 50):
     """Get recent autonomous trades."""
-    trader = get_autonomous_trader()
-    if not trader:
-        raise HTTPException(status_code=500, detail="Autonomous trader not initialized")
+    try:
+        trader = get_autonomous_trader()
+        if not trader:
+            return JSONResponse(
+                {
+                    "total": 0,
+                    "recent": [],
+                    "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+                }
+            )
 
-    trades = trader.trade_history[-limit:] if trader.trade_history else []
-    return JSONResponse(
-        {
-            "total": len(trader.trade_history),
-            "recent": trades,
-            "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
-        }
-    )
+        # Safely get trade history
+        trade_history = []
+        if hasattr(trader, 'trade_history') and trader.trade_history:
+            trade_history = trader.trade_history[-limit:] if isinstance(trader.trade_history, list) else []
+
+        return JSONResponse(
+            {
+                "total": len(trade_history) if trade_history else 0,
+                "recent": trade_history,
+                "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error getting trade history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/immutable-log/status")
@@ -323,3 +337,82 @@ async def get_immutable_log_status():
     except Exception as e:
         logger.error(f"Failed to get immutable log status: {e}")
         raise HTTPException(status_code=500, detail=f"Immutable log error: {str(e)}")
+
+
+@router.post("/api/autonomous/positions/close")
+async def close_position(symbol: str):
+    """Close all of a specific position."""
+    try:
+        from backend.exchange.paper_trading import get_paper_trading
+
+        engine = get_paper_trading()
+        if not engine:
+            raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+
+        # Get position
+        positions = engine.get_positions()
+        position = next((p for p in positions if p['symbol'] == symbol and p['status'] == 'open'), None)
+
+        if not position:
+            raise HTTPException(status_code=404, detail=f"No open position found for {symbol}")
+
+        # Execute market sell order for full quantity
+        order = engine.place_market_order(
+            symbol=symbol,
+            side='sell',
+            quantity=position['quantity'],
+            source='manual_close'
+        )
+
+        logger.info(f"✅ Position closed: {symbol} {position['quantity']:.4f}")
+
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "quantity_closed": position['quantity'],
+            "order_id": order.get('id') if order else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error closing position: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/signals/calculate")
+async def calculate_signal(symbol: str):
+    """Calculate trading signal for a symbol."""
+    try:
+        from backend.analytics.signals import get_signal_generator
+        from backend.analytics.historical_data import get_historical_service
+
+        # Get signal generator
+        generator = get_signal_generator()
+        if not generator:
+            raise HTTPException(status_code=500, detail="Signal generator not initialized")
+
+        # Get historical data for the symbol
+        hist_service = get_historical_service()
+        if not hist_service:
+            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
+        prices = hist_service.get_prices(symbol, period=90)
+        if prices is None or len(prices) == 0:
+            raise HTTPException(status_code=404, detail=f"No price data available for {symbol}")
+
+        # Generate signal
+        signal_result = await generator.generate_signal(symbol, prices)
+
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "signal": signal_result.get('signal_value', 0) if signal_result else 0,
+            "confidence": signal_result.get('confidence', 0) if signal_result else 0,
+            "reasoning": signal_result.get('reasoning', '') if signal_result else '',
+            "components": signal_result.get('components', {}) if signal_result else {}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error calculating signal: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

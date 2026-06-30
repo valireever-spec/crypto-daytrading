@@ -697,6 +697,21 @@
         const API_BASE = '';
         let refreshInterval = null;
 
+        // Safe event handlers (prevent XSS via onclick attributes)
+        async function closePositionHandler(button) {
+            const symbol = button.getAttribute('data-symbol');
+            if (!symbol) {
+                alert('Invalid symbol');
+                return;
+            }
+            if (confirm(`Close position for ${symbol}?`)) {
+                const result = await postAPI('/api/autonomous/positions/close', { symbol: symbol });
+                if (result) {
+                    loadDashboard();
+                }
+            }
+        }
+
         // Tab switching
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.addEventListener('click', () => {
@@ -722,9 +737,14 @@
 
         async function postAPI(endpoint, data) {
             try {
+                const headers = { 'Content-Type': 'application/json' };
+                // Add CSRF token if available
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+
                 const response = await fetch(`${API_BASE}${endpoint}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify(data)
                 });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -849,7 +869,7 @@
                         <td class="price">${formatCurrency(pos.current_price)}</td>
                         <td class="${pnlClass}">${formatCurrency(pos.pnl)} (${pos.pnl_pct.toFixed(2)}%)</td>
                         <td>
-                            <button class="btn-danger" onclick="closePosition('${pos.symbol}')">Close</button>
+                            <button class="btn-danger" data-symbol="${escapeHtml(pos.symbol)}" onclick="closePositionHandler(this)">Close</button>
                         </td>
                     </tr>
                 `;

@@ -706,6 +706,7 @@
         async function loadAllocation() {
             try {
                 const response = await fetch(`${API_BASE}/allocation`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
 
                 // Update sliders
@@ -820,10 +821,10 @@
                                 ${pnlSign}${formatCurrency(pos.unrealized_pnl || 0)}
                             </div>
                             <div class="exit-buttons">
-                                <button class="exit-btn" onclick="partialExit('${pos.symbol}', 0.25)">25%</button>
-                                <button class="exit-btn" onclick="partialExit('${pos.symbol}', 0.50)">50%</button>
-                                <button class="exit-btn" onclick="partialExit('${pos.symbol}', 0.75)">75%</button>
-                                <button class="exit-btn" onclick="partialExit('${pos.symbol}', 1.00)">100%</button>
+                                <button class="exit-btn" data-symbol="${escapeHtml(pos.symbol)}" data-percentage="0.25" onclick="partialExitHandler(this)">25%</button>
+                                <button class="exit-btn" data-symbol="${escapeHtml(pos.symbol)}" data-percentage="0.50" onclick="partialExitHandler(this)">50%</button>
+                                <button class="exit-btn" data-symbol="${escapeHtml(pos.symbol)}" data-percentage="0.75" onclick="partialExitHandler(this)">75%</button>
+                                <button class="exit-btn" data-symbol="${escapeHtml(pos.symbol)}" data-percentage="1.00" onclick="partialExitHandler(this)">100%</button>
                             </div>
                         </div>
                     </div>
@@ -840,7 +841,7 @@
                 return;
             }
 
-            tbody.innerHTML = trades.reverse().map(trade => {
+            tbody.innerHTML = [...trades].reverse().map(trade => {
                 const timestamp = new Date(trade.timestamp).toLocaleTimeString();
                 const pnl = trade.realized_pnl || 0;
                 const pnlClass = pnl >= 0 ? 'positive' : 'negative';
@@ -862,10 +863,35 @@
             }).join('');
         }
 
+        // Safe handler for partial exit buttons (prevents XSS via onclick)
+        async function partialExitHandler(button) {
+            const symbol = button.getAttribute('data-symbol');
+            const percentage = button.getAttribute('data-percentage');
+            if (!symbol || !percentage) {
+                addAlert('Invalid exit parameters', 'danger');
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE}/trading/exit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: symbol, percentage: parseFloat(percentage) })
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                addAlert(`Exited ${(percentage * 100).toFixed(0)}% of ${symbol}`, 'success');
+                loadPositions();
+            } catch (error) {
+                console.error('Error exiting position:', error);
+                addAlert(`Error exiting position: ${error.message}`, 'danger');
+            }
+        }
+
         // Pause trading
         async function pauseTrading() {
             try {
                 const response = await fetch(`${API_BASE}/trading/pause`, { method: 'POST' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
                 state.trading_paused = true;
                 addAlert('Trading paused', 'warning');
@@ -880,6 +906,7 @@
         async function resumeTrading() {
             try {
                 const response = await fetch(`${API_BASE}/trading/resume`, { method: 'POST' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
                 state.trading_paused = false;
                 addAlert('Trading resumed', 'success');
@@ -1053,10 +1080,10 @@
 
             const alert = document.createElement('div');
             alert.className = `alert ${type}`;
-            alert.innerHTML = `
-                <span>${message}</span>
-                <button class="alert-close" onclick="this.parentElement.remove()">×</button>
-            `;
+            alert.innerHTML = `<button class="alert-close" onclick="this.parentElement.remove()">×</button>`;
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message;
+            alert.insertBefore(messageSpan, alert.firstChild);
 
             container.insertBefore(alert, container.firstChild);
 
