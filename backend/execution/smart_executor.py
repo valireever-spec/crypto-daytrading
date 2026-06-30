@@ -117,9 +117,9 @@ class SmartExecutor:
                     reason=f"Position too large: {position_pct:.1f}% > {self.max_position_pct*100:.1f}%",
                 )
 
-            # Step 4: Attempt regime detection (if it fails, still approve trade)
-            regime_name = "SIDEWAYS"  # Default regime
-            regime_confidence = 0.5
+            # Step 4: Regime detection - CRITICAL for risk management
+            regime_name = None
+            regime_confidence = 0.0
 
             try:
                 from backend.analytics.historical_data import get_historical_service
@@ -138,18 +138,56 @@ class SmartExecutor:
                     if ohlcv is not None and not ohlcv.empty and len(ohlcv) >= 20:
                         try:
                             regime_metrics = detector.detect_regime(ohlcv)
-                            regime_name = regime_metrics.get("regime", "SIDEWAYS")
-                            regime_confidence = regime_metrics.get("confidence", 0.5)
+                            regime_name = regime_metrics.get("regime", None)
+                            regime_confidence = regime_metrics.get("confidence", 0.0)
+                            if regime_name is None:
+                                raise ValueError("Regime detector returned None")
                         except Exception as regime_error:
-                            # Regime detection failed but that's OK - use defaults
-                            logger.warning(
-                                f"Regime detection issue ({regime_error}), using default"
+                            logger.error(
+                                f"CRITICAL: Regime detection failed ({regime_error}). Rejecting trade for safety."
                             )
-                            regime_name = "SIDEWAYS"
-                            regime_confidence = 0.5
+                            return ExecutionDecision(
+                                decision="REJECT",
+                                symbol=context.symbol,
+                                quantity=context.quantity,
+                                price=context.current_price,
+                                regime="UNKNOWN",
+                                confidence=0.0,
+                                reason=f"Regime detection failed: {regime_error}",
+                            )
+                    else:
+                        logger.error("Insufficient historical data for regime detection. Rejecting trade.")
+                        return ExecutionDecision(
+                            decision="REJECT",
+                            symbol=context.symbol,
+                            quantity=context.quantity,
+                            price=context.current_price,
+                            regime="UNKNOWN",
+                            confidence=0.0,
+                            reason="Insufficient historical data for regime detection",
+                        )
+                else:
+                    logger.error("Historical service unavailable. Rejecting trade for safety.")
+                    return ExecutionDecision(
+                        decision="REJECT",
+                        symbol=context.symbol,
+                        quantity=context.quantity,
+                        price=context.current_price,
+                        regime="UNKNOWN",
+                        confidence=0.0,
+                        reason="Historical service unavailable",
+                    )
             except Exception as e:
-                logger.warning(f"Regime check skipped: {e}")
-                # Continue with default regime
+                logger.error(f"CRITICAL: Regime check failed: {e}. Rejecting trade for safety.")
+                return ExecutionDecision(
+                    decision="REJECT",
+                    symbol=context.symbol,
+                    quantity=context.quantity,
+                    price=context.current_price,
+                    regime="UNKNOWN",
+                    confidence=0.0,
+                    reason=f"Regime detection error: {e}",
+                )
 
             logger.info(
                 f"Entry evaluation for {context.symbol}: "
@@ -230,8 +268,8 @@ class SmartExecutor:
                     symbol=context.symbol,
                     quantity=context.quantity,
                     price=context.current_price,
-                    regime="BULL",  # Would come from regime detector
-                    confidence=0.8,  # Would come from regime detector
+                    regime=regime_name,  # From regime detector
+                    confidence=regime_confidence,  # From regime detector
                     order_id=order_id,
                     reason="Order filled",
                 )
