@@ -574,7 +574,7 @@ class TradingDatabase:
 
         cursor.execute(
             """
-            SELECT id, symbol, side, quantity, price, trade_time, slippage_pct, realized_pnl, order_id, status
+            SELECT id, symbol, side, quantity, price, trade_time, slippage_pct, realized_pnl, order_id, status, fee
             FROM trades
             WHERE DATE(trade_time) = DATE('now')
             ORDER BY trade_time ASC
@@ -583,6 +583,35 @@ class TradingDatabase:
 
         trades = [dict(row) for row in cursor.fetchall()]
         conn.close()
+
+        return trades
+
+    def get_all_trades(self) -> List[Dict]:
+        """Get ALL trades ever (not just today's).
+
+        Used on startup to restore full trade history after API restart.
+        Critical for persistence: ensures trades aren't lost on restart.
+
+        Returns:
+            List of all trade dicts (entire history)
+        """
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT id, symbol, side, quantity, price, trade_time, slippage_pct, realized_pnl, order_id, status, fee
+            FROM trades
+            ORDER BY trade_time ASC
+            """
+        )
+
+        trades = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        if trades:
+            logger.info(f"✅ Restored {len(trades)} trades from database (full history)")
 
         return trades
 

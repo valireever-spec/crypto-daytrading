@@ -599,14 +599,14 @@ class PaperTradingEngine:
             logger.error(f"Failed to restore positions from DB: {e}")
 
     def _restore_trades_from_db(self) -> None:
-        """Restore trade history from database on startup (CRITICAL for BACKUP recovery).
+        """Restore trade history from database on startup (CRITICAL for persistence).
 
-        Ensures that trades synced from PRIMARY are restored to in-memory history
-        if BACKUP is restarted. Without this, BACKUP would lose trade history.
+        Ensures that ALL trades are restored to in-memory history on API restart.
+        This prevents trade history loss when the API restarts.
         """
         try:
             db = get_database()
-            db_trades = db.get_trades_today()
+            db_trades = db.get_all_trades()
 
             if not db_trades:
                 logger.info("No historical trades to restore from database")
