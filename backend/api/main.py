@@ -360,9 +360,11 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
         if "total_pnl" in state:
             engine.total_pnl = state["total_pnl"]
 
-        # Sync positions
+        # Sync positions (both database and in-memory)
         if "positions" in state:
             db.clear_all_positions()
+            engine.positions.clear()  # Clear in-memory positions too!
+
             for pos in state["positions"]:
                 try:
                     entry_time_str = pos.get("entry_time")
@@ -372,16 +374,28 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
                     else:
                         entry_time = entry_time_str or datetime.utcnow()
 
+                    # Insert into database
                     db.insert_position(
                         symbol=pos["symbol"],
                         quantity=pos["quantity"],
                         entry_price=pos["entry_price"],
                         entry_time=entry_time
                     )
+
+                    # Also load into in-memory cache
+                    from backend.exchange.paper_trading import Position
+                    engine.positions[pos["symbol"]] = Position(
+                        symbol=pos["symbol"],
+                        side="LONG",  # Synced positions are always long (buy)
+                        quantity=pos["quantity"],
+                        entry_price=pos["entry_price"],
+                        entry_time=entry_time,
+                        current_price=pos.get("current_price", pos["entry_price"])
+                    )
                 except Exception as pos_err:
                     logger.warning(f"Failed to sync position {pos.get('symbol')}: {pos_err}")
 
-        logger.info(f"✅ BACKUP synced: cash={state.get('cash')}, positions={len(state.get('positions', []))}")
+        logger.info(f"✅ BACKUP synced: cash={state.get('cash')}, positions={len(state.get('positions', []))} (in-memory + DB)")
         return JSONResponse({"status": "synced", "timestamp": datetime.now().isoformat()})
 
     except Exception as e:
