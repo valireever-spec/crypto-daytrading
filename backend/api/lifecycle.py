@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from backend.core import constants
 
 # Load .env file if it exists (python-dotenv alternative)
 env_file = Path.cwd() / ".env"
@@ -20,6 +21,48 @@ if env_file.exists():
                     os.environ[key] = value.strip('"').strip("'")
 
 logger = logging.getLogger(__name__)
+
+
+def validate_environment_configuration() -> None:
+    """Validate all environment variables and configuration at startup.
+
+    Raises ValueError if any critical configuration is invalid.
+    """
+    errors = []
+
+    # Validate URLs
+    try:
+        constants.validate_urls()
+    except ValueError as e:
+        errors.append(str(e))
+
+    # Validate machine ID
+    if constants.MACHINE_ID not in ["main", "backup"]:
+        errors.append(f"MACHINE_ID must be 'main' or 'backup', got '{constants.MACHINE_ID}'")
+
+    # Validate timeouts
+    if constants.HEALTH_CHECK_TIMEOUT <= 0:
+        errors.append(f"HEALTH_CHECK_TIMEOUT must be positive, got {constants.HEALTH_CHECK_TIMEOUT}")
+    if constants.HEARTBEAT_CHECK_INTERVAL <= 0:
+        errors.append(f"HEARTBEAT_CHECK_INTERVAL must be positive, got {constants.HEARTBEAT_CHECK_INTERVAL}")
+    if constants.HEARTBEAT_FAILURE_THRESHOLD <= 0:
+        errors.append(f"HEARTBEAT_FAILURE_THRESHOLD must be positive, got {constants.HEARTBEAT_FAILURE_THRESHOLD}")
+
+    # Validate replication thresholds
+    if constants.REPLICATION_LAG_WARNING_THRESHOLD <= 0:
+        errors.append(f"REPLICATION_LAG_WARNING_THRESHOLD must be positive, got {constants.REPLICATION_LAG_WARNING_THRESHOLD}")
+    if constants.REPLICATION_LAG_CRITICAL_THRESHOLD <= 0:
+        errors.append(f"REPLICATION_LAG_CRITICAL_THRESHOLD must be positive, got {constants.REPLICATION_LAG_CRITICAL_THRESHOLD}")
+    if constants.REPLICATION_LAG_CRITICAL_THRESHOLD < constants.REPLICATION_LAG_WARNING_THRESHOLD:
+        errors.append(f"REPLICATION_LAG_CRITICAL_THRESHOLD ({constants.REPLICATION_LAG_CRITICAL_THRESHOLD}) must be >= WARNING threshold ({constants.REPLICATION_LAG_WARNING_THRESHOLD})")
+
+    if errors:
+        error_msg = "Environment configuration errors:\n  " + "\n  ".join(errors)
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    logger.info(f"✅ Environment configuration validated ({len(vars(constants))} settings loaded)")
+
 
 # Global tasks to manage
 websocket_task = None
@@ -39,24 +82,32 @@ async def lifespan(app: FastAPI):
 
     logger.info("Starting crypto daytrading platform...")
 
+    # Validate environment configuration first
+    validate_environment_configuration()
+
     # Import essential initialization functions
     from backend.exchange.paper_trading import init_paper_trading
     from backend.exchange.binance_stream import init_stream_client
     from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
     from backend.trading.autonomous_trader import TradingConfig
+    from backend.execution.smart_executor import init_smart_executor
 
     # Validate HA configuration
-    primary_url = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
-    backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
-    if primary_url == backup_url:
-        logger.error(f"ERROR: PRIMARY and BACKUP URLs are identical: {primary_url}")
-        raise ValueError("PRIMARY_API_URL and BACKUP_API_URL must be different")
-    logger.info(f"HA Configuration validated: PRIMARY={primary_url}, BACKUP={backup_url}")
+    try:
+        constants.validate_urls()
+        logger.info(f"HA Configuration validated: PRIMARY={constants.PRIMARY_API_URL}, BACKUP={constants.BACKUP_API_URL}")
+    except ValueError as e:
+        logger.error(f"HA Configuration error: {e}")
+        raise
 
     # Initialize core components
     initial_capital = float(os.getenv("INITIAL_CAPITAL", "1000"))
     init_paper_trading(starting_capital=initial_capital)
     logger.info(f"Paper trading engine initialized with €{initial_capital:.2f}")
+
+    # Initialize smart executor
+    init_smart_executor()
+    logger.info("Smart executor initialized")
 
     # Initialize Binance stream
     try:
@@ -101,8 +152,6 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to initialize autonomous trader: {e}")
 
     # Add sync task for PRIMARY or failover monitor for BACKUP
-    machine_id = os.getenv("MACHINE_ID", "main")
-    backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
 
     async def sync_to_backup():
         """PRIMARY: Periodically sync state to BACKUP."""
@@ -111,7 +160,7 @@ async def lifespan(app: FastAPI):
 
         while True:
             try:
-                await asyncio.sleep(5)  # Sync every 5 seconds
+                await asyncio.sleep(constants.STATE_SYNC_INTERVAL)
                 engine = get_paper_trading()
                 if not engine:
                     continue
@@ -122,8 +171,8 @@ async def lifespan(app: FastAPI):
                     "positions": [p for p in engine.get_positions() if p["status"] == "open"]
                 }
 
-                async with httpx.AsyncClient(timeout=3) as client:
-                    resp = await client.post(f"{backup_url}/api/ha/sync-from-primary", json=state)
+                async with httpx.AsyncClient(timeout=constants.HEALTH_CHECK_TIMEOUT) as client:
+                    resp = await client.post(f"{constants.BACKUP_API_URL}/api/ha/sync-from-primary", json=state)
                     if resp.status_code == 200:
                         logger.debug(f"✅ Synced to BACKUP: {len(state['positions'])} positions, €{state['cash']:.2f} cash")
                     else:
@@ -137,26 +186,32 @@ async def lifespan(app: FastAPI):
         from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
         from backend.core.heartbeat import init_heartbeat_monitor, get_heartbeat_monitor
 
-        primary_url = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
         trader = None
 
-        # Initialize heartbeat monitor (5s checks, 3 misses = 15s timeout)
-        monitor = init_heartbeat_monitor(check_interval=5, failure_threshold=3)
-        logger.info("💓 BACKUP heartbeat monitor initialized (3 misses = 15s timeout)")
+        # Initialize heartbeat monitor using config constants
+        monitor = init_heartbeat_monitor(
+            check_interval=constants.HEARTBEAT_CHECK_INTERVAL,
+            failure_threshold=constants.HEARTBEAT_FAILURE_THRESHOLD
+        )
+        logger.info(
+            f"💓 BACKUP heartbeat monitor initialized "
+            f"({constants.HEARTBEAT_FAILURE_THRESHOLD} misses = {constants.HEARTBEAT_TIMEOUT_SECONDS}s timeout)"
+        )
 
         while True:
             try:
-                await asyncio.sleep(5)  # Check every 5 seconds (matches heartbeat interval)
+                await asyncio.sleep(constants.HEARTBEAT_CHECK_INTERVAL)
 
-                # Check heartbeat timeout (PRIMARY sends heartbeat every 5s)
+                # Check heartbeat timeout
                 primary_failed = monitor.check_timeout()
 
-                # Fallback: Check HTTP health (in case heartbeat isn't implemented yet)
+                # Fallback: Check HTTP health via PRIMARY_API_URL
                 try:
-                    async with httpx.AsyncClient(timeout=2) as client:
-                        resp = await client.get(f"{primary_url}/api/health")
+                    async with httpx.AsyncClient(timeout=constants.HEALTH_CHECK_TIMEOUT) as client:
+                        resp = await client.get(f"{constants.PRIMARY_API_URL}/api/health")
                         primary_healthy = resp.status_code == 200
-                except:
+                except Exception as e:
+                    logger.debug(f"PRIMARY health check failed: {e}")
                     primary_healthy = False
 
                 # Trigger failover if PRIMARY failed (either heartbeat or HTTP check)
@@ -191,24 +246,29 @@ async def lifespan(app: FastAPI):
 
     # Heartbeat sender (PRIMARY) and heartbeat monitor (BACKUP)
     async def heartbeat_sender():
-        """PRIMARY: Send heartbeat to BACKUP every 5 seconds."""
+        """PRIMARY: Send heartbeat to BACKUP at configured interval."""
         from backend.core.heartbeat import init_heartbeat_sender
 
-        backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
-        sender = init_heartbeat_sender(backup_url, interval=5)
+        sender = init_heartbeat_sender(constants.BACKUP_API_URL, interval=constants.HEARTBEAT_CHECK_INTERVAL)
         await sender.start()
 
-    if machine_id == "main":
+    if constants.IS_PRIMARY:
         global sync_task, heartbeat_task
         sync_task = asyncio.create_task(sync_to_backup())
-        logger.info("📤 PRIMARY sync task started (→ BACKUP every 5s)")
+        logger.info(f"📤 PRIMARY sync task started (→ {constants.BACKUP_API_URL} every {constants.STATE_SYNC_INTERVAL}s)")
 
         heartbeat_task = asyncio.create_task(heartbeat_sender())
-        logger.info(f"💓 PRIMARY heartbeat sender started (→ {os.getenv('BACKUP_API_URL', 'http://192.168.3.25:8002')} every 5s)")
+        logger.info(
+            f"💓 PRIMARY heartbeat sender started "
+            f"(→ {constants.BACKUP_API_URL} every {constants.HEARTBEAT_CHECK_INTERVAL}s)"
+        )
     else:
         global failover_task
         failover_task = asyncio.create_task(failover_monitor())
-        logger.info("📡 BACKUP failover monitor started (check every 5s with heartbeat detection)")
+        logger.info(
+            f"📡 BACKUP failover monitor started "
+            f"(check every {constants.HEARTBEAT_CHECK_INTERVAL}s with heartbeat detection)"
+        )
 
     # Startup complete
     logger.info("✅ Crypto daytrading platform started successfully")

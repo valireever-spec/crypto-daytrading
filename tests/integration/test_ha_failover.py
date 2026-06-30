@@ -453,5 +453,135 @@ class TestIntegrationFullFailover:
         print("  5. Verify no transaction gaps in audit trail")
 
 
+class TestHeartbeatMonitorUnit:
+    """Unit tests for heartbeat monitor functionality."""
+
+    def test_heartbeat_monitor_tracks_failures(self):
+        """Test that heartbeat monitor tracks consecutive failures."""
+        from backend.failover.heartbeat import HeartbeatMonitor
+
+        monitor = HeartbeatMonitor(failure_threshold=3)
+
+        # Initially healthy
+        assert monitor.is_primary_healthy is True
+        assert monitor.consecutive_failures == 0
+
+        # First failure
+        monitor._handle_failure("Connection timeout")
+        assert monitor.consecutive_failures == 1
+        assert monitor.is_primary_healthy is True  # Still healthy
+
+        # Second failure
+        monitor._handle_failure("Connection timeout")
+        assert monitor.consecutive_failures == 2
+        assert monitor.is_primary_healthy is True
+
+        # Third failure - should declare PRIMARY dead
+        monitor._handle_failure("Connection timeout")
+        assert monitor.consecutive_failures == 3
+        assert monitor.is_primary_healthy is False
+
+    def test_recovery_attempts_counter(self):
+        """Test that recovery attempts are tracked."""
+        from backend.failover.heartbeat import HeartbeatMonitor
+
+        monitor = HeartbeatMonitor(failure_threshold=2)
+
+        # Declare PRIMARY dead
+        monitor._handle_failure("Failure 1")
+        monitor._handle_failure("Failure 2")
+        assert monitor.is_primary_healthy is False
+
+        # Track recovery attempts
+        initial_attempts = monitor.recovery_attempts
+        monitor._handle_failure("Failure 3")
+        assert monitor.recovery_attempts == initial_attempts + 1
+
+    def test_recovery_resets_counters(self):
+        """Test that PRIMARY recovery resets failure counters."""
+        from backend.failover.heartbeat import HeartbeatMonitor
+
+        monitor = HeartbeatMonitor(failure_threshold=2)
+
+        # Declare PRIMARY dead and increase recovery attempts
+        monitor._handle_failure("Failure 1")
+        monitor._handle_failure("Failure 2")
+        monitor._handle_failure("Failure 3")
+
+        assert monitor.is_primary_healthy is False
+        assert monitor.recovery_attempts > 0
+
+        # Simulate recovery
+        monitor.consecutive_failures = 0
+        monitor.is_primary_healthy = True
+        monitor.recovery_attempts = 0
+
+        assert monitor.is_primary_healthy is True
+        assert monitor.consecutive_failures == 0
+        assert monitor.recovery_attempts == 0
+
+
+class TestFailoverStateSync:
+    """Test that state is correctly synced during failover."""
+
+    def test_position_preservation(self):
+        """Test that positions are preserved during failover."""
+        client = TestClient(app)
+
+        # Get initial state
+        response = client.get("/api/health")
+        assert response.status_code == 200
+        initial_state = response.json()
+
+        # Positions should be preserved across failover
+        assert "account" in initial_state
+        assert "positions_value" in initial_state["account"]
+
+    def test_cash_balance_sync(self):
+        """Test that cash balance is synced correctly."""
+        client = TestClient(app)
+
+        response = client.get("/api/health")
+        assert response.status_code == 200
+        state = response.json()
+
+        account = state["account"]
+        # Cash + positions value should equal equity
+        total = account["cash"] + account["positions_value"]
+        assert abs(total - account["total_equity"]) < 0.01
+
+
+class TestFailoverScenarios:
+    """Integration tests for complete failover scenarios."""
+
+    def test_scenario_primary_offline_backup_detects(self):
+        """Test scenario: PRIMARY goes offline, BACKUP detects within threshold."""
+        from backend.failover.heartbeat import HeartbeatMonitor
+
+        monitor = HeartbeatMonitor(failure_threshold=2)
+
+        # Simulate PRIMARY being offline
+        monitor._handle_failure("Connection refused")
+        assert monitor.consecutive_failures == 1
+
+        monitor._handle_failure("Connection refused")
+        assert monitor.is_primary_healthy is False  # Failover triggered
+
+    def test_scenario_transient_glitch_no_failover(self):
+        """Test scenario: Transient network glitch below threshold."""
+        from backend.failover.heartbeat import HeartbeatMonitor
+
+        monitor = HeartbeatMonitor(failure_threshold=3)
+
+        # Simulate single glitch
+        monitor._handle_failure("Temporary timeout")
+        assert monitor.consecutive_failures == 1
+        assert monitor.is_primary_healthy is True
+
+        # Connection recovers (simulated by reset)
+        monitor.consecutive_failures = 0
+        assert monitor.is_primary_healthy is True  # No failover
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -7,8 +7,10 @@ primary and backup machines.
 import json
 import logging
 import os
+import shlex
+import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,28 @@ class ConfigManager:
         return CONFIG_FILE
 
     @staticmethod
+    def _validate_config(config: Dict[str, Any]) -> bool:
+        """Validate loaded configuration for required fields and valid values.
+
+        Returns True if config is valid, raises ValueError if invalid.
+        """
+        required_fields = ["position_size_pct", "max_positions", "entry_threshold"]
+
+        for field in required_fields:
+            if field not in config:
+                raise ValueError(f"Config missing required field: {field}")
+
+        # Validate value ranges
+        if not (0 < config.get("position_size_pct", 0) <= 100):
+            raise ValueError(f"position_size_pct must be 0-100, got {config.get('position_size_pct')}")
+        if not (config.get("max_positions", 0) > 0):
+            raise ValueError(f"max_positions must be positive, got {config.get('max_positions')}")
+        if not (0 <= config.get("entry_threshold", 0) <= 100):
+            raise ValueError(f"entry_threshold must be 0-100, got {config.get('entry_threshold')}")
+
+        return True
+
+    @staticmethod
     def load_config() -> Dict[str, Any]:
         """Load config from disk. Falls back to .env if not found."""
         config_file = ConfigManager.get_config_path()
@@ -64,8 +88,12 @@ class ConfigManager:
             try:
                 with open(config_file, "r") as f:
                     data = json.load(f)
+                    # Validate loaded config
+                    ConfigManager._validate_config(data)
                     logger.info(f"Loaded config from {config_file}")
                     return data
+            except ValueError as e:
+                logger.error(f"Invalid config in {config_file}: {e} - falling back to .env")
             except Exception as e:
                 logger.warning(f"Failed to load config from {config_file}: {e}")
 
@@ -83,12 +111,12 @@ class ConfigManager:
         symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
 
         return {
-            "position_size_pct": float(os.getenv("POSITION_SIZE_PCT", "0.05")),
+            "position_size_pct": float(os.getenv("POSITION_SIZE_PCT", "2.5")),
             "max_positions": int(os.getenv("MAX_POSITIONS", "5")),
             "max_daily_loss_pct": float(os.getenv("MAX_DAILY_LOSS_PCT", "5.0")),
             "entry_threshold": float(os.getenv("ENTRY_THRESHOLD", "60.0")),
-            "exit_profit_target": float(os.getenv("EXIT_PROFIT_TARGET", "0.03")),
-            "exit_stop_loss": float(os.getenv("EXIT_STOP_LOSS", "0.02")),
+            "exit_profit_target": float(os.getenv("EXIT_PROFIT_TARGET", "1.5")),
+            "exit_stop_loss": float(os.getenv("EXIT_STOP_LOSS", "1.0")),
             "enabled": True,
             "symbols": symbols,
         }
@@ -268,12 +296,16 @@ class ConfigManager:
         """
         try:
             # Use SSH alias for passwordless authentication
-            ssh_cmd = "ssh backup 'pkill -f \"uvicorn.*8002\" || true; sleep 2; cd ~/crypto-daytrading && source venv/bin/activate && nohup python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8002 > logs/api.log 2>&1 &'"
+            # Note: Complex shell commands passed to SSH require shell=True on the remote
+            ssh_cmd = [
+                "ssh", "backup",
+                "pkill -f 'uvicorn.*8002' || true; sleep 2; cd ~/crypto-daytrading && source venv/bin/activate && nohup python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8002 > logs/api.log 2>&1 &"
+            ]
             subprocess.run(
                 ssh_cmd,
-                shell=True,
                 timeout=15,
                 capture_output=True,
+                check=False,
             )
             logger.info("Triggered backup API reload via SSH (backup alias)")
         except Exception as e:

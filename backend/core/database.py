@@ -68,6 +68,7 @@ class TradingDatabase:
                 order_id TEXT UNIQUE,
                 status TEXT DEFAULT 'FILLED',
                 slippage_pct REAL,
+                fee REAL DEFAULT 0.0,
                 realized_pnl REAL DEFAULT 0.0,
                 hash TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -99,8 +100,8 @@ class TradingDatabase:
         # Drop old prevent_trade_update trigger if it exists (we need to allow UPDATE)
         try:
             cursor.execute("DROP TRIGGER IF EXISTS prevent_trade_update")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not drop trigger (may not exist): {e}")
 
         # Configuration snapshots for rollback
         cursor.execute(

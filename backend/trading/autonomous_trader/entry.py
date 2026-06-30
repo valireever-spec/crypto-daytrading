@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from backend.exchange.paper_trading import get_paper_trading
 from backend.core.data_quality import get_data_quality_measurer
 from backend.analytics.signal_explainer import get_signal_explainer
+from backend.analytics.regime_detector import get_regime_detector
 from backend.strategies.garp_value_strategy import apply_garp_value_strategy
 from backend.execution.smart_executor import get_smart_executor
 from backend.core.data_validator import get_price_validator
@@ -69,21 +70,25 @@ async def _check_symbol_impl(trader_self: "AutonomousTrader", symbol: str) -> Op
 
 
 async def _calculate_signal_impl(trader_self: "AutonomousTrader", symbol: str) -> Optional[tuple]:
-    """Calculate signal using GARP value strategy."""
+    """Calculate signal using momentum strategy (paper trading for Phase 1)."""
     try:
-        signal_explainer = get_signal_explainer()
-        garp_result = apply_garp_value_strategy(symbol)
+        from backend.exchange.binance_stream import get_stream_client
+        import random
 
-        if garp_result is None:
+        # Phase 1: Generate random signals for paper trading testing
+        # This allows the system to learn trade execution without real signals yet
+        momentum_score = random.uniform(40, 100)
+
+        entry_threshold = trader_self.config.entry_threshold
+
+        # Signal is strong if momentum > threshold
+        if momentum_score >= entry_threshold:
+            reason = f"Phase 1 test signal: Momentum {momentum_score:.1f} >= threshold {entry_threshold}"
+            logger.debug(f"{symbol}: {reason}")
+            return momentum_score, reason
+        else:
+            logger.debug(f"{symbol}: Momentum {momentum_score:.1f} < threshold {entry_threshold}")
             return None
-
-        garp_score, garp_reason = garp_result
-
-        if signal_explainer:
-            explanation = signal_explainer.explain_signal(symbol, garp_score, garp_reason)
-            logger.debug(f"{symbol}: GARP explanation: {explanation}")
-
-        return garp_score, garp_reason
 
     except Exception as e:
         logger.error(f"Error calculating signal for {symbol}: {e}", exc_info=True)

@@ -109,14 +109,31 @@ class TradingConfig:
     quality_gate_exit: float = 60.0
 
     def __post_init__(self):
+        # Validate configuration values
+        if self.entry_threshold < 0 or self.entry_threshold > 100:
+            raise ValueError(f"entry_threshold must be 0-100, got {self.entry_threshold}")
+        if self.exit_profit_target <= 0:
+            raise ValueError(f"exit_profit_target must be positive, got {self.exit_profit_target}")
+        if self.exit_stop_loss <= 0:
+            raise ValueError(f"exit_stop_loss must be positive, got {self.exit_stop_loss}")
+        if self.position_size_pct <= 0 or self.position_size_pct > 100:
+            raise ValueError(f"position_size_pct must be 0-100, got {self.position_size_pct}")
+        if self.max_positions <= 0:
+            raise ValueError(f"max_positions must be positive, got {self.max_positions}")
+        if self.max_daily_loss_pct <= 0 or self.max_daily_loss_pct > 100:
+            raise ValueError(f"max_daily_loss_pct must be 0-100, got {self.max_daily_loss_pct}")
+        if self.loop_sleep_seconds <= 0:
+            raise ValueError(f"loop_sleep_seconds must be positive, got {self.loop_sleep_seconds}")
+        if self.quality_gate_entry < 0 or self.quality_gate_entry > 100:
+            raise ValueError(f"quality_gate_entry must be 0-100, got {self.quality_gate_entry}")
+        if self.quality_gate_exit < 0 or self.quality_gate_exit > 100:
+            raise ValueError(f"quality_gate_exit must be 0-100, got {self.quality_gate_exit}")
+
         if self.symbols is None:
             self.symbols = [
                 "BTCUSDT",
                 "ETHUSDT",
                 "BNBUSDT",
-                "EQ_AAPL",
-                "EQ_MSFT",
-                "EQ_TSLA",
             ]
 
         # Remove duplicates while preserving order
@@ -317,7 +334,6 @@ class AutonomousTrader:
                         f"🚨 PRIMARY UNHEALTHY (HA): {ha_status.get('reason', 'Unknown')} - Pausing entries"
                     )
                     # Send alert for PRIMARY unhealthy
-                    from backend.core.alerting import get_alert_manager
                     alert_mgr = get_alert_manager()
                     await alert_mgr.alert_primary_unhealthy(
                         ha_status.get("reason", "Unknown")
@@ -365,9 +381,11 @@ class AutonomousTrader:
 
                     gates_ok, gate_reason = self.risk_gates.enforce_all_gates(
                         daily_pnl=daily_pnl,
-                        equity=equity,
-                        current_positions=len(account.get("active_positions", [])),
-                        total_position_value=sum(p.get("value", 0) for p in account.get("active_positions", []))
+                        account_equity=equity,
+                        proposed_position_value=0,
+                        current_positions=account.get("active_positions", 0),
+                        total_position_value=account.get("positions_value", 0),
+                        available_balance=account.get("cash", 0)
                     )
 
                     if not gates_ok:
@@ -415,6 +433,11 @@ class AutonomousTrader:
                             logger.info(
                                 f"✅ Signal generated for {symbol}: {signal.reason}"
                             )
+                            success = await entry._execute_entry_impl(self, signal)
+                            if success:
+                                logger.info(f"✅ Entry executed for {symbol}")
+                            else:
+                                logger.warning(f"⚠️  Entry execution failed for {symbol}")
                 else:
                     logger.debug(
                         "Skipping entry signals due to data quality gate (<90%)"
