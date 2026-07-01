@@ -9,6 +9,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import Optional
 
 from backend.core.emergency_stop import (
     trigger_emergency_stop,
@@ -38,7 +39,7 @@ class EmergencyStopResponse(BaseModel):
     positions_closed: int
     timestamp: datetime
     reason: str
-    error: str = None
+    error: Optional[str] = None
 
 
 class CrashDetectionRequest(BaseModel):
@@ -51,15 +52,15 @@ class CrashDetectionResponse(BaseModel):
     crash_detected: bool
     triggered_at: datetime
     symbols_analyzed: list
-    largest_drop_symbol: str = None
+    largest_drop_symbol: Optional[str] = None
     largest_drop_percent: float
     details: dict
 
 
 class EmergencyStatusResponse(BaseModel):
     emergency_stop_active: bool
-    emergency_stop_triggered_at: datetime = None
-    emergency_stop_reason: str = None
+    emergency_stop_triggered_at: Optional[datetime] = None
+    emergency_stop_reason: Optional[str] = None
     crash_detected: bool
     crash_threshold_percent: float
     tracked_symbols: list
