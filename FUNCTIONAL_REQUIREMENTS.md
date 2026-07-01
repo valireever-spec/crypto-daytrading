@@ -500,6 +500,219 @@
 
 ---
 
+### FR-015: Automatic Database Authority Resolution (HA Recovery)
+- **Description:** When PRIMARY and BACKUP databases diverge, automatically select the chronologically most recent database as authoritative and sync it to the stale machine
+- **Why:** During split-brain or recovery scenarios, machines may have different account states. The most recent state is authoritative to prevent:
+  - Reverting to stale positions (losing current P&L)
+  - Orphaned or duplicate trades
+  - Incorrect cash balance during failover
+- **Acceptance Criteria:**
+  
+  **Database Authority Selection:**
+  - Compare timestamps across both databases:
+    - `account_state.updated_at` (primary indicator)
+    - OR `MAX(trades.created_at)` if account_state not updated
+  - Select database with later timestamp as "authoritative"
+  - Select database with earlier timestamp as "stale"
+  
+  **Automatic Sync Process:**
+  - On system startup: Check if databases diverge (timestamps differ >1 minute)
+  - If diverged: Identify authoritative database
+  - Copy entire database file from authoritative → stale machine
+  - Verify checksums match post-sync
+  - Resume trading with unified state
+  
+  **Use Case 1: PRIMARY Crashes, BACKUP Takes Over**
+  - 16:31 PRIMARY crashes, BACKUP takes over
+  - BACKUP.database updated to 16:35 (€750 cash)
+  - PRIMARY.database stuck at 16:30 (€1000 cash)
+  - Recovery detects 16:35 > 16:30 → BACKUP is authoritative
+  - PRIMARY restored from BACKUP, now has €750 cash
+  
+  **Use Case 2: PRIMARY Restarts, Resyncs with BACKUP**
+  - BACKUP has been trading alone for 2 hours
+  - BACKUP.database: 18:30 (€600 cash, 8 trades)
+  - PRIMARY.database: 16:30 (€1000 cash, 0 trades)
+  - Recovery detects 18:30 > 16:30 → BACKUP is authoritative
+  - PRIMARY restored from BACKUP, now has €600 cash + all 8 trades
+  
+  **No Manual Intervention:**
+  - Recovery happens automatically on startup
+  - No need to manually pick "which database is correct"
+  - Chronological time is the arbiter, not human judgment
+  
+  **Verification:**
+  - After sync, both databases must have:
+    - Same account state (cash, P&L, positions)
+    - Same trade count and trade details
+    - Same updated_at timestamp
+  - Before resuming trading, verify checksums match
+  
+- **Implementation:**
+  1. On system startup, query both PRIMARY and BACKUP databases
+  2. Get max(updated_at) from account_state (or max(created_at) from trades)
+  3. If max timestamp differs by >60 seconds: recover
+  4. Copy entire .db file from authoritative → stale machine
+  5. Verify checksums (`sha256sum trading.db`)
+  6. Resume trading
+  
+- **Measurement:**
+  - Simulate divergence: Set PRIMARY.db timestamp to old value
+  - Run recovery script
+  - Verify stale machine has correct state from authoritative DB
+  - Verify no trades lost, no duplicates
+  
+- **Test:**
+  1. Execute 10 trades on PRIMARY (€1,000 → €800)
+  2. PRIMARY crashes at 16:31, BACKUP takes over
+  3. BACKUP executes 5 trades (€800 → €750)
+  4. PRIMARY restarts at 16:50 with stale DB
+  5. Recovery script runs:
+     - PRIMARY.db: 16:30 (€1000, 0 trades)
+     - BACKUP.db: 16:35 (€750, 5 trades)
+     - Selects BACKUP as authoritative (later timestamp)
+  6. Verify PRIMARY restored to: €750 cash, all 15 trades, matches BACKUP
+  
+- **Acceptance:**
+  - ✅ Stale database never overwrites recent state
+  - ✅ All trades from both machines preserved
+  - ✅ Cash/P&L matches authoritative database exactly
+  - ✅ Chronological timestamp used for authority, not machine name
+  - ✅ Recovery is automatic (no manual steps)
+
+**Trace:** Design → Unit Test (8 tests) → Integration Test (4 tests)
+
+---
+
+### FR-016: Autonomous 24/7 Trading (Sleep Mode)
+- **Description:** Bot executes trades autonomously while user is sleeping, with no manual intervention required
+- **Why:** Crypto markets never close (24/7). User must sleep (8h/night). Autopilot bridges this gap.
+- **Acceptance Criteria:**
+  - Bot continuously monitors signals while PRIMARY or BACKUP is running
+  - Executes BUY/SELL orders without user approval
+  - Respects entry threshold (min signal strength to trigger trade)
+  - Respects position limits (max concurrent positions)
+  - All trades logged with timestamp, price, P&L
+  - HA ensures trading continues if one machine fails
+  - Can run 8+ hours uninterrupted (overnight test)
+- **Test:** 
+  - Run paper trading overnight (user offline), verify ≥5 trades executed
+  - Force PRIMARY crash at 2am, verify BACKUP takes over in <30s
+  - Check all overnight trades logged correctly
+- **Acceptance:** Paper test shows 8+ hours of autonomous trading with 0 manual intervention
+
+**Trace:** Design → Unit Test (6 tests) → Integration Test (3 tests)
+
+---
+
+### FR-017: Emergency Market Crash Response
+- **Description:** User can immediately stop all trading and close positions when market crashes or anomaly detected
+- **Why:** Market gaps, circuit breakers, black swan events can invalidate strategy. Need instant kill switch.
+- **Acceptance Criteria:**
+  - "CLOSE ALL" endpoint: Closes all open positions immediately at market price
+  - "PAUSE ALL" endpoint: Stops new entry signals, holds existing positions with active stops
+  - "HALT SYSTEM" endpoint: Kills all trading, stops HA, freezes all state
+  - Each endpoint takes <2 seconds to execute
+  - Can be triggered via:
+    - API call from dashboard
+    - Emergency alert if daily loss >5%
+    - Manual trigger (trader hits button)
+  - All positions closed logged to audit trail
+- **Test:**
+  - Simulate market crash: Create 10 open positions
+  - Call CLOSE ALL endpoint
+  - Verify all positions closed within 2 seconds
+  - Verify P&L calculated correctly
+  - Verify audit trail shows closure reason (market crash)
+- **Acceptance:** CLOSE ALL closes all positions in <2s, 100% success rate
+
+**Trace:** Design → Unit Test (5 tests) → Integration Test (4 tests)
+
+---
+
+### FR-018: Manual Signal Override
+- **Description:** User can override bot's signal decision in real-time (execute or skip a signal)
+- **Why:** Market context changes. Bot's signal threshold doesn't account for news/sentiment. Human judgment needed sometimes.
+- **Acceptance Criteria:**
+  - "OVERRIDE SIGNAL" endpoint: Ignores current signal, prevent trade execution
+  - "FORCE ENTRY" endpoint: Force trade even if signal <threshold (with warning)
+  - "FORCE EXIT" endpoint: Close specific position immediately
+  - Each override logged with reason (e.g., "Fed announcement", "Earnings", "Bad sentiment")
+  - User can adjust entry threshold +/- 5 points for rest of day
+  - Overrides reset at midnight (daily reset)
+- **Test:**
+  - Signal fires: BTCUSDT 72/100 (normal threshold 65, so executes)
+  - User calls OVERRIDE SIGNAL → Trade prevented
+  - Signal fires: ETHUSDT 45/100 (below threshold, normally skipped)
+  - User calls FORCE ENTRY → Trade executed (with lower confidence logged)
+  - Verify both in audit trail
+- **Acceptance:** Overrides prevent/force trades as requested, logged with reason
+
+**Trace:** Design → Unit Test (6 tests) → Integration Test (3 tests)
+
+---
+
+### FR-019: Real-Time Strategy Learning & Feedback
+- **Description:** System analyzes trade outcomes and provides daily feedback to help user learn what works
+- **Why:** Crypto trading requires pattern recognition. User needs to understand: Which signals work? What time-of-day is profitable? What signals fail?
+- **Acceptance Criteria:**
+  - **Daily Summary:** After market close, show:
+    - Win rate by signal strength (90-100 score, 70-89, 50-69, etc.)
+    - Win rate by time-of-day (which hours were most profitable)
+    - Win rate by symbol (which cryptos performed best)
+    - Average trade duration (fast wins, slow wins)
+    - Fee impact (how much did fees eat into profit)
+  
+  - **Per-Trade Feedback:**
+    - Why this signal fired (RSI 35, MACD cross, etc.)
+    - Entry quality (signal was 75/100 = high confidence)
+    - Exit quality (exited early? at peak? at loss?)
+    - Alternative outcome (if held 5 min longer: +€2 more)
+  
+  - **Actionable Recommendations:**
+    - "Signal 70 had only 30% win today, consider raising threshold to 75"
+    - "BTCUSDT was 70% win vs 45% for others, focus there tomorrow"
+    - "9am-11am had 80% win, 2pm-4pm had 40%, concentrate on morning"
+  
+- **Test:**
+  - Run 20-trade paper test
+  - Call daily summary endpoint
+  - Verify breakdown by signal strength, time, symbol
+  - Verify recommendations make sense (correlation, not random)
+- **Acceptance:** Daily summary shows 5+ insights, recommendations are evidence-based
+
+**Trace:** Design → Unit Test (8 tests) → Integration Test (4 tests)
+
+---
+
+### FR-020: Emergency Stop (Hard Kill Switch)
+- **Description:** One-click system shutdown that stops all trading, closes all positions, and halts both PRIMARY and BACKUP
+- **Why:** Last resort if something goes wrong (API exploited, strategy broken, manual panic)
+- **Acceptance Criteria:**
+  - "EMERGENCY STOP" endpoint: Immediate execution, no confirmation
+  - Action sequence (atomic, all-or-nothing):
+    1. Stop all new signal generation
+    2. Close all open positions at market price
+    3. Halt HA heartbeat (disable failover)
+    4. Write "EMERGENCY STOP" to audit log with timestamp
+    5. Freeze database (no further writes)
+    6. Notify user via all channels (email, SMS, push)
+  
+  - Cannot be undone (requires manual restart of API)
+  - Logged with timestamp and trigger reason
+  
+- **Test:**
+  - System has 5 open positions, generating signals
+  - Call EMERGENCY STOP
+  - Verify within 2 seconds: all positions closed, trading stopped, HA disabled
+  - Verify audit log shows stop event
+  - Verify API requires manual restart to resume
+- **Acceptance:** EMERGENCY STOP halts all trading in <2s, requires manual restart
+
+**Trace:** Design → Unit Test (4 tests) → Integration Test (3 tests)
+
+---
+
 ## V-Model: Use Cases & Scenarios
 
 ### UC-1: Morning Trading (Trader Learning)
@@ -551,9 +764,10 @@ Result: Data-driven optimization, continuous improvement
 | **Monitoring** | 2 (FR-009, FR-010) | +1 (was 1) |
 | **Learning** | 1 (FR-012) | +1 (new) |
 | **Alerts** | 1 (FR-011) | Same |
-| **HA** | 1 (FR-013) | Same |
+| **HA & Recovery** | 2 (FR-013, FR-015) | +1 (was 1) |
 | **Overnight** | 1 (FR-014) | +1 (new) |
-| **TOTAL** | **14** | +8 (was 6) |
+| **Safety & Control** | 5 (FR-016, FR-017, FR-018, FR-019, FR-020) | +5 (new, critical) |
+| **TOTAL** | **20** | +14 (was 6) |
 
 ---
 

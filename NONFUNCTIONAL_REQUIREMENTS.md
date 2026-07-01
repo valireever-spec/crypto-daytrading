@@ -90,7 +90,7 @@
 
 ---
 
-### NFR-010A: Platform-Wide Data Consistency
+### NFR-010: Platform-Wide Data Consistency
 - **Requirement:** All platform components (PRIMARY API, BACKUP API, SQLite database, in-memory engine) MUST have identical state
 - **Why:** Data divergence causes trading errors, incorrect P&L, failed failover
 - **Scope:** Every trade, cash balance, P&L, position must be identical across:
@@ -112,7 +112,7 @@
 
 ---
 
-### NFR-010: Database Durability (API-Database Sync)
+### NFR-010B: Database Durability (API-Database Sync)
 - **Requirement:** In-memory state MUST sync permanently with SQLite database
 - **Why:** API crashes/restarts would lose account state (cash, P&L) without this
 - **Scope:**
@@ -146,7 +146,7 @@
 
 ## Security Requirements
 
-### NFR-010: API Key Protection
+### NFR-011: API Key Protection
 - **Requirement:** Binance API keys never stored in code, logs, or version control
 - **Why:** Stolen keys = complete account compromise
 - **Measurement:** Audit code + logs + git history for plaintext keys
@@ -155,7 +155,7 @@
 
 ---
 
-### NFR-011: Input Validation
+### NFR-012: Input Validation
 - **Requirement:** All user inputs validated (strategy parameters, order quantities)
 - **Why:** Bad inputs could cause loss or security issues
 - **Examples:**
@@ -167,7 +167,7 @@
 
 ---
 
-### NFR-012: Audit Trail Immutability
+### NFR-013: Audit Trail Immutability
 - **Requirement:** Trade audit trail is append-only, never deleted or modified
 - **Why:** Regulatory requirement for live trading, forensics on losses
 - **Measurement:** Audit trail file has no overwrites, only appends
@@ -178,7 +178,7 @@
 
 ## Observability Requirements
 
-### NFR-013: Structured Logging
+### NFR-014: Structured Logging
 - **Requirement:** All events logged as JSON (timestamp, level, event, context)
 - **Why:** Easy parsing for monitoring, alerting, debugging
 - **Format:** `{"timestamp": "2026-07-15T09:30:00Z", "level": "INFO", "event": "ORDER_FILLED", "symbol": "BTCUSDT", "qty": 0.5, "price": 45000.50}`
@@ -187,38 +187,9 @@
 
 ---
 
-### NFR-014: Metrics & Dashboard
-- **Requirement:** Real-time dashboard shows P&L, win rate, Sharpe, system health
-- **Why:** User must know if strategy is working and system is healthy
-- **Metrics:**
-  - Daily P&L (USD and %)
-  - Win rate (profitable trades / total trades)
-  - Profit factor (avg winning trade / avg losing trade)
-  - Sharpe ratio (risk-adjusted return)
-  - Consecutive wins/losses
-  - Binance API status
-  - Backup machine status
-- **Test:** Dashboard displays all metrics after 10 trades
-- **Acceptance:** All 8 metrics visible, update every 10 seconds
-
----
-
-### NFR-015: Alerts & Runbooks
-- **Requirement:** Critical events trigger alerts with runbooks for action
-- **Why:** 24/7 trading requires automation; user can't monitor constantly
-- **Alert Triggers:**
-  - Daily loss >5% account → **Runbook:** Stop all new positions, close if bounce
-  - Binance connectivity lost for >60s → **Runbook:** Wait 30s, retry, alert
-  - Backup failover detected → **Runbook:** Investigate main machine, verify backup health
-  - Order stuck >5min unfilled → **Runbook:** Cancel and retry, or manual intervention
-- **Test:** Simulate each alert condition, verify runbook output
-- **Acceptance:** All 4 alerts tested, runbooks documented
-
----
-
 ## Maintainability Requirements
 
-### NFR-016: Code Organization
+### NFR-015: Code Organization
 - **Requirement:** Single-responsibility modules, max 500 lines per file
 - **Why:** Crypto market moves fast; bugs must be found and fixed quickly
 - **Structure:**
@@ -232,7 +203,7 @@
 
 ---
 
-### NFR-017: Type Hints & Linting
+### NFR-016: Type Hints & Linting
 - **Requirement:** 100% type hints, mypy 0 errors, black formatted
 - **Why:** Catches bugs at dev time, not production
 - **Test:** `mypy . && black --check . && ruff check .`
@@ -240,7 +211,7 @@
 
 ---
 
-### NFR-016A: Code Quality Excellence (Lifetime Commitment)
+### NFR-017: Code Quality Excellence (Lifetime Commitment)
 - **Requirement:** Code quality must be maintained at highest standards throughout entire project lifetime
 - **Why:** Technical debt spirals; high quality prevents bugs, reduces maintenance cost, enables rapid iteration
 - **Standards:**
@@ -271,7 +242,7 @@
 
 ---
 
-### NFR-017A: Implementation Testing (No Claims Without Tests)
+### NFR-018: Implementation Testing (No Claims Without Tests)
 - **Requirement:** EVERY code change must have passing tests BEFORE claiming success
 - **Why:** Prevents false claims (e.g., "realized_pnl is persisted" when it wasn't)
 - **Rule:** If you can't show a test that verifies it, it's NOT implemented
@@ -294,7 +265,7 @@
 
 ---
 
-### NFR-018: Test Coverage
+### NFR-019: Test Coverage
 - **Requirement:** ≥85% test coverage for critical paths
 - **Critical paths:**
   - Signal generation (must be accurate)
@@ -306,7 +277,7 @@
 
 ---
 
-### NFR-019: Documentation
+### NFR-020: Documentation
 - **Requirement:** Every strategy and API endpoint documented with examples
 - **Why:** Easy onboarding, understand why trades happened
 - **Contents:**
@@ -321,7 +292,7 @@
 
 ## Cost Requirements
 
-### NFR-020: Operational Cost Coverage
+### NFR-021: Operational Cost Coverage
 - **Requirement:** Strategy must be profitable enough to cover costs with 2x safety margin
 - **Why:** Otherwise, even if strategy works, losses to fees eat profit
 - **Costs:**
@@ -336,7 +307,7 @@
 
 ## Scalability Requirements
 
-### NFR-021: Asset Expansion
+### NFR-022: Asset Expansion
 - **Requirement:** Support adding new trading pairs without code changes
 - **Why:** Want to trade BTCUSDT, ETHUSDT, DOGEUSDT, etc.
 - **Implementation:** Config file or database for pairs + strategy mapping
@@ -345,7 +316,7 @@
 
 ---
 
-### NFR-022: Strategy Expansion
+### NFR-023: Strategy Expansion
 - **Requirement:** Support adding new strategies without modifying core system
 - **Why:** Want to test momentum, mean reversion, grid trading, etc.
 - **Implementation:** Strategy interface (entry/exit methods), registry
@@ -356,7 +327,7 @@
 
 ## Deployment Requirements
 
-### NFR-023: Zero-Downtime Deployment
+### NFR-024: Zero-Downtime Deployment
 - **Requirement:** Deploy code updates without stopping trading
 - **Why:** Crypto markets 24/7; downtime = missed trades
 - **Approach:** Blue-green deployment or rolling restart with backup takeover
@@ -365,7 +336,7 @@
 
 ---
 
-### NFR-024: Configuration Management
+### NFR-025: Configuration Management
 - **Requirement:** All settings via environment variables (no hardcoding)
 - **Why:** Same code runs on dev, testnet, mainnet with different configs
 - **Variables:**
@@ -381,7 +352,7 @@
 
 ## Acceptance Testing
 
-### NFR-025: Paper Trading Acceptance
+### NFR-026: Paper Trading Acceptance
 - **Requirement:** Pass 10-day paper trading run with >55% win rate and positive P&L
 - **Setup:** €10,000 virtual capital, best strategy from testing
 - **Acceptance Criteria:**
@@ -394,7 +365,7 @@
 
 ---
 
-### NFR-026: Live Trading Acceptance
+### NFR-027: Live Trading Acceptance
 - **Requirement:** Pass 2-week live trading with €1,000 without losses >5%
 - **Setup:** Real Binance, best strategy, €1,000 starting capital
 - **Acceptance Criteria:**

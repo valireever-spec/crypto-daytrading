@@ -85,6 +85,58 @@ async def lifespan(app: FastAPI):
     # Validate environment configuration first
     validate_environment_configuration()
 
+    # ========== FR-015: Database Authority Recovery ==========
+    # Auto-detect and sync stale database before trading starts
+    logger.info("🔍 Checking database authority (FR-015)...")
+    try:
+        from backend.core.database_authority import DatabaseAuthority
+        from backend.core.database_sync import DatabaseSyncer
+        from backend.core import constants as db_constants
+
+        authority = DatabaseAuthority(divergence_threshold_seconds=60)
+
+        # Get database paths from environment or defaults
+        primary_db = os.getenv("PRIMARY_DB_PATH", "/home/vali/projects/crypto-daytrading/data/trading.db")
+        backup_db = os.getenv("BACKUP_DB_PATH", "/home/claude/crypto-daytrading/data/trading.db")
+
+        result = authority.detect_authority(primary_db, backup_db)
+        logger.info(f"Authority result: {result['authoritative']} - {result['reason']}")
+
+        # If divergence detected, auto-sync
+        if result['sync_needed']:
+            logger.warning(f"🚨 Database divergence detected: {result['divergence_seconds']:.1f}s")
+
+            syncer = DatabaseSyncer(
+                remote_user="claude",
+                remote_host="192.168.3.25"  # BACKUP host
+            )
+
+            if result['authoritative'] == 'primary':
+                # PRIMARY is authoritative, sync to BACKUP
+                logger.info("Syncing PRIMARY → BACKUP")
+                sync_result = syncer.sync_from_authoritative(primary_db, backup_db)
+            elif result['authoritative'] == 'backup':
+                # BACKUP is authoritative, sync to PRIMARY
+                logger.info("Syncing BACKUP → PRIMARY")
+                sync_result = syncer.sync_from_authoritative(backup_db, primary_db)
+            else:
+                sync_result = {'success': False, 'error': 'Unknown authority'}
+
+            if sync_result['success']:
+                logger.info(f"✅ Database recovery complete: {sync_result['time_seconds']:.2f}s, "
+                           f"{sync_result['bytes_copied']} bytes")
+            else:
+                logger.error(f"❌ Database sync failed: {sync_result['error']}")
+                # Don't crash, continue with potentially diverged state
+                # Manual intervention can fix this later
+        else:
+            logger.info("✅ Databases in sync (or acceptable clock drift)")
+
+    except Exception as e:
+        logger.error(f"Database authority check failed: {e}")
+        # Non-critical error, continue anyway
+    # ========== End FR-015 ==========
+
     # Import essential initialization functions
     from backend.exchange.paper_trading import init_paper_trading
     from backend.exchange.binance_stream import init_stream_client

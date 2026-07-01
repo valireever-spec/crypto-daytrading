@@ -25,6 +25,7 @@ from backend.api.middleware import LogAndMetricsMiddleware
 # Import all routers
 from backend.api.routers.tax import router as tax_router
 from backend.api.routers.autonomous import router as autonomous_router
+from backend.api.routers.emergency import router as emergency_router
 from backend.api.routers.monitoring import router as monitoring_router
 from backend.api.routers.risk_management import router as risk_router
 from backend.api.routers.multi_asset import router as multi_asset_router
@@ -94,6 +95,7 @@ async def favicon():
 routers = [
     tax_router,
     autonomous_router,
+    emergency_router,
     monitoring_router,
     risk_router,
     multi_asset_router,
