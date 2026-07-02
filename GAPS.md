@@ -20,7 +20,52 @@
 ## Gap Details (In Priority Order)
 
 ### CRITICAL (Blocking)
-*None identified* ✅
+
+#### BUG-001: Database Missing Error Handling  
+- **Severity:** 🔴 CRITICAL
+- **CSF Pillar:** 3 (Verification & Validation) + 5 (Root-Cause Improvement)
+- **What:** `backend/core/database.py` (703 lines) has only 1% error handling (~7 try-except blocks)
+- **Why:** Any database error (corrupt table, locked DB, disk full) → silent trade loss
+- **Risk:** Trade insertion could fail without retry, leaving position orphaned
+- **Confidence:** 95%
+- **Current State:** Database functions return None/empty on errors
+- **Fix Required:**
+  1. Add try-except to every database operation
+  2. Implement retry logic with exponential backoff
+  3. Add logging for all errors
+- **Timeline:** 2-3 hours (add error handling to 20+ functions)
+- **Blocking:** YES - Must fix before live trading
+
+#### BUG-002: Global State Without Thread Locks (Race Condition)
+- **Severity:** 🔴 CRITICAL  
+- **CSF Pillar:** 4 (Continuous Integration & Safe Delivery)
+- **What:** 10+ modules use `global` state without locks (signal_explainer, portfolio_monitor, allocation_manager, etc.)
+- **Why:** HA with 2 async tasks accessing same global = data corruption
+- **Risk:** Portfolio data corruption during concurrent PRIMARY/BACKUP access
+- **Confidence:** 90%
+- **Current State:** Works in single-threaded mode, fails under load
+- **Fix Required:**
+  1. Add threading.Lock() to each global singleton
+  2. Protect all read/write operations
+  3. Add tests for concurrent access
+- **Timeline:** 3-4 hours
+- **Blocking:** YES - Must fix before HA failover testing
+
+#### BUG-003: pydantic-settings Import Missing
+- **Severity:** 🔴 CRITICAL (Runtime)
+- **CSF Pillar:** 2 (Build Quality)
+- **What:** `backend/core/config.py` imports `from pydantic_settings import BaseSettings` but package not in requirements.txt
+- **Why:** Works in venv but fails in standalone Python imports
+- **Risk:** Config reload during live trading could fail
+- **Confidence:** 100%
+- **Current State:** API works (venv has it), but direct imports fail
+- **Fix Required:**
+  ```bash
+  # Add to requirements.txt:
+  pydantic-settings==2.0.0+
+  ```
+- **Timeline:** 2 min (add 1 line to requirements.txt)
+- **Blocking:** YES - Must add to requirements
 
 ---
 
