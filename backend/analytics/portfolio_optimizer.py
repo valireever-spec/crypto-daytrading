@@ -12,6 +12,8 @@ import pandas as pd
 import numpy as np
 from scipy.optimize import minimize
 
+from backend.core.ha_globals_manager import get_or_init
+
 logger = logging.getLogger(__name__)
 
 
@@ -425,13 +427,6 @@ class PortfolioOptimizer:
         )
 
 
-# Global instance
-_optimizer: PortfolioOptimizer = None
-
-
 def get_portfolio_optimizer() -> PortfolioOptimizer:
-    """Get or create portfolio optimizer."""
-    global _optimizer
-    if _optimizer is None:
-        _optimizer = PortfolioOptimizer()
-    return _optimizer
+    """Get or create portfolio optimizer (thread-safe via ha_globals_manager)."""
+    return get_or_init("portfolio_optimizer", PortfolioOptimizer)

@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Dict, Optional
 from dataclasses import dataclass
 
+from backend.core.ha_globals_manager import get_or_init
+
 logger = logging.getLogger(__name__)
 
 ALLOCATION_FILE = Path("logs/allocation_config.json")
@@ -223,17 +225,11 @@ class AllocationManager:
         return composite
 
 
-# Global allocation manager instance
-_allocation_manager: Optional[AllocationManager] = None
-
-
 def init_allocation() -> AllocationManager:
-    """Initialize global allocation manager."""
-    global _allocation_manager
-    _allocation_manager = AllocationManager()
-    return _allocation_manager
+    """Initialize global allocation manager (thread-safe via ha_globals_manager)."""
+    return get_or_init("allocation_manager", AllocationManager)
 
 
 def get_allocation() -> Optional[AllocationManager]:
-    """Get global allocation manager."""
-    return _allocation_manager
+    """Get global allocation manager (thread-safe via ha_globals_manager)."""
+    return get_or_init("allocation_manager", AllocationManager)
