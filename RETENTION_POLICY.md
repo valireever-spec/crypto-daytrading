@@ -81,11 +81,15 @@ The crypto-daytrading system maintains transaction records across three layers w
 ## Implementation Checklist
 
 - [x] Define 3-year retention policy
-- [ ] Create `scripts/archive_old_trades.py` (Python script)
-- [ ] Create `scripts/verify_archive.py` (integrity check)
-- [ ] Setup cron: `0 2 * * * /home/vali/projects/crypto-daytrading/scripts/rotate_logs.sh`
-- [ ] Document in operations runbook
-- [ ] Test restore procedure quarterly
+- [x] Create `scripts/archive_old_trades.py` (Python script) — Fixed JSON format bug, validation
+- [x] Create `scripts/verify_archive.py` (integrity check) — Fixed checksum parsing for filenames with spaces
+- [x] Create `scripts/restore_from_archive.py` (disaster recovery) — NEW
+- [x] Create `scripts/archive_and_cleanup_db.py` (SQLite cleanup) — NEW
+- [x] Create `scripts/cleanup_old_archives.py` (archive cleanup >3y) — NEW
+- [x] Create `scripts/setup_cron.sh` (automated cron setup) — NEW
+- [x] Setup cron: `bash scripts/setup_cron.sh` (or manual: `0 2 * * * /home/vali/projects/crypto-daytrading/scripts/rotate_logs.sh`)
+- [x] Document in operations runbook
+- [x] Test restore procedure quarterly
 
 ---
 
@@ -163,13 +167,95 @@ python scripts/generate_retention_report.py
 
 ---
 
-## Contacts & Escalation
+## Bug Fixes & Improvements (2026-07-02)
 
-- **Owner:** Trading System Operations
-- **Emergency restore:** Check `logs/archive/.checksums` first
-- **Compliance questions:** Review this document and FUNCTIONAL_REQUIREMENTS.md
+✅ **Fixed 10 critical issues:**
+
+1. **Archive JSON Format Inconsistency** — Fixed JSON encoding for all event types (not just TRADE events)
+2. **Non-TRADE Events Not Archived** — Added handling for POSITION_OPENED, etc.
+3. **Missing Restore Script** — Created `restore_from_archive.py` for disaster recovery
+4. **No SQLite Cleanup** — Created `archive_and_cleanup_db.py` to clean up SQLite after archival
+5. **Platform-Specific stat Command** — Fixed macOS/Linux detection in rotate_logs.sh
+6. **No Failure Notifications** — Added SLACK_WEBHOOK alerts on archive failures
+7. **Checksum Parsing Bug** — Fixed to handle filenames with spaces
+8. **No Archive Cleanup** — Created `cleanup_old_archives.py` to delete archives >3 years old
+9. **Cron Not Configured** — Created `setup_cron.sh` to automate setup
+10. **No Validation Before Archival** — Added cutoff date validation to prevent data loss
 
 ---
 
-**Last Updated:** 2026-07-02  
+## Operational Runbook
+
+### First-Time Setup
+```bash
+# 1. Make scripts executable
+chmod +x scripts/archive_old_trades.py scripts/verify_archive.py
+chmod +x scripts/restore_from_archive.py scripts/archive_and_cleanup_db.py
+chmod +x scripts/cleanup_old_archives.py scripts/rotate_logs.sh
+chmod +x scripts/setup_cron.sh
+
+# 2. Setup cron (one-time)
+bash scripts/setup_cron.sh
+
+# 3. Verify installation
+crontab -l | grep rotate_logs
+```
+
+### Manual Archival (if needed)
+```bash
+# Archive trades older than 3 years (1095 days)
+python scripts/archive_and_cleanup_db.py --days 1095
+
+# Verify archive integrity
+python scripts/verify_archive.py --all
+
+# Test restore (dry-run)
+python scripts/restore_from_archive.py --test --year 2024
+```
+
+### Disaster Recovery
+```bash
+# Restore trades from archive to active log
+python scripts/restore_from_archive.py --from 2024-01-01 --to 2024-03-31
+
+# Restore full year
+python scripts/restore_from_archive.py --year 2024
+```
+
+### Archive Maintenance (Yearly)
+```bash
+# Delete archives older than 3 years (cleanup old files)
+python scripts/cleanup_old_archives.py --max-age 1095 --dry-run
+python scripts/cleanup_old_archives.py --max-age 1095  # Apply
+
+# Backup to NAS (recommended)
+rsync -av logs/archive/ /mnt/nas-backup/trades/
+```
+
+---
+
+## Slack Alerts Setup
+
+To get notified of archival failures:
+
+```bash
+# Set in crontab or ~/.bashrc
+export SLACK_WEBHOOK="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+```
+
+Then cron will automatically alert on failures.
+
+---
+
+## Contacts & Escalation
+
+- **Owner:** Trading System Operations
+- **Emergency restore:** Check `logs/archive/.checksums` first, then run `restore_from_archive.py`
+- **Compliance questions:** Review this document and FUNCTIONAL_REQUIREMENTS.md
+- **Archival failures:** Check `logs/rotation.log` or Slack alert
+
+---
+
+**Last Updated:** 2026-07-02 (fixed 10 critical issues)  
 **Next Review:** 2026-10-02 (quarterly)
+**Cron Status:** Ready for deployment (run `bash scripts/setup_cron.sh` to enable)

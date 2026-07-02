@@ -39,7 +39,13 @@ def archive_trades(active_log, archive_dir, cutoff_date, dry_run=False):
     archive_dir.mkdir(exist_ok=True)
 
     trades_to_archive = []
-    trades_to_keep = []
+    other_events_to_keep = []  # Non-TRADE events
+    trades_to_keep = []  # Recent trades
+
+    # Validate cutoff date is reasonable (not in future)
+    if cutoff_date > datetime.utcnow().date():
+        logger.error(f"❌ Cutoff date cannot be in future: {cutoff_date}")
+        return 0
 
     # Read active log
     if not active_log.exists():
@@ -53,8 +59,10 @@ def archive_trades(active_log, archive_dir, cutoff_date, dry_run=False):
 
             try:
                 data = json.loads(line)
+
+                # Handle non-TRADE events (preserve as-is, don't archive)
                 if data.get('event_type') != 'TRADE':
-                    trades_to_keep.append(line)
+                    other_events_to_keep.append(data)
                     continue
 
                 trade_date = datetime.fromisoformat(
@@ -64,11 +72,11 @@ def archive_trades(active_log, archive_dir, cutoff_date, dry_run=False):
                 if trade_date < cutoff_date:
                     trades_to_archive.append(data)
                 else:
-                    trades_to_keep.append(line)
+                    trades_to_keep.append(data)
 
             except json.JSONDecodeError:
                 logger.warning(f"Skipped invalid JSON: {line[:50]}")
-                trades_to_keep.append(line)
+                continue
 
     # Write archive
     if trades_to_archive:
@@ -87,7 +95,7 @@ def archive_trades(active_log, archive_dir, cutoff_date, dry_run=False):
                 archived_count = sum(1 for _ in f)
 
             if archived_count != len(trades_to_archive):
-                logger.error(f"Archive mismatch: wrote {len(trades_to_archive)}, verified {archived_count}")
+                logger.error(f"❌ Archive mismatch: wrote {len(trades_to_archive)}, verified {archived_count}")
                 return 0
 
             # Calculate checksum
@@ -102,12 +110,18 @@ def archive_trades(active_log, archive_dir, cutoff_date, dry_run=False):
             logger.info(f"✅ Archived {len(trades_to_archive)} trades")
             logger.info(f"   Checksum: {checksum}")
 
-    # Update active log (keep non-archived trades)
-    if not dry_run and trades_to_archive:
+    # Update active log: write all remaining trades + non-trade events
+    if not dry_run:
         with open(active_log, 'w') as f:
-            f.writelines(trades_to_keep)
+            # Write non-TRADE events first (preserve order)
+            for event in other_events_to_keep:
+                f.write(json.dumps(event) + '\n')
+            # Write remaining trades
+            for trade in trades_to_keep:
+                f.write(json.dumps(trade) + '\n')
 
-        logger.info(f"✅ Updated active log: {len(trades_to_keep)} trades remaining")
+        remaining_total = len(other_events_to_keep) + len(trades_to_keep)
+        logger.info(f"✅ Updated active log: {len(trades_to_keep)} trades, {len(other_events_to_keep)} other events remaining")
 
     return len(trades_to_archive)
 

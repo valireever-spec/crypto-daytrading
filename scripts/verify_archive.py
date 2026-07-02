@@ -75,29 +75,43 @@ def verify_checksums(archive_dir):
             if not line.strip():
                 continue
 
-            parts = line.split()
+            # Parse "HASH  FILENAME" format (two spaces separate)
+            # Handle filenames with spaces by splitting on first occurrence of 2+ spaces
+            parts = line.split(None, 1)  # Split on first whitespace
             if len(parts) < 2:
+                logger.warning(f"⚠️  Invalid checksum line format: {line[:60]}")
                 continue
 
             expected_hash = parts[0]
-            filename = parts[1]
+            filename = parts[1].strip()
+
+            # Validate hash format (should be 64 hex chars for SHA256)
+            if len(expected_hash) != 64 or not all(c in '0123456789abcdef' for c in expected_hash):
+                logger.warning(f"⚠️  Invalid hash format: {expected_hash}")
+                continue
+
             filepath = archive_dir / filename
 
             if not filepath.exists():
                 logger.warning(f"⚠️  File not found: {filepath}")
+                invalid_count += 1
                 continue
 
             # Calculate hash
-            with open(filepath, 'rb') as f:
-                actual_hash = hashlib.sha256(f.read()).hexdigest()
+            try:
+                with open(filepath, 'rb') as f:
+                    actual_hash = hashlib.sha256(f.read()).hexdigest()
 
-            if actual_hash == expected_hash:
-                logger.info(f"✅ {filename}: hash verified")
-                valid_count += 1
-            else:
-                logger.error(f"❌ {filename}: hash mismatch!")
-                logger.error(f"   Expected: {expected_hash}")
-                logger.error(f"   Actual:   {actual_hash}")
+                if actual_hash == expected_hash:
+                    logger.info(f"✅ {filename}: hash verified")
+                    valid_count += 1
+                else:
+                    logger.error(f"❌ {filename}: hash mismatch!")
+                    logger.error(f"   Expected: {expected_hash}")
+                    logger.error(f"   Actual:   {actual_hash}")
+                    invalid_count += 1
+            except Exception as e:
+                logger.error(f"❌ {filename}: failed to read for verification: {e}")
                 invalid_count += 1
 
     return invalid_count == 0
