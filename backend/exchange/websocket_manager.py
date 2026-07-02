@@ -128,8 +128,8 @@ class WebSocketManager:
             # Subscribe to streams
             await self._subscribe_streams()
 
-            # Start listening
-            await self._ws_listen()
+            # Start listening in background (don't await - it's an infinite loop)
+            asyncio.create_task(self._ws_listen())
 
             return True
 
