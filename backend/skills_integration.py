@@ -600,6 +600,8 @@ class CryptoSkillsManager:
 
 # Global instance for easy access
 skills = None
+skills_lock = __import__("asyncio").Lock()
+
 
 def init_skills(log_dir: str = "logs", dashboard_url: str = "http://localhost:8000") -> CryptoSkillsManager:
     """

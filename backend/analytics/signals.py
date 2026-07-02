@@ -239,6 +239,7 @@ class SignalGenerator:
 
 # Global signal generator instance
 _signal_generator: Optional[SignalGenerator] = None
+_signal_generator_lock = __import__("asyncio").Lock()
 
 
 def init_signal_generator() -> SignalGenerator:

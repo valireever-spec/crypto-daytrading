@@ -51,6 +51,7 @@ from backend.api.routers.dashboard_wrapper import router as dashboard_wrapper_ro
 from backend.api.routers.trading_control import router as trading_control_router
 from backend.api.routers.dashboard_integration import router as dashboard_integration_router
 from backend.api.routers.allocation_management import router as allocation_management_router
+from backend.api.routers.config import router as config_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -121,6 +122,7 @@ routers = [
     trading_control_router,
     dashboard_integration_router,
     allocation_management_router,
+    config_router,
 ]
 
 for router in routers:
