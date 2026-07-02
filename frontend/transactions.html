@@ -416,7 +416,7 @@
             try {
                 const response = await fetch(`${API}/api/paper/trades?limit=100`);
                 const data = await response.json();
-                allTransactions = data.trades || [];
+                allTransactions = Array.isArray(data) ? data : (data.trades || []);
 
                 // Populate symbol filter
                 uniqueSymbols.clear();
