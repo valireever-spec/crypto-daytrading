@@ -408,35 +408,43 @@ class TradingDatabase:
         logger.info(f"Position closed in DB: id={position_id}")
 
     def get_open_positions(self) -> List[Dict]:
-        """Get all open positions from database.
+        """Get all open positions from database (with error handling).
 
         Returns:
             List of position dicts: {id, symbol, quantity, entry_price, entry_time}
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        cursor.execute(
-            """
-            SELECT id, symbol, quantity, entry_price, entry_time
-            FROM open_positions
-            WHERE status = 'OPEN'
-            ORDER BY entry_time ASC
-            """
-        )
+            cursor.execute(
+                """
+                SELECT id, symbol, quantity, entry_price, entry_time
+                FROM open_positions
+                WHERE status = 'OPEN'
+                ORDER BY entry_time ASC
+                """
+            )
 
-        positions = [dict(row) for row in cursor.fetchall()]
-        conn.close()
+            positions = [dict(row) for row in cursor.fetchall()]
+            conn.close()
 
-        if positions:
-            logger.info(f"Restored {len(positions)} open positions from DB")
-            for pos in positions:
-                logger.info(
-                    f"  - {pos['symbol']}: {pos['quantity']} @ {pos['entry_price']}"
-                )
+            if positions:
+                logger.info(f"Restored {len(positions)} open positions from DB")
+                for pos in positions:
+                    logger.info(
+                        f"  - {pos['symbol']}: {pos['quantity']} @ {pos['entry_price']}"
+                    )
 
-        return positions
+            return positions
+
+        except sqlite3.DatabaseError as e:
+            logger.error(f"❌ Database error reading positions: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"❌ Unexpected error reading open positions: {e}")
+            return []
 
     def clear_all_positions(self) -> None:
         """Clear all corrupted/stale positions (Pillar #10: Database Integrity).
@@ -595,25 +603,33 @@ class TradingDatabase:
         Returns:
             List of all trade dicts (entire history)
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        cursor.execute(
-            """
-            SELECT id, symbol, side, quantity, price, trade_time, slippage_pct, realized_pnl, order_id, status, fee
-            FROM trades
-            ORDER BY trade_time ASC
-            """
-        )
+            cursor.execute(
+                """
+                SELECT id, symbol, side, quantity, price, trade_time, slippage_pct, realized_pnl, order_id, status, fee
+                FROM trades
+                ORDER BY trade_time ASC
+                """
+            )
 
-        trades = [dict(row) for row in cursor.fetchall()]
-        conn.close()
+            trades = [dict(row) for row in cursor.fetchall()]
+            conn.close()
 
-        if trades:
-            logger.info(f"✅ Restored {len(trades)} trades from database (full history)")
+            if trades:
+                logger.info(f"✅ Restored {len(trades)} trades from database (full history)")
 
-        return trades
+            return trades
+
+        except sqlite3.DatabaseError as e:
+            logger.error(f"❌ Database error reading trades: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"❌ Unexpected error reading trade history: {e}")
+            return []
 
     def save_config_snapshot(self, config_dict: Dict) -> None:
         """Save configuration snapshot for audit trail.

@@ -34,6 +34,140 @@ Crypto Daytrading Platform — Development Guidance
 
 ---
 
+## Gap & Bug Detection: Skills-Based Workflow
+
+This project leverages **5 specialized detection skills** from the skill-creator project to systematically identify gaps and bugs.
+
+### Quick Start: Run All Detection Skills
+
+```bash
+# 1. Security first (API keys, passwords, secrets)
+secrets-scanner-v2 /path/to/crypto-daytrading
+
+# 2. Security testing gaps
+test-security-analyzer-v2 /path/to/crypto-daytrading
+
+# 3. Dependency vulnerabilities
+dependency-vulnerability-checker-v2 /path/to/crypto-daytrading
+
+# 4. Test coverage gaps
+testing-intelligence-engine-v2 /path/to/crypto-daytrading
+
+# 5. Resilience testing (exchange failures, market crashes)
+chaos-testing-framework-v2 /path/to/crypto-daytrading
+```
+
+### 🔴 CRITICAL: Security Skills (Run First)
+
+#### 1. **`secrets-scanner-v2`** — Detect Hardcoded Secrets
+- **What:** Finds API keys, private keys, passwords in code
+- **Why:** Crypto systems are high-value targets; ANY leaked key = total loss
+- **Checklist:**
+  - [ ] No Binance API keys in code
+  - [ ] No private wallet keys in git
+  - [ ] No `.env` file committed
+  - [ ] All secrets loaded from environment variables
+  - [ ] `.gitignore` includes `.env`, `*.key`, logs/
+
+#### 2. **`test-security-analyzer-v2`** — Find Untested Security Paths
+- **What:** Identifies security-critical code without test coverage
+- **Why:** Most crypto breaches happen on untested edge cases
+- **Checklist:**
+  - [ ] All exchange API calls have error tests
+  - [ ] Circuit breaker tested (exchange down scenario)
+  - [ ] Insufficient balance scenario tested
+  - [ ] API rate limit handling tested
+  - [ ] Invalid order rejection tested
+
+#### 3. **`dependency-vulnerability-checker-v2`** — Scan for CVEs
+- **What:** Detects known vulnerabilities in dependencies (especially crypto libs)
+- **Why:** Vulnerable crypto libraries = system compromise
+- **Checklist:**
+  - [ ] All dependencies pinned to exact versions
+  - [ ] No high-severity CVEs in crypto libraries
+  - [ ] Crypto libs up-to-date (ccxt, pydantic, aiohttp)
+  - [ ] Pre-commit hook runs `pip check` before commit
+
+### 🟡 HIGH PRIORITY: Testing Skills (Then)
+
+#### 4. **`testing-intelligence-engine-v2`** — Identify Test Coverage Gaps
+- **What:** Finds untested code paths and edge cases
+- **Why:** Trading logic requires comprehensive scenario coverage
+- **Checklist:**
+  - [ ] ≥90% code coverage on critical paths
+  - [ ] All buy/sell scenarios tested
+  - [ ] All error paths tested
+  - [ ] Portfolio math edge cases tested (0 balance, max leverage)
+  - [ ] Concurrent trade scenarios tested
+
+#### 5. **`chaos-testing-framework-v2`** — Test Resilience Under Failure
+- **What:** Tests system behavior when things fail (exchange down, no liquidity, slippage)
+- **Why:** Real markets fail; your system must degrade gracefully
+- **Test scenarios:**
+  - [ ] Exchange API returns 5xx error
+  - [ ] Network timeout during order placement
+  - [ ] Insufficient balance during execution
+  - [ ] High slippage (market moved >threshold)
+  - [ ] API rate limit hit
+  - [ ] Market gaps (order never fills, price jumps)
+
+### Workflow: From Detection to Fix
+
+1. **Run skills in priority order** (secrets → security tests → CVEs → coverage → chaos)
+2. **Document findings** in `GAPS.md` with:
+   - Gap ID (SEC-001, TEST-001, etc.)
+   - Severity (Critical, High, Medium, Low)
+   - Which skill detected it
+   - CSF pillar it maps to
+3. **Link to CSF section** below for fixes (e.g., "Pillar 6.3: Rate limiting")
+4. **Create test cases** for each gap fix
+5. **Re-run detection** to verify fix works
+
+### Key Files for Gap Tracking
+
+- **`GAPS.md`** — Active list of detected gaps (create if doesn't exist)
+- **`CRITICAL_SYSTEMS_FRAMEWORK.md`** — CSF rules and targets
+- **`FUNCTIONAL_REQUIREMENTS.md`** — Feature requirements
+- **`NONFUNCTIONAL_REQUIREMENTS.md`** — System properties & constraints
+
+---
+
+## Portfolio Frameworks Reference
+
+This project also follows **three portfolio frameworks** from the central project-designer project:
+
+### 1. **8-Pillar Architecture Framework**
+Located in: `../project-designer/FRAMEWORK.md`
+
+Maps to CSF pillars:
+- Pillar 1 (Arch Discipline) ← CSF 1, 2
+- Pillar 2 (Build Quality) ← CSF 3, 4
+- Pillar 3 (Verification) ← CSF 5, 6
+- Pillar 6 (Security) ← CSF 7, 8
+- Pillar 7 (Observability) ← CSF 9, 10
+
+### 2. **11 Engineering Standards**
+Located in: `../project-designer/ENGINEERING_STANDARDS_BASE.md`
+
+All standards apply; crypto-critical ones:
+- ✅ Type Hints (mypy 0 errors)
+- ✅ Testing (≥90% coverage for crypto)
+- ✅ Configuration (no hardcoded secrets)
+- ✅ Error Handling (log all failures)
+- ✅ Observability (JSON logs, dashboards, metrics)
+
+### 3. **V-Model Requirements Traceability**
+Located in: `../project-designer/V_MODEL_REQUIREMENTS.md`
+
+We already implement V-Model here; frameworks doc provides additional templates.
+
+### 4. **Maturity Roadmap**
+Located in: `../project-designer/MATURITY_ROADMAP.md`
+
+Current status: **Viable (40–60%)** → Target: **Production-Ready (60–80%)**
+
+---
+
 ## Critical Systems Framework (CSF) Application
 
 This project implements the **Critical Systems Framework (CSF)** — a 26-pillar hardening standard for autonomous trading systems.
@@ -330,6 +464,43 @@ Every requirement must map to:
 
 ---
 
+## Creating & Tracking Gaps
+
+Create a `GAPS.md` file in the project root to track all detected gaps:
+
+```markdown
+# GAPS.md
+
+## Critical (Security)
+
+| ID | Detection Skill | Issue | CSF Pillar | Status |
+|----|-----------------|-------|-----------|--------|
+| SEC-001 | secrets-scanner | API key in config.py | Pillar 6 | 🔴 Open |
+| SEC-002 | test-security-analyzer | No test for rate limit | Pillar 6 | 🟡 In Progress |
+| SEC-003 | dependency-vulnerability-checker | ccxt 2.x has CVE | Pillar 8 | 🔴 Open |
+
+## High Priority (Testing)
+
+| ID | Detection Skill | Issue | CSF Pillar | Status |
+|----|-----------------|-------|-----------|--------|
+| TEST-001 | testing-intelligence-engine | 72% coverage on execution | Pillar 5 | 🟡 In Progress |
+| TEST-002 | chaos-testing-framework | No test for exchange down | Pillar 6 | 🔴 Open |
+
+## Medium Priority (Quality)
+
+| ID | Detection Skill | Issue | CSF Pillar | Status |
+|----|-----------------|-------|-----------|--------|
+| QUAL-001 | code-quality-dashboard | File size >500 lines | Pillar 11 | 🟡 In Progress |
+```
+
+Then:
+1. Fix each gap
+2. Create test case or code change
+3. Update status to ✅ Done
+4. Re-run skill to verify
+
+---
+
 ## Commands
 
 ```bash
@@ -480,6 +651,51 @@ crypto-daytrading/
 4. **Track everything:** Every trade logged, every loss analyzed. This data is gold for learning.
 
 5. **Safe to live:** Once you've validated >55% win rate in paper, switching to live with €1,000 is low-risk.
+
+---
+
+## Integration with Skill-Creator Project
+
+This project uses **5 specialized skills** from `/home/vali/projects/skill-creator/` to detect and fix gaps:
+
+**Project location:** `/home/vali/projects/skill-creator/`
+
+**Skills library:** `/home/vali/projects/skill-library/`
+
+Each skill is production-ready and implements the **10-Part Reliability Solution**:
+1. Grounding in reality (read existing code first)
+2. Explicit boundaries (knows what it does and doesn't do)
+3. Verification patterns (checks its own work)
+4. Safe error handling (never lies or guesses)
+5. Automated verification gates (validates findings)
+6. Structured constraints (type-safe operations)
+7. Audit trail logging (records what it found)
+8. Reality-check functions (double-checks results)
+9. Confidence scoring (ranks confidence of findings)
+10. Silence over lying (errors if uncertain)
+
+**How to invoke:**
+```bash
+# If skills are installed globally
+secrets-scanner-v2 /home/vali/projects/crypto-daytrading
+
+# Or run from skill-creator
+python -m skill_creator.cli --skill secrets-scanner-v2 --path /home/vali/projects/crypto-daytrading
+```
+
+**Recommended execution order:**
+1. secrets-scanner-v2 (security, non-negotiable)
+2. test-security-analyzer-v2 (test coverage for security paths)
+3. dependency-vulnerability-checker-v2 (CVE scanning)
+4. testing-intelligence-engine-v2 (overall test coverage)
+5. chaos-testing-framework-v2 (resilience)
+
+**Why this order:**
+- Security first (prevent catastrophic failures)
+- Then testing (ensure security is actually tested)
+- Then quality (optimize for maintainability)
+
+**Expected output:** `GAPS.md` file with actionable findings linked to CSF pillars
 
 ---
 

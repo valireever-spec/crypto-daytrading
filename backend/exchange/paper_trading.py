@@ -3,6 +3,7 @@
 import logging
 import uuid
 import sqlite3
+import threading
 from datetime import datetime
 from typing import Dict, List, Optional, Literal
 from dataclasses import dataclass, asdict
@@ -676,19 +677,23 @@ class PaperTradingEngine:
             logger.error(f"Failed to restore account state from DB: {e}")
 
 
-# Global paper trading engine
+# Global paper trading engine (thread-safe access)
 _paper_engine: Optional[PaperTradingEngine] = None
+_paper_engine_lock = threading.Lock()
 
 
 def init_paper_trading(
     starting_capital: float = 1000.0,
 ) -> PaperTradingEngine:
-    """Initialize global paper trading engine."""
+    """Initialize global paper trading engine (thread-safe)."""
     global _paper_engine
-    _paper_engine = PaperTradingEngine(starting_capital)
-    return _paper_engine
+    with _paper_engine_lock:
+        if _paper_engine is None:
+            _paper_engine = PaperTradingEngine(starting_capital)
+        return _paper_engine
 
 
 def get_paper_trading() -> Optional[PaperTradingEngine]:
-    """Get global paper trading engine."""
-    return _paper_engine
+    """Get global paper trading engine (thread-safe)."""
+    with _paper_engine_lock:
+        return _paper_engine

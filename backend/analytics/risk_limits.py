@@ -1,6 +1,7 @@
 """Risk limit enforcement and monitoring."""
 
 import logging
+import threading
 from typing import Dict, Optional, List
 from dataclasses import dataclass
 from enum import Enum
@@ -279,19 +280,22 @@ class RiskMonitor:
         }
 
 
-# Global risk monitor instance
+# Global risk monitor instance (thread-safe access)
 _risk_monitor: Optional[RiskMonitor] = None
+_risk_monitor_lock = threading.Lock()
 
 
 def init_risk_monitor(limits: RiskLimits = None) -> RiskMonitor:
-    """Initialize risk monitor."""
+    """Initialize risk monitor (thread-safe)."""
     global _risk_monitor
-    if _risk_monitor is None:
-        _risk_monitor = RiskMonitor(limits)
-        logger.info("Risk monitor initialized")
-    return _risk_monitor
+    with _risk_monitor_lock:
+        if _risk_monitor is None:
+            _risk_monitor = RiskMonitor(limits)
+            logger.info("Risk monitor initialized")
+        return _risk_monitor
 
 
 def get_risk_monitor() -> Optional[RiskMonitor]:
-    """Get risk monitor instance."""
-    return _risk_monitor
+    """Get risk monitor instance (thread-safe)."""
+    with _risk_monitor_lock:
+        return _risk_monitor
