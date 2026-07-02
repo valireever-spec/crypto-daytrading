@@ -216,6 +216,18 @@ async def get_paper_trades(limit: int = 100) -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/transactions", include_in_schema=False)
+async def get_transactions_page() -> FileResponse:
+    """Serve transactions dashboard HTML page."""
+    frontend_path = Path(__file__).parent.parent.parent / "frontend"
+    transactions_file = frontend_path / "transactions.html"
+
+    if not transactions_file.exists():
+        raise HTTPException(status_code=404, detail="Transactions page not found")
+
+    return FileResponse(path=transactions_file, media_type="text/html")
+
+
 @app.post("/api/paper/reset")
 async def reset_paper_trading(capital: float = None) -> JSONResponse:
     """Reset paper trading with optional custom capital (DANGEROUS - for testing only)."""
