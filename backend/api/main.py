@@ -140,13 +140,20 @@ async def root():
 
 @app.get("/api/health")
 async def health_check() -> JSONResponse:
-    """Check system health."""
+    """Check system health with circuit breaker and WebSocket status.
+
+    Returns:
+        - 200: Healthy (all systems OK)
+        - 503: Degraded or unhealthy
+    """
     try:
         from backend.exchange.paper_trading import get_paper_trading
-        from backend.core.circuit_breaker import get_circuit_breaker
+        from backend.core.circuit_breaker_v2 import get_circuit_breaker
+        from backend.exchange.websocket_manager import get_manager
 
         engine = get_paper_trading()
         circuit_breaker = get_circuit_breaker()
+        ws_manager = get_manager()
 
         if not engine:
             return JSONResponse(
@@ -154,16 +161,43 @@ async def health_check() -> JSONResponse:
                 content={"status": "unhealthy", "reason": "Paper trading engine not ready"},
             )
 
+        # Get statuses
+        cb_status = circuit_breaker.get_status()
+        ws_health = ws_manager.get_health() if ws_manager else None
+        account = engine.get_account_state()
+
+        # Determine overall health
+        ws_healthy = (
+            ws_health and
+            (ws_health["websocket"]["connected"] or
+             ws_health["rest"]["active"])
+        )
+
+        trading_allowed = cb_status["trading_allowed"]
+
+        # Status mapping
+        if not ws_healthy or not trading_allowed:
+            http_status = 503 if cb_status["state"] == "OPEN" else 200
+        else:
+            http_status = 200
+
         return JSONResponse(
-            {
-                "status": "healthy",
-                "circuit_breaker": circuit_breaker.get_status_report(),
-                "account": engine.get_account_state(),
+            status_code=http_status,
+            content={
+                "status": "healthy" if (ws_healthy and trading_allowed) else
+                         "degraded" if trading_allowed else "unhealthy",
+                "circuit_breaker": cb_status,
+                "websocket": ws_health,
+                "account": account,
+                "trading_allowed": trading_allowed,
             }
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return JSONResponse(status_code=503, content={"status": "unhealthy", "error": str(e)})
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "error": str(e)}
+        )
 
 
 @app.get("/api/paper/account")

@@ -140,9 +140,11 @@ async def lifespan(app: FastAPI):
     # Import essential initialization functions
     from backend.exchange.paper_trading import init_paper_trading
     from backend.exchange.binance_stream import init_stream_client
+    from backend.exchange.websocket_manager import init_manager
     from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
     from backend.trading.autonomous_trader import TradingConfig
     from backend.execution.smart_executor import init_smart_executor
+    from backend.core.circuit_breaker_v2 import init_circuit_breaker
 
     # Validate HA configuration
     try:
@@ -161,10 +163,27 @@ async def lifespan(app: FastAPI):
     init_smart_executor()
     logger.info("Smart executor initialized")
 
-    # Initialize Binance stream
+    # Initialize new circuit breaker v2 (intelligent, not just halt)
+    try:
+        circuit_breaker = init_circuit_breaker(
+            failure_threshold=5,      # More tolerant than before
+            recover_timeout=20,       # Faster recovery
+        )
+        logger.info("✅ Circuit breaker v2 initialized (intelligent degradation mode)")
+    except Exception as e:
+        logger.error(f"Failed to initialize circuit breaker: {e}")
+
+    # Initialize new WebSocket manager (with automatic recovery + REST fallback)
+    try:
+        ws_manager = await init_manager(symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"])
+        logger.info("✅ WebSocket manager initialized (automatic recovery + REST fallback)")
+    except Exception as e:
+        logger.error(f"Failed to initialize WebSocket manager: {e}")
+
+    # Initialize Binance stream (legacy, kept for backward compatibility)
     try:
         stream_client = await init_stream_client()
-        logger.info("Binance stream client initialized")
+        logger.info("Binance stream client initialized (legacy)")
 
         async def on_price_update(symbol: str, data: dict) -> None:
             """Handle price updates from Binance stream."""

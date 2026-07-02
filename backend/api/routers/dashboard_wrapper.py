@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Query
 from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.binance_stream import get_stream_client
+from backend.exchange.websocket_manager import get_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["dashboard"])
@@ -14,40 +15,57 @@ router = APIRouter(prefix="/api", tags=["dashboard"])
 
 @router.get("/prices")
 async def get_prices():
-    """Get current market prices for all tracked symbols."""
+    """Get current market prices for all tracked symbols.
+
+    Returns prices from WebSocket (preferred) or REST fallback.
+    Includes health status and data freshness.
+    """
     try:
-        stream_client = get_stream_client()
-        if not stream_client:
-            return {
-                "prices": {},
-                "stream_status": {
-                    "connected": False,
-                    "message": "Stream client not initialized"
-                }
-            }
-
+        # Try to get engine for symbol list
         engine = get_paper_trading()
-        if not engine:
+        symbols = engine.config.symbols if (engine and hasattr(engine, 'config')) else ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
+
+        # Try new WebSocket manager first
+        try:
+            manager = get_manager()
+            prices = manager.get_prices(symbols, max_age_seconds=10)
+            health = manager.get_health()
+
             return {
-                "prices": {},
+                "prices": prices,
                 "stream_status": {
-                    "connected": False,
-                    "message": "Paper trading engine not initialized"
+                    "connected": health["websocket"]["connected"],
+                    "source": "websocket" if prices else "fallback",
+                    "websocket": health["websocket"],
+                    "rest": health["rest"],
+                    "healthy": len(prices) == len(symbols)
                 }
             }
+        except Exception as e:
+            logger.debug(f"WebSocket manager error: {e}")
 
-        symbols = engine.config.symbols if hasattr(engine, 'config') else ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
+        # Fallback: try old stream client
+        stream_client = get_stream_client()
+        if stream_client and hasattr(stream_client, 'get_prices_fresh'):
+            prices = stream_client.get_prices_fresh(symbols, max_age_seconds=5)
+            if prices:
+                return {
+                    "prices": prices,
+                    "stream_status": {
+                        "connected": True,
+                        "source": "stream_client_fallback",
+                        "healthy": len(prices) == len(symbols)
+                    }
+                }
 
-        prices = {}
-        for symbol in symbols:
-            if hasattr(stream_client, 'price_cache') and symbol in stream_client.price_cache:
-                prices[symbol] = stream_client.price_cache[symbol]
-
+        # Last resort: return empty with error
         return {
-            "prices": prices,
+            "prices": {},
             "stream_status": {
-                "connected": stream_client.is_connected if hasattr(stream_client, 'is_connected') else False,
-                "last_update": "Now"
+                "connected": False,
+                "source": "none",
+                "message": "No price source available (WebSocket down, REST unavailable)",
+                "recommendation": "Check WebSocket connection or API health"
             }
         }
 
@@ -57,7 +75,8 @@ async def get_prices():
             "prices": {},
             "stream_status": {
                 "connected": False,
-                "message": f"Error: {str(e)}"
+                "message": f"Error: {str(e)}",
+                "recommendation": "Restart API server"
             }
         }
 
