@@ -39,8 +39,8 @@ class PriceUpdate:
 class WebSocketManager:
     """Manage WebSocket connection with automatic recovery and REST fallback."""
 
-    BINANCE_WS = "wss://stream.testnet.binance.vision:9443/ws"
-    BINANCE_REST = "https://testnet.binance.vision/api/v3"
+    BINANCE_WS = "wss://stream.binance.com:9443/ws"  # LIVE Binance (testnet has no kline data)
+    BINANCE_REST = "https://api.binance.com/api/v3"  # LIVE Binance REST
 
     def __init__(self, symbols: List[str] = None, max_reconnect_attempts: int = 10):
         self.symbols = symbols or ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
