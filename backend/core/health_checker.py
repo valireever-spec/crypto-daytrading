@@ -323,11 +323,11 @@ class HealthChecker:
             disk = psutil.disk_usage("/")
             percent = disk.percent
 
-            healthy = percent < 85
+            healthy = percent < 90
             message = f"Disk usage: {percent:.1f}%"
-            if percent > 90:
+            if percent > 95:
                 message += " (CRITICAL)"
-            elif percent > 85:
+            elif percent > 90:
                 message += " (WARNING)"
 
             return HealthStatus(
@@ -338,7 +338,7 @@ class HealthChecker:
                     "used_gb": disk.used / 1024 / 1024 / 1024,
                     "free_gb": disk.free / 1024 / 1024 / 1024,
                     "percent": percent,
-                    "threshold_percent": 85,
+                    "threshold_percent": 90,
                 },
             )
         except Exception as e:
