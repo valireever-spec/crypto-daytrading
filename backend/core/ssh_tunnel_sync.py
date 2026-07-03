@@ -45,48 +45,54 @@ class SSHTunnelSync:
             # Build JSON payload
             payload = json.dumps(state)
 
-            # SSH command: Use curl on BACKUP to POST to localhost:8002
+            # SSH command: Run curl on BACKUP machine, pass JSON via stdin for safety
             ssh_cmd = [
                 "ssh",
                 "-o", "ConnectTimeout=3",
                 "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
                 f"{self.backup_user}@{self.backup_host}",
-                f"curl -s -X POST http://127.0.0.1:8002/api/ha/sync-from-primary "
-                f"-H 'Content-Type: application/json' "
-                f"-d '{payload}' | grep -q '\"status\"' && echo 'SUCCESS' || echo 'FAILED'"
+                "curl -s -X POST http://127.0.0.1:8002/api/ha/sync-from-primary "
+                "-H 'Content-Type: application/json' "
+                "-d @- "
+                "| grep -q '\"status\"' && echo 'SUCCESS' || echo 'FAILED'"
             ]
 
-            # Execute SSH command with timeout
+            # Execute SSH command with timeout and provide JSON via stdin
             try:
-                result = await asyncio.wait_for(
+                process = await asyncio.wait_for(
                     asyncio.create_subprocess_exec(
                         *ssh_cmd,
+                        stdin=asyncio.subprocess.PIPE,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE
                     ),
                     timeout=self.ssh_timeout
                 )
 
+                # Send payload to stdin, then communicate with timeout
                 stdout, stderr = await asyncio.wait_for(
-                    result.communicate(),
+                    process.communicate(input=payload.encode()),
                     timeout=self.ssh_timeout
                 )
 
                 output = stdout.decode().strip()
+                return_code = process.returncode
 
-                if result.returncode == 0 and "SUCCESS" in output:
+                if return_code == 0 and "SUCCESS" in output:
                     logger.info("✅ PRIMARY → BACKUP sync via SSH succeeded")
                     return True
                 else:
-                    logger.warning(f"⚠️ SSH sync failed: {stderr.decode()}")
+                    error_msg = stderr.decode().strip() if stderr else output
+                    logger.warning(f"⚠️ SSH sync failed (rc={return_code}): {error_msg}")
                     return False
 
             except asyncio.TimeoutError:
-                logger.error(f"SSH sync timeout ({self.ssh_timeout}s)")
+                logger.error(f"SSH sync timeout ({self.ssh_timeout}s) - connection may be slow or unreachable")
                 return False
 
         except Exception as e:
-            logger.error(f"❌ SSH tunnel sync error: {e}")
+            logger.error(f"❌ SSH tunnel sync error: {type(e).__name__}: {e}")
             return False
 
     async def check_ssh_connectivity(self) -> bool:

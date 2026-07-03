@@ -296,11 +296,11 @@ class HealthChecker:
             mem = psutil.virtual_memory()
             percent = mem.percent
 
-            healthy = percent < 85
+            healthy = percent < 90
             message = f"Memory usage: {percent:.1f}%"
-            if percent > 90:
+            if percent > 95:
                 message += " (CRITICAL)"
-            elif percent > 85:
+            elif percent > 90:
                 message += " (WARNING)"
 
             return HealthStatus(
@@ -311,7 +311,7 @@ class HealthChecker:
                     "used_mb": mem.used / 1024 / 1024,
                     "available_mb": mem.available / 1024 / 1024,
                     "percent": percent,
-                    "threshold_percent": 85,
+                    "threshold_percent": 90,
                 },
             )
         except Exception as e:

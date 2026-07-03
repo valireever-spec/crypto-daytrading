@@ -135,8 +135,10 @@ class WebSocketResilience:
 
         # Reconnection logic
         self.reconnection_attempts = 0
-        self.max_reconnection_attempts = 5
-        self.base_backoff = 1.0  # 1 second initial backoff
+        self.max_reconnection_attempts = 3
+        self.base_backoff = 2.0  # 2 second initial backoff
+        self.last_reconnection_time: Optional[float] = None
+        self.reconnection_cooldown = 60.0  # Don't retry reconnection within 60s of last attempt
 
         # Circuit breaker
         self.circuit_breaker = CircuitBreaker(failure_threshold=3, timeout_seconds=30)
@@ -204,6 +206,16 @@ class WebSocketResilience:
         Returns:
             True if reconnection successful, False otherwise
         """
+        # CRITICAL: Prevent rapid re-triggering (cooldown window)
+        if self.last_reconnection_time is not None:
+            time_since_last = time.time() - self.last_reconnection_time
+            if time_since_last < self.reconnection_cooldown:
+                logger.debug(
+                    f"⏸️  WebSocket reconnection on cooldown ({self.reconnection_cooldown:.0f}s window, "
+                    f"{time_since_last:.0f}s elapsed) - skipping duplicate attempt"
+                )
+                return False
+
         logger.warning(f"⚠️  WebSocket reconnection triggered: {reason}")
 
         # Check circuit breaker
@@ -213,13 +225,14 @@ class WebSocketResilience:
             )
             return False
 
-        # Exponential backoff: 1s, 2s, 4s, 8s, 8s (max)
+        # Exponential backoff: 2s, 4s, 8s (max)
         backoff = min(self.base_backoff * (2 ** self.reconnection_attempts), 8.0)
 
         logger.info(f"⏳ Reconnecting in {backoff:.1f}s (attempt {self.reconnection_attempts + 1}/{self.max_reconnection_attempts})")
         await asyncio.sleep(backoff)
 
         self.reconnection_attempts += 1
+        self.last_reconnection_time = time.time()
 
         # Record failure if max attempts exceeded
         if self.reconnection_attempts >= self.max_reconnection_attempts:
@@ -227,6 +240,7 @@ class WebSocketResilience:
                 logger.critical(
                     f"🔴 WebSocket reconnection failed {self.max_reconnection_attempts}x, circuit breaker OPEN"
                 )
+                self.reconnection_attempts = 0  # Reset for next cooldown period
                 return False
 
         # TODO: Actual reconnection logic (call binance_stream.reconnect())

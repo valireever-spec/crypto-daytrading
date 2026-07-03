@@ -366,7 +366,15 @@ async def lifespan(app: FastAPI):
                         consecutive_failures = 0
                     else:
                         consecutive_failures += 1
-                        logger.warning(f"⚠️ Both HTTP and SSH sync failed")
+                        logger.critical(f"🔴 Both HTTP and SSH sync failed - STATE DIVERGENCE RISK ({consecutive_failures} consecutive failures)")
+
+                        # After 3 consecutive failures, alert the trading system to pause
+                        if consecutive_failures >= 3:
+                            from backend.core.alerting import get_alert_manager
+                            alert_mgr = get_alert_manager()
+                            await alert_mgr.alert_primary_unhealthy(
+                                f"HA State Sync Failed ({consecutive_failures}x) - Cannot reach BACKUP, trading paused to prevent divergence"
+                            )
 
             except Exception as e:
                 consecutive_failures += 1
