@@ -1,1474 +1,1051 @@
-# Crypto Daytrading Platform — Traceability Matrix
+# Traceability Matrix
 
-**Version:** 1.0  
-**Date:** 2026-07-03  
-**Generated:** Automated Requirements → Code → Test Coverage Analysis  
-**Last Test Run:** 971 passed, 128 failed (88.3% pass rate)
+**Generated:** 2026-07-03 18:24:17
 
----
+## Summary
 
-## Executive Summary
+| Category | Total | Complete | Partial | Not Found |
+|----------|-------|----------|---------|-----------|
+| Functional Requirements | 20 | 0 | 0 | 0 |
+| Non-Functional Requirements | 27 | 0 | 27 | 0 |
+| **Total** | **47** | **0** | **27** | **0** |
 
-| Category | Total | Implemented | Tested | Pass Rate | Coverage |
-|----------|-------|-------------|--------|-----------|----------|
-| **Functional Requirements** | 20 | 18 | 16 | 80% | 85% |
-| **Non-Functional Requirements** | 27 | 22 | 18 | 67% | 72% |
-| **Config Requirements (CFR)** | 12 | 12 | 8 | 67% | 78% |
-| **TOTAL** | **59** | **52** | **42** | **71%** | **78%** |
-
-### Key Metrics
-- **Overall Implementation:** 88% (52 of 59 requirements have code)
-- **Test Coverage:** 71% (42 of 59 have passing tests)
-- **Code Quality:** 18% (note: low due to incomplete test suite, see gaps section)
-- **Critical Gap:** Platform consistency testing (NFR-010) — only 9% coverage
-
----
-
-## Part 1: Functional Requirements (FR-001 through FR-020)
+## Functional Requirements
 
 ### FR-001: Binance API Integration
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | `backend/exchange/binance_stream.py`, `backend/core/health_checker.py` |
-| **Code Files** | ✅ FOUND | 93 files reference Binance/API |
-| **Test Coverage** | ✅ PASSING | 8/10 tests passing (80%) |
-| **Gaps** | ⚠️ PARTIAL | Fallback exchange not implemented (optional Phase 2) |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 7 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/exchange/binance_stream.py` — Main Binance WebSocket connection
-- `backend/exchange/websocket_manager.py` — WebSocket management
-- `backend/core/health_checker.py` — Binance connectivity monitoring
-- `backend/core/rate_limiter.py` — Rate limit enforcement (1200 req/min)
-- `backend/config/asset_config.py` — Symbol configuration
+**Code Files:**
+- ./backend/skills_integration.py
+- ./backend/exchange/binance_websocket.py
+- ./backend/exchange/binance_stream.py
+- ./backend/exchange/binance_stream_resilience.py
+- ./venv/lib/python3.12/site-packages/binance/api.py
 
 **Test Files:**
-- `tests/integration/test_binance_stream.py` — WebSocket connection tests
-- `tests/unit/test_binance_stream.py` — Unit tests for stream
-- `tests/unit/test_websocket_manager.py` — WebSocket manager tests (5 tests failing)
+- ./venv/lib/python3.12/site-packages/pandas/tests/extension/base/reshaping.py
+- ./venv/lib/python3.12/site-packages/pytest/__init__.py
+- ./venv/lib/python3.12/site-packages/_pytest/assertion/rewrite.py
+- ./venv/lib/python3.12/site-packages/_pytest/assertion/util.py
+- ./venv/lib/python3.12/site-packages/_pytest/logging.py
 
-**Acceptance Criteria Status:**
-- ✅ GET ticker data with <1s latency (IMPLEMENTED)
-- ✅ POST orders with confirmation (IMPLEMENTED)
-- ✅ GET order status real-time (IMPLEMENTED)
-- ✅ GET account balance (IMPLEMENTED)
-- ✅ Handle rate limits (IMPLEMENTED)
-- ✅ Testnet support (IMPLEMENTED)
-- ❌ Fallback to backup exchange (NOT IMPLEMENTED - optional)
-
-**Overall Status:** ✅ **IMPLEMENTED** (98% complete) — All core criteria met, fallback is phase 2
+**Acceptance Criteria:**
+- [ ] GET ticker data (BTCUSDT, ETHUSDT, etc.) with <1s latency
+- [ ] POST market and limit orders with execution confirmation
+- [ ] GET order status in real-time (pending → filled → cancelled)
+- [ ] GET account balance and position status
+- [ ] Handle rate limits (1200 req/min for user API)
+- [ ] Testnet support for paper trading (no real money)
+- [ ] Fallback to backup exchange if Binance unavailable (TBD: second exchange)
 
 ---
 
-### FR-002: Paper Trading Engine (Real Live Prices via WebSocket)
+### FR-002: Paper Trading Engine (Real Live Prices via Binance WebSocket)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | `backend/exchange/paper_trading.py`, multiple supporting files |
-| **Code Files** | ✅ FOUND | 55 files with paper trading logic |
-| **Test Coverage** | ⚠️ PARTIAL | 7/15 tests passing (47%) |
-| **Gaps** | ❌ CRITICAL | WebSocket integration incomplete; slippage calculation hardcoded |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 0 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/exchange/paper_trading.py` (294 lines) — Core paper trading engine
-  - Simulates fills at WebSocket prices
-  - Tracks virtual cash and positions
-  - Implements slippage calculation
-  - Mode toggle (paper vs live)
-- `backend/exchange/price_simulator.py` — Price simulation utilities
-- `backend/exchange/websocket_manager.py` — WebSocket price feed integration
-- `backend/execution/smart_executor.py` — Order execution logic
+**Code Files:**
+- ./backend/exchange/paper_trading.py
+- ./backend/api/routers/trading_control.py
+- ./backend/analytics/risk_metrics_engine.py
+- ./backend/analytics/portfolio_rebalancing_engine.py
+- ./backend/analytics/attribution_engine.py
 
 **Test Files:**
-- `tests/test_paper_trading.py` — Paper trading acceptance tests
-  - ✅ test_paper_trading_basic_buy
-  - ✅ test_paper_trading_basic_sell
-  - ⚠️ test_paper_trading_slippage (hardcoded, not ATR-based)
-  - ❌ test_paper_trading_mode_toggle (failing)
-  - ❌ test_paper_trading_10day_acceptance (not running)
-
-**Acceptance Criteria Status:**
-- ✅ WebSocket connection established (IMPLEMENTED)
-- ✅ Subscribe to Binance streams (IMPLEMENTED)
-- ✅ Maintain persistent connection (IMPLEMENTED)
-- ⚠️ Auto-reconnect on drops (PARTIALLY - needs testing)
-- ✅ Virtual cash tracking (IMPLEMENTED)
-- ✅ Starting balance configurable (IMPLEMENTED)
-- ⚠️ Slippage calculation (HARDCODED 0.05-0.1%, NOT ATR-based)
-- ⚠️ Mode toggle paper/live (PARTIAL - implemented but not fully tested)
-- ✅ Paper trading endpoints (IMPLEMENTED: /api/paper/*)
-- ❌ 10-day acceptance test (NOT PASSING)
-
-**Overall Status:** ⚠️ **PARTIAL** (70% complete) — Core functionality works; slippage needs enhancement, mode toggle needs testing
+- ./tests/test_paper_trading.py
+- ./venv/lib/python3.12/site-packages/pandas/tests/extension/base/io.py
+- ./venv/lib/python3.12/site-packages/pytest_cov/plugin.py
+- ./venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py
+- ./venv/lib/python3.12/site-packages/mypyc/test/config.py
 
 ---
 
-### FR-003: Real-Time Signal Generation
+### FR-003: Real-Time Signal Generation (REDESIGNED)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | `backend/strategies/garp_value_strategy.py`, signal modules |
-| **Code Files** | ✅ FOUND | 71 files with signal logic |
-| **Test Coverage** | ✅ PASSING | 9/12 tests passing (75%) |
-| **Gaps** | ⚠️ MINOR | Performance optimization needed |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 9 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/analytics/signals.py` — RSI, MACD, Bollinger Bands indicators
-- `backend/strategies/garp_value_strategy.py` — Strategy implementation
-- `backend/analytics/signal_explainer.py` — Signal analysis and explanation
-- `backend/core/signal_validation.py` — Signal quality validation
+**Code Files:**
+- ./backend/analytics/signal_explainer.py
+- ./backend/analytics/signals.py
+- ./backend/core/signal_validation.py
+- ./venv/lib/python3.12/site-packages/anyio/_core/_signals.py
+- ./venv/lib/python3.12/site-packages/scipy/signal/_signal_api.py
 
 **Test Files:**
-- `tests/test_signals.py` — Signal generation tests
-  - ✅ test_rsi_calculation
-  - ✅ test_macd_calculation
-  - ✅ test_bollinger_bands
-  - ⚠️ test_signal_latency (<500ms target, p95 at 650ms)
+- ./venv/lib/python3.12/site-packages/_pytest/config/__init__.py
+- ./venv/lib/python3.12/site-packages/pytest_cov/embed.py
+- ./venv/lib/python3.12/site-packages/scipy/signal/tests/mpsig.py
+- ./venv/lib/python3.12/site-packages/mypyc/test-data/fixtures/ir.py
+- ./venv/lib/python3.12/site-packages/_pytest/_code/__init__.py
 
-**Acceptance Criteria Status:**
-- ✅ Calculate RSI (14-period) (IMPLEMENTED)
-- ✅ MACD calculation (IMPLEMENTED)
-- ✅ Bollinger Bands (IMPLEMENTED)
-- ✅ Multiple timeframes (1m, 5m, 15m, 1h) (IMPLEMENTED)
-- ✅ Signal score -100 to +100 (IMPLEMENTED)
-- ⚠️ <500ms latency (FAILING — p95 at 650ms)
-- ✅ Handle NaN/gaps (IMPLEMENTED)
-- ✅ WebSocket feed (IMPLEMENTED)
-
-**Overall Status:** ✅ **IMPLEMENTED** (95% complete) — All criteria met except latency tuning needed
+**Acceptance Criteria:**
+- [ ] Calculate RSI (14-period), MACD, Bollinger Bands on OHLCV candles
+- [ ] Support multiple timeframes: 1m, 5m, 15m, 1h (user selects which to watch)
+- [ ] Return signal score: -100 (strong sell) to +100 (strong buy)
+- [ ] Update signal every time candle closes (not every 15 minutes)
+- [ ] Latency: <500ms from candle close to signal available
+- [ ] Handle edge cases: NaN on insufficient candles, gaps in data
+- [ ] WebSocket feed for real-time price updates (sub-second)
+- [ ] Three strategies available:
+- [ ] Define parameter sets per time block (can edit without restart):
 
 ---
 
-### FR-003B: Dynamic Strategy Allocation
+### FR-004: Real-Time Signal Alerts (NEW — CRITICAL)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Strategy mixing, time-based allocation |
-| **Code Files** | ✅ FOUND | Allocation engine, strategy registry |
-| **Test Coverage** | ✅ PASSING | 6/8 tests passing (75%) |
-| **Gaps** | ⚠️ MINOR | Dashboard integration not complete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 2 criteria | See below |
+| Gaps | ⚠️ 1 gap(s) | See below |
 
-**Code Implementation Files:**
-- `backend/analytics/allocation.py` — Dynamic allocation solver
-- `backend/execution/portfolio_orchestrator.py` — Multi-strategy execution
-- `backend/api/routers/allocation_management.py` — Allocation API endpoints
+**Code Files:**
+- ./backend/analytics/signal_explainer.py
+- ./backend/analytics/signals.py
+- ./backend/core/signal_validation.py
+- ./venv/lib/python3.12/site-packages/anyio/_core/_signals.py
+- ./venv/lib/python3.12/site-packages/scipy/signal/_signal_api.py
 
 **Test Files:**
-- `tests/test_allocation.py` — Allocation tests
-  - ✅ test_momentum_allocation
-  - ✅ test_mean_reversion_allocation
-  - ✅ test_grid_trading_allocation
-  - ✅ test_time_of_day_presets
-  - ⚠️ test_dashboard_sliders (partial)
+- ./venv/lib/python3.12/site-packages/_pytest/config/__init__.py
+- ./venv/lib/python3.12/site-packages/pytest_cov/embed.py
+- ./venv/lib/python3.12/site-packages/scipy/signal/tests/mpsig.py
+- ./venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py
+- ./venv/lib/python3.12/site-packages/mypyc/test-data/fixtures/ir.py
 
-**Acceptance Criteria Status:**
-- ✅ Three strategies available (IMPLEMENTED)
-- ✅ Dashboard sliders for adjustment (IMPLEMENTED)
-- ✅ Sum must equal 100% (IMPLEMENTED with validation)
-- ✅ Time-of-day presets (IMPLEMENTED)
-- ✅ Change without restart (IMPLEMENTED)
+**Acceptance Criteria:**
+- [ ] Alert when signal ≥ configured threshold (e.g., ≥70 for strong buy)
+- [ ] Alert channels:
 
-**Overall Status:** ✅ **IMPLEMENTED** (90% complete) — All core features working, dashboard UI needs polish
+**Gaps Identified:**
+- Acceptance criterion may not be implemented: 'Alert channels:...'
 
 ---
 
-### FR-003C: Time-Based Parameter Switching
+### FR-005: Manual Order Entry & Execution (NEW — CRITICAL)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Time-based rules, dynamic switching |
-| **Code Files** | ✅ FOUND | Config management, runtime config |
-| **Test Coverage** | ✅ PASSING | 4/6 tests passing (67%) |
-| **Gaps** | ⚠️ MINOR | Manual override testing incomplete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/core/config.py` — Configuration loading
-- `backend/core/runtime_config.py` — Runtime parameter management
-- `backend/core/config_manager.py` — Parameter hot-reload
-- `backend/api/routers/config.py` — Configuration API
+**Code Files:**
+- ./venv/lib/python3.12/site-packages/IPython/core/magics/execution.py
+- ./venv/lib/python3.12/site-packages/numpy/core/_add_newdocs.py
+- ./backend/trading/autonomous_trader/entry.py
+- ./backend/core/order_safety.py
+- ./venv/lib/python3.12/site-packages/dateparser_scripts/order_languages.py
 
 **Test Files:**
-- `tests/unit/test_config_hot_reload.py` — Config reload tests
-  - ✅ test_morning_parameters
-  - ✅ test_afternoon_parameters
-  - ✅ test_close_out_parameters
-  - ⚠️ test_manual_override (failing)
+- ./venv/lib/python3.12/site-packages/_pytest/recwarn.py
+- ./venv/lib/python3.12/site-packages/_pytest/python_api.py
+- ./venv/lib/python3.12/site-packages/pytest_cov/plugin.py
+- ./venv/lib/python3.12/site-packages/mypy/test/helpers.py
+- ./venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py
 
-**Acceptance Criteria Status:**
-- ✅ Time blocks with parameters (IMPLEMENTED)
-- ✅ Profit target/stop loss per time (IMPLEMENTED)
-- ✅ Auto-switch at boundaries (IMPLEMENTED)
-- ✅ Dashboard display (IMPLEMENTED)
-- ⚠️ Manual override (PARTIALLY WORKING)
-
-**Overall Status:** ✅ **IMPLEMENTED** (85% complete) — Core time-switching works, override needs testing
+**Acceptance Criteria:**
+- [ ] **BUY button** on dashboard:
 
 ---
 
-### FR-004: Real-Time Signal Alerts
+### FR-006: Manual Stop & Profit Override (NEW — CRITICAL)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Alert system, multi-channel delivery |
-| **Code Files** | ✅ FOUND | 21 files with alert logic |
-| **Test Coverage** | ⚠️ PARTIAL | 4/8 tests passing (50%) |
-| **Gaps** | ⚠️ MODERATE | Email/SMS integration incomplete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/core/alerting.py` — Alert generation and routing
-- `backend/api/routers/learning_feedback.py` — Alert endpoints
-- `backend/core/monitoring_logger.py` — Alert logging
+**Code Files:**
+- ./backend/core/emergency_stop.py
+- ./backend/core/stop_loss_safety.py
+- ./venv/lib/python3.12/site-packages/numpy/core/_add_newdocs.py
+- ./backend/analytics/stop_loss.py
+- ./venv/lib/python3.12/site-packages/pip/_vendor/tenacity/stop.py
 
 **Test Files:**
-- `tests/integration/test_monitoring.py` — Alert tests (many failing)
-  - ⚠️ test_create_alert (failing)
-  - ⚠️ test_get_alerts (failing)
-  - ⚠️ test_resolve_alert (failing)
+- ./venv/lib/python3.12/site-packages/numpy/testing/overrides.py
+- ./venv/lib/python3.12/site-packages/_pytest/recwarn.py
+- ./venv/lib/python3.12/site-packages/_pytest/python_api.py
+- ./venv/lib/python3.12/site-packages/pytest_cov/plugin.py
+- ./venv/lib/python3.12/site-packages/mypy/test/helpers.py
 
-**Acceptance Criteria Status:**
-- ✅ Dashboard notifications (IMPLEMENTED)
-- ⚠️ Browser push notifications (PARTIAL)
-- ❌ Email alerts (NOT IMPLEMENTED)
-- ❌ SMS alerts (NOT IMPLEMENTED)
-- ✅ Alert includes symbol/score/trend (IMPLEMENTED)
-- ✅ No auto-execution (IMPLEMENTED)
-- ⚠️ 30-second expiry (NOT FULLY IMPLEMENTED)
-
-**Overall Status:** ⚠️ **PARTIAL** (60% complete) — Dashboard alerts work; email/SMS not implemented
+**Acceptance Criteria:**
+- [ ] On each active position, show:
 
 ---
 
-### FR-005: Manual Order Entry & Execution
+### FR-007: System States & Pause Mechanism (NEW — CRITICAL)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Order forms, execution, confirmation |
-| **Code Files** | ✅ FOUND | 96 files with order logic |
-| **Test Coverage** | ✅ PASSING | 8/10 tests passing (80%) |
-| **Gaps** | ⚠️ MINOR | Exit quick buttons partial |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ⚠️ 1 gap(s) | See below |
 
-**Code Implementation Files:**
-- `backend/execution/smart_executor.py` (159 lines) — Manual order execution
-- `backend/execution/exit_manager.py` (135 lines) — Exit management
-- `backend/api/routers/trading_control.py` — Order entry endpoints
-- `backend/core/order_safety.py` — Order validation and safety
+**Code Files:**
+- ./venv/lib/python3.12/site-packages/prompt_toolkit/contrib/completers/system.py
+- ./venv/lib/python3.12/site-packages/numpy/core/_add_newdocs_scalars.py
+- ./venv/lib/python3.12/site-packages/numpy/core/_add_newdocs.py
+- ./venv/lib/python3.12/site-packages/scipy/sparse/linalg/_dsolve/_add_newdocs.py
+- ./venv/lib/python3.12/site-packages/markdown_it/rules_inline/newline.py
 
 **Test Files:**
-- `tests/test_smart_executor.py` — Executor tests
-  - ✅ test_market_order
-  - ✅ test_limit_order
-  - ✅ test_order_confirmation
-  - ✅ test_execution_speed (<2s requirement)
+- ./venv/lib/python3.12/site-packages/IPython/testing/globalipapp.py
+- ./venv/lib/python3.12/site-packages/IPython/testing/plugin/dtexample.py
+- ./venv/lib/python3.12/site-packages/_pytest/hookspec.py
+- ./venv/lib/python3.12/site-packages/_pytest/monkeypatch.py
+- ./venv/lib/python3.12/site-packages/_pytest/nodes.py
 
-**Acceptance Criteria Status:**
-- ✅ BUY button with entry form (IMPLEMENTED)
-- ✅ SELL/EXIT buttons (IMPLEMENTED)
-- ✅ Quick exit options (IMPLEMENTED)
-- ✅ Order confirmation screen (IMPLEMENTED)
-- ✅ Status tracking (IMPLEMENTED)
-- ✅ <2s execution (IMPLEMENTED — avg 1.8s)
+**Acceptance Criteria:**
+- [ ] Four system states (toggle via dashboard):
 
-**Overall Status:** ✅ **IMPLEMENTED** (95% complete) — All manual order features working
+**Gaps Identified:**
+- No logging found in code
 
 ---
 
-### FR-006: Manual Stop & Profit Override
+### FR-008: Dynamic Position Sizing (NEW — CRITICAL)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Stop/profit adjustment, position updates |
-| **Code Files** | ✅ FOUND | Exit manager, position tracking |
-| **Test Coverage** | ✅ PASSING | 5/6 tests passing (83%) |
-| **Gaps** | ⚠️ MINOR | Break-even close not fully tested |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/execution/exit_manager.py` — Stop/profit management
-- `backend/analytics/stop_loss.py` (62 lines) — Stop loss calculations
+**Code Files:**
+- ./backend/analytics/position_sizing.py
+- ./venv/lib/python3.12/site-packages/coverage/disposition.py
+- ./venv/lib/python3.12/site-packages/jedi/inference/value/dynamic_arrays.py
+- ./venv/lib/python3.12/site-packages/jedi/inference/dynamic_params.py
+- ./backend/core/position_reconciliation.py
 
 **Test Files:**
-- `tests/test_exit_manager.py` — Exit management tests
-  - ✅ test_tighten_stop
-  - ✅ test_widen_stop
-  - ✅ test_take_profit_early
-  - ✅ test_hit_stop_early
-  - ⚠️ test_break_even_close (failing)
+- ./tests/test_position_sizing.py
+- ./venv/lib/python3.12/site-packages/IPython/testing/decorators.py
+- ./venv/lib/python3.12/site-packages/_pytest/monkeypatch.py
+- ./venv/lib/python3.12/site-packages/_pytest/assertion/util.py
+- ./venv/lib/python3.12/site-packages/_pytest/fixtures.py
 
-**Acceptance Criteria Status:**
-- ✅ Show position details (IMPLEMENTED)
-- ✅ Tighten/widen stops (IMPLEMENTED)
-- ✅ Take profit early (IMPLEMENTED)
-- ⚠️ Break-even closes (PARTIAL)
-
-**Overall Status:** ✅ **IMPLEMENTED** (90% complete) — Stop/profit features working; break-even needs testing
+**Acceptance Criteria:**
+- [ ] **Base position size:** 1.5% of account (configurable, default)
 
 ---
 
-### FR-007: System States & Pause Mechanism
+### FR-009: Real-Time Portfolio Monitoring (REDESIGNED)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | State machine, pause logic |
-| **Code Files** | ✅ FOUND | State management, HA globals |
-| **Test Coverage** | ✅ PASSING | 4/5 tests passing (80%) |
-| **Gaps** | ⚠️ MINOR | Dashboard state display incomplete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/core/ha_globals_manager.py` — System state management
-- `backend/api/routers/trading_control.py` — State control endpoints
+**Code Files:**
+- ./backend/api/routers/monitoring.py
+- ./backend/analytics/portfolio_analyzer.py
+- ./backend/analytics/portfolio_rebalancing_engine.py
+- ./backend/analytics/portfolio_regime_monitor.py
+- ./backend/analytics/portfolio_optimizer.py
 
 **Test Files:**
-- `tests/test_autonomous.py` — State tests
-  - ✅ test_trading_state
-  - ✅ test_paused_state
-  - ✅ test_close_only_state
-  - ✅ test_monitoring_state
-  - ⚠️ test_state_transitions (failing)
+- ./backend/analytics/portfolio_backtest_engine_v2.py
+- ./backend/backtesting/portfolio_backtest_engine.py
+- ./tests/unit/test_portfolio_rebalancing_engine.py
+- ./tests/unit/test_portfolio_regime_monitor.py
+- ./tests/test_portfolio_orchestrator.py
 
-**Acceptance Criteria Status:**
-- ✅ TRADING state (IMPLEMENTED)
-- ✅ PAUSED state (IMPLEMENTED)
-- ✅ CLOSE_ONLY state (IMPLEMENTED)
-- ✅ MONITORING state (IMPLEMENTED)
-- ✅ Instant state change (IMPLEMENTED)
-
-**Overall Status:** ✅ **IMPLEMENTED** (85% complete) — All states working; transitions need testing
+**Acceptance Criteria:**
+- [ ] **Account summary** (update every 1 second):
 
 ---
 
-### FR-008: Dynamic Position Sizing
+### FR-010: Per-Strategy Analytics (NEW — CRITICAL)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Multi-factor position sizing |
-| **Code Files** | ✅ FOUND | 104 files with sizing logic |
-| **Test Coverage** | ⚠️ PARTIAL | 8/12 tests passing (67%) |
-| **Gaps** | ❌ MODERATE | Volatility adjustment not fully implemented |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/analytics/position_sizing.py` (60 lines) — Sizing calculations
-- `backend/core/financial_safety.py` — Position safety checks
-- `backend/execution/portfolio_orchestrator.py` — Orchestration
+**Code Files:**
+- ./backend/analytics/strategy_analytics.py
+- ./backend/api/routers/backup_analytics.py
+- ./backend/api/routers/dashboard_wrapper.py
+- ./venv/lib/python3.12/site-packages/markdown_it/rules_inline/newline.py
+- ./venv/lib/python3.12/site-packages/mypy/semanal_newtype.py
 
 **Test Files:**
-- `tests/test_position_sizing.py` — Sizing tests
-  - ✅ test_base_size_calculation
-  - ✅ test_signal_strength_adjustment
-  - ✅ test_account_heat_adjustment
-  - ⚠️ test_win_streak_adjustment (failing)
-  - ⚠️ test_volatility_adjustment (failing)
-  - ❌ test_time_of_day_adjustment (failing)
+- ./venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py
+- ./venv/lib/python3.12/site-packages/mypyc/test-data/fixtures/ir.py
+- ./venv/lib/python3.12/site-packages/IPython/testing/decorators.py
+- ./venv/lib/python3.12/site-packages/IPython/testing/globalipapp.py
+- ./venv/lib/python3.12/site-packages/radon/tests/run.py
 
-**Acceptance Criteria Status:**
-- ✅ Base position size (1.5%) (IMPLEMENTED)
-- ✅ Signal strength factor (IMPLEMENTED)
-- ⚠️ Account heat factor (PARTIAL)
-- ⚠️ Win streak factor (PARTIAL — not fully tracked)
-- ❌ Time of day factor (NOT IMPLEMENTED as separate)
-- ⚠️ Volatility factor (HARDCODED, not ATR-based)
-- ⚠️ Final calculation (IMPLEMENTED but factors incomplete)
-
-**Overall Status:** ⚠️ **PARTIAL** (70% complete) — Base sizing works; advanced factors incomplete
+**Acceptance Criteria:**
+- [ ] **Win rate by strategy** (today):
 
 ---
 
-### FR-009: Real-Time Portfolio Monitoring
+### FR-011: Critical Alerts & Runbooks (REDESIGNED)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Dashboard, live updates, panels |
-| **Code Files** | ✅ FOUND | API endpoints, portfolio tracking |
-| **Test Coverage** | ⚠️ PARTIAL | 6/8 tests passing (75%) |
-| **Gaps** | ⚠️ MINOR | Dashboard display incomplete; collection error in test |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/api/routers/portfolio.py` — Portfolio endpoints
-- `backend/api/routers/monitoring.py` — Monitoring endpoints
-- `backend/execution/portfolio_orchestrator.py` — Position tracking
-- `backend/trading/autonomous_trader/portfolio.py` — Portfolio state
+**Code Files:**
+- ./backend/core/alerting.py
+- ./scripts/resource_monitor.py
+- ./scripts/failover_monitor.py
+- ./scripts/check_ha_status.py
+- ./backend/analytics/risk_limits.py
 
 **Test Files:**
-- `tests/test_portfolio_orchestrator.py` — Portfolio tests
-- `tests/test_dashboard.py` — Dashboard tests (COLLECTION ERROR - import issue)
+- ./venv/lib/python3.12/site-packages/numpy/core/tests/test_array_coercion.py
+- ./venv/lib/python3.12/site-packages/scipy/stats/_hypotests.py
+- ./venv/lib/python3.12/site-packages/scipy/stats/_binomtest.py
+- ./venv/lib/python3.12/site-packages/scipy/stats/tests/test_multicomp.py
+- ./venv/lib/python3.12/site-packages/scipy/stats/tests/test_fit.py
 
-**Acceptance Criteria Status:**
-- ✅ Account summary (IMPLEMENTED)
-- ✅ Equity tracking (IMPLEMENTED)
-- ✅ Cash/positions display (IMPLEMENTED)
-- ✅ Active positions panel (IMPLEMENTED)
-- ✅ Recent trades panel (IMPLEMENTED)
-- ✅ Strategy allocation display (IMPLEMENTED)
-- ✅ System health status (IMPLEMENTED)
-- ⚠️ Dashboard integration (PARTIAL — test file broken)
-
-**Overall Status:** ✅ **IMPLEMENTED** (88% complete) — Backend fully working; dashboard test needs fix
+**Acceptance Criteria:**
+- [ ] **CRITICAL alerts** (SMS + push + email + sound):
 
 ---
 
-### FR-010: Per-Strategy Analytics
+### FR-012: Trade Quality Analysis (NEW — CRITICAL)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Analytics engine, win rate tracking |
-| **Code Files** | ✅ FOUND | Analytics modules (47 files) |
-| **Test Coverage** | ✅ PASSING | 7/10 tests passing (70%) |
-| **Gaps** | ⚠️ MINOR | Time-of-day breakdown incomplete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/analytics/strategy_analytics.py` (128 lines) — Per-strategy metrics
-- `backend/analytics/backtest_analyzer.py` — Trade analysis
-- `backend/api/routers/learning_feedback.py` — Analytics API
-- `backend/analytics/performance_tracker.py` — Performance tracking
+**Code Files:**
+- ./scripts/archive_old_trades.py
+- ./venv/lib/python3.12/site-packages/binance/websocket/spot/websocket_api/_trade.py
+- ./venv/lib/python3.12/site-packages/binance/spot/_trade.py
+- ./backend/core/data_quality.py
+- ./venv/lib/python3.12/site-packages/scipy/optimize/_trustregion_constr/equality_constrained_sqp.py
 
 **Test Files:**
-- `tests/test_strategy_analytics.py` — Analytics tests
-  - ✅ test_win_rate_by_strategy
-  - ✅ test_average_trade_metrics
-  - ⚠️ test_win_rate_by_time (failing)
-  - ⚠️ test_win_rate_by_pair (failing)
-  - ✅ test_fee_analysis
+- ./venv/lib/python3.12/site-packages/_pytest/_code/code.py
+- ./venv/lib/python3.12/site-packages/_pytest/python_api.py
+- ./venv/lib/python3.12/site-packages/pandas/_testing/asserters.py
+- ./venv/lib/python3.12/site-packages/numpy/testing/_private/utils.py
+- ./venv/lib/python3.12/site-packages/mypy/test/data.py
 
-**Acceptance Criteria Status:**
-- ✅ Win rate by strategy (IMPLEMENTED)
-- ✅ Average trade metrics (IMPLEMENTED)
-- ⚠️ Win rate by time of day (PARTIAL)
-- ⚠️ Win rate by pair (PARTIAL)
-- ✅ Fee analysis (IMPLEMENTED)
-- ✅ Update on trade close (IMPLEMENTED)
-
-**Overall Status:** ✅ **IMPLEMENTED** (80% complete) — Core analytics working; time/pair breakdown incomplete
+**Acceptance Criteria:**
+- [ ] On each closed trade, analyze:
 
 ---
 
-### FR-011: Critical Alerts & Runbooks
+### FR-013: HA Redundancy (Dual Machine) (SAME AS BEFORE)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ⚠️ PARTIAL | Alert system, runbook framework |
-| **Code Files** | ✅ FOUND | Alerting modules, monitoring |
-| **Test Coverage** | ⚠️ PARTIAL | 3/6 tests passing (50%) |
-| **Gaps** | ⚠️ MODERATE | SMS/email alerts not implemented; runbooks incomplete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 6 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/core/alerting.py` (100 lines) — Alert system
-- `backend/api/routers/learning_feedback.py` — Alert endpoints
-- `backend/core/emergency_stop.py` — Emergency alerts
+**Code Files:**
+- ./backend/api/routers/redundancy.py
+- ./venv/lib/python3.12/site-packages/scipy/optimize/_remove_redundancy.py
+- ./venv/lib/python3.12/site-packages/scipy/optimize/_dual_annealing.py
+- ./venv/lib/python3.12/site-packages/pip/_vendor/chardet/codingstatemachine.py
+- ./venv/lib/python3.12/site-packages/pygments/lexers/robotframework.py
 
 **Test Files:**
-- `tests/integration/test_monitoring.py` — Alert tests (many failing)
+- ./venv/lib/python3.12/site-packages/_pytest/hookspec.py
+- ./venv/lib/python3.12/site-packages/_pytest/monkeypatch.py
+- ./venv/lib/python3.12/site-packages/_pytest/assertion/util.py
+- ./venv/lib/python3.12/site-packages/_pytest/python_api.py
+- ./venv/lib/python3.12/site-packages/pandas/tests/series/methods/__init__.py
 
-**Acceptance Criteria Status:**
-- ✅ Exchange down detection (IMPLEMENTED)
-- ✅ Failover alerts (IMPLEMENTED)
-- ⚠️ Daily loss alerts (IMPLEMENTED but not persisted)
-- ❌ Position gap alerts (NOT IMPLEMENTED)
-- ✅ Account heat warnings (IMPLEMENTED)
-- ⚠️ Consecutive loss tracking (PARTIAL)
-- ❌ Runbooks not persistent (IN-MEMORY ONLY)
-
-**Overall Status:** ⚠️ **PARTIAL** (60% complete) — Alert framework exists; runbooks not persistent, SMS/email missing
+**Acceptance Criteria:**
+- [ ] Heartbeat check every 10 seconds (main → backup)
+- [ ] Failover trigger after 3 consecutive missed heartbeats (30s)
+- [ ] Backup has read-only copy of positions and P&L
+- [ ] No duplicate trades during failover
+- [ ] UUID per trade order (inherited by backup)
+- [ ] Network tolerant: handle 5-10s latency, temporary disconnects
 
 ---
 
-### FR-012: Trade Quality Analysis
+### FR-014: Overnight Mode (NEW — NEEDED BEFORE LIVE)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Trade analysis, feedback generation |
-| **Code Files** | ✅ FOUND | Analytics modules |
-| **Test Coverage** | ✅ PASSING | 6/8 tests passing (75%) |
-| **Gaps** | ⚠️ MINOR | Alternative exit scenarios incomplete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/analytics/signal_explainer.py` — Signal explanation
-- `backend/analytics/backtest_analyzer.py` — Trade analysis
-- `backend/api/routers/learning_feedback.py` — Feedback API
-- `backend/analytics/feedback_loop_engine.py` — Feedback generation
-
-**Test Files:**
-- `tests/test_strategy_analytics.py` — Quality analysis tests
-  - ✅ test_entry_quality_analysis
-  - ✅ test_exit_quality_analysis
-  - ✅ test_hold_duration_analysis
-  - ✅ test_fee_cost_analysis
-  - ⚠️ test_alternative_exits (failing)
-
-**Acceptance Criteria Status:**
-- ✅ Entry quality (IMPLEMENTED)
-- ✅ Exit quality (IMPLEMENTED)
-- ✅ Hold duration (IMPLEMENTED)
-- ✅ Fee cost (IMPLEMENTED)
-- ⚠️ Alternative exit scenarios (PARTIAL)
-- ✅ Verdict/learning (IMPLEMENTED)
-
-**Overall Status:** ✅ **IMPLEMENTED** (85% complete) — Core trade analysis working; alternative scenarios incomplete
-
----
-
-### FR-013: HA Redundancy (Dual Machine)
-
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Failover, deduplication, heartbeat |
-| **Code Files** | ✅ FOUND | 40 files with HA logic |
-| **Test Coverage** | ⚠️ PARTIAL | 4/5 tests passing (80%) |
-| **Gaps** | ⚠️ MODERATE | Split-brain scenarios incomplete |
-
-**Code Implementation Files:**
-- `backend/failover/heartbeat.py` (75 lines) — Heartbeat mechanism
-- `backend/core/ha_failover.py` (155 lines) — Failover logic
-- `backend/core/ha_deduplication.py` — UUID deduplication
-- `backend/failover/ha_wrapper.py` — HA wrapper
-- `backend/failover/health_checker.py` — Health checking
+**Code Files:**
+- ./backend/analytics/cost_model_calibrator.py
+- ./backend/analytics/realistic_cost_model.py
+- ./venv/lib/python3.12/site-packages/pydantic/root_model.py
+- ./venv/lib/python3.12/site-packages/pydantic/_internal/_model_construction.py
+- ./venv/lib/python3.12/site-packages/requests/models.py
 
 **Test Files:**
-- `tests/integration/test_ha_system.py` — HA tests
-  - ✅ test_heartbeat_detection
-  - ✅ test_failover_trigger
-  - ⚠️ test_failure_detection_and_failover (failing)
-  - ✅ test_no_duplicate_trades
-  - ✅ test_backup_sync_on_failover
+- ./venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py
+- ./venv/lib/python3.12/site-packages/IPython/core/tests/simpleerr.py
+- ./venv/lib/python3.12/site-packages/_pytest/pastebin.py
+- ./venv/lib/python3.12/site-packages/_pytest/hookspec.py
+- ./venv/lib/python3.12/site-packages/_pytest/assertion/truncate.py
 
-**Acceptance Criteria Status:**
-- ✅ Heartbeat every 10s (IMPLEMENTED)
-- ✅ Failover after 30s missed (IMPLEMENTED)
-- ✅ Read-only backup state (IMPLEMENTED)
-- ✅ No duplicate trades (IMPLEMENTED via UUID)
-- ✅ UUID per trade (IMPLEMENTED)
-- ⚠️ Network tolerance (PARTIAL — high latency causes issues)
-
-**Overall Status:** ✅ **IMPLEMENTED** (85% complete) — Core HA works; network tolerance needs improvement
-
----
-
-### FR-014: Overnight Mode
-
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ⚠️ PARTIAL | Parameter switching, reduced risk mode |
-| **Code Files** | ✅ FOUND | Config management, scheduling |
-| **Test Coverage** | ⚠️ PARTIAL | 2/4 tests passing (50%) |
-| **Gaps** | ⚠️ MODERATE | Auto-prompts not implemented; mode not fully automated |
-
-**Code Implementation Files:**
-- `backend/core/runtime_config.py` — Overnight parameters
-- `backend/core/config_manager.py` — Config switching
-
-**Test Files:**
-- `tests/test_autonomous.py` — Overnight mode tests
-  - ⚠️ test_overnight_parameter_switch (failing)
-  - ⚠️ test_overnight_grid_only_mode (failing)
-  - ⚠️ test_overnight_position_limit (failing)
-  - ⚠️ test_overnight_close_all_prompt (failing — no UI prompts)
-
-**Acceptance Criteria Status:**
-- ❌ Manual prompts at close (NOT IMPLEMENTED)
-- ⚠️ Different parameters overnight (IMPLEMENTED but not automated)
-- ⚠️ Wider stops/targets (IMPLEMENTED but not switching)
-- ⚠️ Grid trading only (IMPLEMENTED but not enforced overnight)
-- ❌ Trader manual buttons (IMPLEMENTED but switch not auto)
-- ❌ Mode switch at 7am (NOT IMPLEMENTED)
-
-**Overall Status:** ⚠️ **PARTIAL** (40% complete) — Config exists; automation and UI prompts missing
+**Acceptance Criteria:**
+- [ ] At market close (6pm ET), ask trader:
 
 ---
 
 ### FR-015: Automatic Database Authority Resolution (HA Recovery)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Authority selection, auto-sync |
-| **Code Files** | ✅ FOUND | Database recovery logic |
-| **Test Coverage** | ✅ PASSING | 6/8 tests passing (75%) |
-| **Gaps** | ⚠️ MINOR | Edge cases in high-latency scenarios |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 0 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/core/database_authority.py` (73 lines) — Authority selection
-- `backend/core/database_sync.py` (84 lines) — Database sync
-- `backend/core/database.py` — Database operations
-- `tests/test_database_authority.py` — Authority selection tests
+**Code Files:**
+- ./backend/core/database_authority.py
+- ./backend/core/database_integrity.py
+- ./backend/core/database_persistence.py
+- ./backend/core/database.py
+- ./backend/core/database_sync.py
 
 **Test Files:**
-- `tests/test_database_authority.py` — Authority resolution tests
-  - ✅ test_authority_selection_primary_ahead
-  - ✅ test_authority_selection_backup_ahead
-  - ✅ test_authority_selection_equal_timestamps
-  - ✅ test_auto_sync_primary_to_backup
-  - ✅ test_auto_sync_backup_to_primary
-  - ⚠️ test_split_brain_recovery (edge cases)
-  - ⚠️ test_corrupted_database_handling (edge cases)
-
-**Acceptance Criteria Status:**
-- ✅ Compare timestamps (IMPLEMENTED)
-- ✅ Select authoritative database (IMPLEMENTED)
-- ✅ Automatic sync (IMPLEMENTED)
-- ✅ Checksum verification (IMPLEMENTED)
-- ✅ Use cases 1 & 2 (IMPLEMENTED)
-- ✅ No manual intervention (IMPLEMENTED)
-- ⚠️ High-latency edge cases (PARTIAL)
-
-**Overall Status:** ✅ **IMPLEMENTED** (90% complete) — Core recovery working; edge cases incomplete
+- ./tests/test_database_authority.py
+- ./venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py
+- ./venv/lib/python3.12/site-packages/pytest_mock/plugin.py
+- ./venv/lib/python3.12/site-packages/_pytest/hookspec.py
+- ./venv/lib/python3.12/site-packages/_pytest/monkeypatch.py
 
 ---
 
 ### FR-016: Autonomous 24/7 Trading (Sleep Mode)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Autonomous execution, HA continuation |
-| **Code Files** | ✅ FOUND | 55 files with autonomous logic |
-| **Test Coverage** | ⚠️ PARTIAL | 4/6 tests passing (67%) |
-| **Gaps** | ⚠️ MINOR | 8+ hour stress test incomplete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 7 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/trading/autonomous_trader/core.py` (326 lines) — Autonomous engine
-- `backend/trading/autonomous_trader/entry.py` — Entry generation
-- `backend/trading/autonomous_trader/exit.py` — Exit management
-- `backend/execution/smart_executor.py` — Order execution
+**Code Files:**
+- ./backend/api/routers/trading_control.py
+- ./backend/api/routers/autonomous.py
+- ./backend/exchange/paper_trading.py
+- ./venv/lib/python3.12/site-packages/pip/_vendor/tenacity/before_sleep.py
+- ./backend/analytics/cost_model_calibrator.py
 
 **Test Files:**
-- `tests/test_autonomous.py` — Autonomous tests
-  - ✅ test_autonomous_entry_generation
-  - ✅ test_autonomous_exit_on_stop_loss
-  - ✅ test_autonomous_exit_on_profit_target
-  - ⚠️ test_autonomous_24h_operation (incomplete)
-  - ⚠️ test_overnight_trading_stress (failing — not 8+ hours)
+- ./venv/lib/python3.12/site-packages/_pytest/timing.py
+- ./venv/lib/python3.12/site-packages/mypy/test/helpers.py
+- ./venv/lib/python3.12/site-packages/numpy/testing/_private/utils.py
+- ./venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py
+- ./venv/lib/python3.12/site-packages/IPython/core/tests/simpleerr.py
 
-**Acceptance Criteria Status:**
-- ✅ Continuous monitoring (IMPLEMENTED)
-- ✅ Autonomous BUY/SELL (IMPLEMENTED)
-- ✅ Respects thresholds (IMPLEMENTED)
-- ✅ Respects position limits (IMPLEMENTED)
-- ✅ Trade logging (IMPLEMENTED)
-- ✅ HA continuation (IMPLEMENTED)
-- ⚠️ 8+ hour stress test (PARTIAL — shorter tests only)
-
-**Overall Status:** ✅ **IMPLEMENTED** (85% complete) — Autonomous trading works; long stress test missing
+**Acceptance Criteria:**
+- [ ] Bot continuously monitors signals while PRIMARY or BACKUP is running
+- [ ] Executes BUY/SELL orders without user approval
+- [ ] Respects entry threshold (min signal strength to trigger trade)
+- [ ] Respects position limits (max concurrent positions)
+- [ ] All trades logged with timestamp, price, P&L
+- [ ] HA ensures trading continues if one machine fails
+- [ ] Can run 8+ hours uninterrupted (overnight test)
 
 ---
 
 ### FR-017: Emergency Market Crash Response
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | CLOSE ALL, PAUSE ALL, HALT endpoints |
-| **Code Files** | ✅ FOUND | Emergency stop, exit manager |
-| **Test Coverage** | ✅ PASSING | 4/4 tests passing (100%) |
-| **Gaps** | ⚠️ NONE | All criteria met |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 5 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/core/emergency_stop.py` (51 lines) — Emergency stop logic
-- `backend/execution/exit_manager.py` — Position closing
-- `backend/api/routers/emergency.py` — Emergency endpoints
+**Code Files:**
+- ./backend/api/routers/emergency.py
+- ./backend/core/emergency_stop.py
+- ./backend/core/crash_detector.py
+- ./venv/lib/python3.12/site-packages/yfinance/domain/market.py
+- ./venv/lib/python3.12/site-packages/binance/spot/_market.py
 
 **Test Files:**
-- `tests/test_emergency_stop.py` — Emergency tests
-  - ✅ test_close_all_endpoint
-  - ✅ test_pause_all_endpoint
-  - ✅ test_halt_system_endpoint
-  - ✅ test_emergency_response_speed
-  - ✅ test_audit_trail_logging
+- ./venv/lib/python3.12/site-packages/_pytest/assertion/util.py
+- ./venv/lib/python3.12/site-packages/_pytest/mark/structures.py
+- ./venv/lib/python3.12/site-packages/_pytest/runner.py
+- ./venv/lib/python3.12/site-packages/_pytest/terminal.py
+- ./venv/lib/python3.12/site-packages/_pytest/_code/code.py
 
-**Acceptance Criteria Status:**
-- ✅ CLOSE ALL endpoint (IMPLEMENTED)
-- ✅ PAUSE ALL endpoint (IMPLEMENTED)
-- ✅ HALT SYSTEM endpoint (IMPLEMENTED)
-- ✅ <2s execution (IMPLEMENTED — avg 1.2s)
-- ✅ Audit trail (IMPLEMENTED)
-
-**Overall Status:** ✅ **IMPLEMENTED** (100% complete) — All criteria fully met
+**Acceptance Criteria:**
+- [ ] "CLOSE ALL" endpoint: Closes all open positions immediately at market price
+- [ ] "PAUSE ALL" endpoint: Stops new entry signals, holds existing positions with active stops
+- [ ] "HALT SYSTEM" endpoint: Kills all trading, stops HA, freezes all state
+- [ ] Each endpoint takes <2 seconds to execute
+- [ ] Can be triggered via:
 
 ---
 
 ### FR-018: Manual Signal Override
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Override logic, threshold adjustment |
-| **Code Files** | ✅ FOUND | Signal validation, config |
-| **Test Coverage** | ✅ PASSING | 5/6 tests passing (83%) |
-| **Gaps** | ⚠️ MINOR | Daily reset not fully tested |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 6 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/core/signal_validation.py` — Signal override logic
-- `backend/api/routers/trading_control.py` — Override endpoints
-- `backend/core/runtime_config.py` — Threshold adjustment
+**Code Files:**
+- ./backend/analytics/signal_explainer.py
+- ./backend/analytics/signals.py
+- ./backend/api/routers/user.py
+- ./backend/core/signal_validation.py
+- ./venv/lib/python3.12/site-packages/anyio/_core/_signals.py
 
 **Test Files:**
-- `tests/test_autonomous.py` — Override tests
-  - ✅ test_override_signal
-  - ✅ test_force_entry
-  - ✅ test_force_exit
-  - ✅ test_override_logging
-  - ⚠️ test_daily_reset (failing)
+- ./venv/lib/python3.12/site-packages/numpy/testing/overrides.py
+- ./venv/lib/python3.12/site-packages/_pytest/recwarn.py
+- ./venv/lib/python3.12/site-packages/_pytest/python_api.py
+- ./venv/lib/python3.12/site-packages/pytest_cov/plugin.py
+- ./venv/lib/python3.12/site-packages/mypy/test/helpers.py
 
-**Acceptance Criteria Status:**
-- ✅ OVERRIDE SIGNAL endpoint (IMPLEMENTED)
-- ✅ FORCE ENTRY endpoint (IMPLEMENTED)
-- ✅ FORCE EXIT endpoint (IMPLEMENTED)
-- ✅ Logging with reason (IMPLEMENTED)
-- ✅ Threshold adjustment (IMPLEMENTED)
-- ⚠️ Daily reset (PARTIAL)
-
-**Overall Status:** ✅ **IMPLEMENTED** (90% complete) — Override working; daily reset needs testing
+**Acceptance Criteria:**
+- [ ] "OVERRIDE SIGNAL" endpoint: Ignores current signal, prevent trade execution
+- [ ] "FORCE ENTRY" endpoint: Force trade even if signal <threshold (with warning)
+- [ ] "FORCE EXIT" endpoint: Close specific position immediately
+- [ ] Each override logged with reason (e.g., "Fed announcement", "Earnings", "Bad sentiment")
+- [ ] User can adjust entry threshold +/- 5 points for rest of day
+- [ ] Overrides reset at midnight (daily reset)
 
 ---
 
 ### FR-019: Real-Time Strategy Learning & Feedback
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | Learning engine, feedback generation |
-| **Code Files** | ✅ FOUND | Analytics, feedback modules |
-| **Test Coverage** | ✅ PASSING | 6/8 tests passing (75%) |
-| **Gaps** | ⚠️ MINOR | Recommendation accuracy not validated |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 1 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/analytics/feedback_loop_engine.py` (89 lines) — Feedback generation
-- `backend/analytics/strategy_analytics.py` — Strategy performance
-- `backend/api/routers/learning_feedback.py` — Feedback API
-- `backend/analytics/signal_explainer.py` — Signal explanation
+**Code Files:**
+- ./backend/api/routers/learning_feedback.py
+- ./backend/analytics/strategy_analytics.py
+- ./backend/strategies/garp_value_strategy.py
+- ./venv/lib/python3.12/site-packages/scipy/optimize/_hessian_update_strategy.py
+- ./backend/api/routers/learning_automation.py
 
 **Test Files:**
-- `tests/test_strategy_analytics.py` — Learning tests
-  - ✅ test_daily_summary_generation
-  - ✅ test_per_trade_feedback
-  - ✅ test_win_rate_breakdown
-  - ⚠️ test_actionable_recommendations (accuracy check failing)
-  - ⚠️ test_feedback_consistency (edge cases)
+- ./venv/lib/python3.12/site-packages/pandas/_testing/_hypothesis.py
+- ./venv/lib/python3.12/site-packages/scipy/optimize/tests/test_hessian_update_strategy.py
+- ./tests/unit/test_garp_strategy.py
+- ./tests/test_strategy_analytics.py
+- ./tests/test_strategy_analytics_api.py
 
-**Acceptance Criteria Status:**
-- ✅ Daily summary (IMPLEMENTED)
-- ✅ Per-trade feedback (IMPLEMENTED)
-- ✅ Win rate by signal/time/symbol (IMPLEMENTED)
-- ✅ Actionable recommendations (IMPLEMENTED but accuracy varies)
-- ✅ Feedback endpoints (IMPLEMENTED)
-
-**Overall Status:** ✅ **IMPLEMENTED** (85% complete) — Feedback working; recommendation accuracy needs improvement
+**Acceptance Criteria:**
+- [ ] **Daily Summary:** After market close, show:
 
 ---
 
 ### FR-020: Emergency Stop (Hard Kill Switch)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Implementation** | ✅ COMPLETE | One-click shutdown, atomic sequence |
-| **Code Files** | ✅ FOUND | Emergency stop module |
-| **Test Coverage** | ✅ PASSING | 4/4 tests passing (100%) |
-| **Gaps** | ⚠️ NONE | All criteria met |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ✅ IMPLEMENTED | 5 file(s) found |
+| Test Coverage | ✅ 0/0 PASSED | 5 test file(s) |
+| Acceptance Criteria | ✅ 2 criteria | See below |
+| Gaps | ✅ 0 gaps | See below |
 
-**Code Implementation Files:**
-- `backend/core/emergency_stop.py` (51 lines) — Hard stop logic
-- `backend/api/routers/emergency.py` — Emergency endpoints
+**Code Files:**
+- ./backend/core/emergency_stop.py
+- ./backend/analytics/stop_loss.py
+- ./backend/api/routers/emergency.py
+- ./backend/skills_integration.py
+- ./backend/core/stop_loss_safety.py
 
 **Test Files:**
-- `tests/test_emergency_stop.py` — Emergency stop tests
-  - ✅ test_emergency_stop_endpoint
-  - ✅ test_emergency_stop_atomic_sequence
-  - ✅ test_emergency_stop_logging
-  - ✅ test_emergency_stop_requires_restart
+- ./tests/test_emergency_stop.py
+- ./venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py
+- ./venv/lib/python3.12/site-packages/pytest_mock/plugin.py
+- ./venv/lib/python3.12/site-packages/_pytest/hookspec.py
+- ./venv/lib/python3.12/site-packages/_pytest/outcomes.py
 
-**Acceptance Criteria Status:**
-- ✅ EMERGENCY STOP endpoint (IMPLEMENTED)
-- ✅ Atomic sequence (IMPLEMENTED)
-- ✅ All positions closed (IMPLEMENTED)
-- ✅ HA halted (IMPLEMENTED)
-- ✅ Audit log (IMPLEMENTED)
-- ✅ Requires manual restart (IMPLEMENTED)
-
-**Overall Status:** ✅ **IMPLEMENTED** (100% complete) — All criteria fully met
+**Acceptance Criteria:**
+- [ ] "EMERGENCY STOP" endpoint: Immediate execution, no confirmation
+- [ ] Action sequence (atomic, all-or-nothing):
 
 ---
 
-## Part 2: Non-Functional Requirements (NFR-001 through NFR-027)
+## Non-Functional Requirements
 
 ### NFR-001: Signal Latency
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | <500ms p95 | Current: 650ms p95 (FAILING) |
-| **Measurement** | Signal generation time | 1,000 historical candles processed |
-| **Test Coverage** | ⚠️ PARTIAL | test_signal_latency exists but shows failure |
-| **Gaps** | ❌ PERFORMANCE | Latency tuning needed |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | ≥95% of signals <500ms | Signal generation must complete in <500ms per symbol |
 
-**Test Results:**
-- ⚠️ Average latency: 420ms (PASSING)
-- ❌ P95 latency: 650ms (FAILING — target 500ms)
-- ❌ P99 latency: 800ms (FAILING)
+**Requirement:** Signal generation must complete in <500ms per symbol
 
-**Status:** ❌ **FAILING** — Performance optimization needed
+**Why:** Crypto moves fast (1-2% per minute); slow signals = missed trades
+
+**Measurement:** Time from price update to buy/sell signal output
+
+**Test:** Process 1,000 historical candles, measure p95/p99 latency
 
 ---
 
 ### NFR-002: Order Execution Speed
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | <2s p95 | Current: 1.8s avg (PASSING) |
-| **Measurement** | Signal to Binance API response | 10 market orders tested |
-| **Test Coverage** | ✅ PASSING | test_execution_speed passing |
-| **Gaps** | ⚠️ NONE | Currently meeting target |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | ≥95% of orders placed <2s | Order must be placed to Binance within 2 seconds of signal |
 
-**Test Results:**
-- ✅ Average: 1.8s (PASSING)
-- ✅ P95: 1.95s (PASSING)
-- ✅ P99: 2.1s (MARGINAL)
+**Requirement:** Order must be placed to Binance within 2 seconds of signal
 
-**Status:** ✅ **PASSING** — Order execution meets requirement
+**Why:** Slippage increases with delay; market can gap
+
+**Measurement:** Time from signal generation to Binance API response
+
+**Test:** Place 10 market orders, measure p50/p95 latency
 
 ---
 
 ### NFR-003: Candle Fetch Latency
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | <2s full batch, <100ms per symbol | Current: Partial implementation |
-| **Measurement** | Fetch 400 candles (100 symbols × 4 timeframes) | Parallel fetching |
-| **Test Coverage** | ⚠️ PARTIAL | test_candle_fetch exists but incomplete |
-| **Gaps** | ⚠️ MODERATE | Parallel implementation incomplete |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | <2s for full batch, <100ms per symbol | Fetch latest candles from Binance in <2 seconds |
 
-**Test Results:**
-- ⚠️ Full batch: ~2.5s (FAILING — target 2s)
-- ⚠️ Per symbol avg: 120ms (FAILING — target 100ms)
-- Bottleneck: Sequential vs parallel fetching
+**Requirement:** Fetch latest candles from Binance in <2 seconds
 
-**Status:** ⚠️ **PARTIAL** — Parallel optimization needed
+**Why:** Real-time trading needs fresh data
+
+**Measurement:** Time from request to receiving full OHLCV data
+
+**Test:** Fetch 100 symbols × 4 timeframes = 400 candles in parallel
 
 ---
 
 ### NFR-004: Throughput
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | ≥100 trades/day | Current: 45-60 trades/day in paper tests |
-| **Measurement** | Trades processed over 30 days | Without CPU degradation |
-| **Test Coverage** | ⚠️ PARTIAL | 10-day test exists, 30-day missing |
-| **Gaps** | ⚠️ MODERATE | Not reaching 100 trades/day target |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 3 file(s) found |
+| Test Coverage | ❌ NO TESTS | 0 test file(s) |
+| Acceptance | ≥100 trades/day with <5% CPU utilization | Support ≥100 trades/day (crypto volatility is high) |
 
-**Test Results:**
-- ⚠️ Paper test avg: 45-60 trades/day (FAILING — target 100)
-- Reason: Conservative signal threshold (60) limits entry frequency
-- Could increase with lower threshold but would need win rate validation
+**Requirement:** Support ≥100 trades/day (crypto volatility is high)
 
-**Status:** ⚠️ **PARTIAL** — Current throughput 50-60% of target
+**Why:** Need capacity for multiple strategies or scaled trading
+
+**Measurement:** Trades processed per day without CPU/memory degradation
+
+**Test:** Run strategy for 30 days, measure avg trades/day
 
 ---
 
 ### NFR-005: Memory Usage
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | <500MB peak | Current: ~350MB typical |
-| **Measurement** | Peak memory during 24h trading | Memory leak detection |
-| **Test Coverage** | ⚠️ PARTIAL | Memory monitoring implemented, formal test missing |
-| **Gaps** | ⚠️ MINOR | 24h+ stress test needed |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Peak <500MB, no memory leaks over 7 days | Keep memory footprint <500MB during normal operation |
 
-**Test Results:**
-- ✅ Typical peak: 350-380MB (PASSING)
-- ✅ No memory leaks detected over 7 days
-- ⚠️ 24h stress test not formally run
+**Requirement:** Keep memory footprint <500MB during normal operation
 
-**Status:** ✅ **PASSING** — Memory usage within limits; formal 24h test needed
+**Why:** HA backup machine may have limited resources
+
+**Measurement:** Peak memory during 24h trading window
+
+**Test:** Monitor memory for 24h, capture peak usage
 
 ---
 
 ### NFR-006: Availability (HA)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | 99.5% uptime | Current: ~30% in split-brain scenarios |
-| **Measurement** | (Total time - downtime) / total time | Over 30 days |
-| **Test Coverage** | ⚠️ PARTIAL | 30-day test not completed |
-| **Gaps** | ❌ CRITICAL | Split-brain bug causing major downtime |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 2 test file(s) |
+| Acceptance | ≥99.5% without manual intervention | 99.5% uptime (≤3.6h downtime/month) |
 
-**Test Results:**
-- ⚠️ Normal operation: 99.6% (PASSING)
-- ❌ Split-brain scenario: 30% (CRITICAL BUG — see SPLIT_BRAIN_BUG_ANALYSIS.md)
-- Root cause: Database divergence during failover
+**Requirement:** 99.5% uptime (≤3.6h downtime/month)
 
-**Status:** ❌ **FAILING** — Split-brain bug must be fixed before 99.5% achievable
+**Why:** Crypto markets 24/7; downtime = missed trades = lost profit
+
+**Measurement:** (Total time - downtime) / total time
+
+**Test:** Run for 30 days, monitor both machines for crashes
 
 ---
 
 ### NFR-007: Data Consistency (No Duplicate Trades)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | 0 duplicate orders during failover | Audit trail verification |
-| **Test Coverage** | ✅ PASSING | test_no_duplicate_trades passing |
-| **Gaps** | ⚠️ NONE | Currently implemented |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | 0 duplicate trades in 30-day test run | No duplicate orders even during failover |
 
-**Test Results:**
-- ✅ UUID deduplication working
-- ✅ 0 duplicates in 100-trade failover test
-- ✅ Audit trail shows unique orders
+**Requirement:** No duplicate orders even during failover
 
-**Status:** ✅ **PASSING** — Deduplication working correctly
+**Why:** Dual machines could both execute same signal if not careful
+
+**Measurement:** Audit trail shows no identical (symbol, time, qty, side) pairs
+
+**Test:** Force failover during trade execution, verify only 1 order created
 
 ---
 
 ### NFR-008: Recovery Time Objective (RTO)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | ≤30s failover | Current: 25s avg |
-| **Measurement** | Time from main failure to backup trade | 5 measurements average |
-| **Test Coverage** | ✅ PASSING | test_failover_trigger passing |
-| **Gaps** | ⚠️ NONE | Currently meeting target |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | ≤30s RTO, measured 5 times, avg <25s | Backup machine must take over within 30 seconds |
 
-**Test Results:**
-- ✅ Average RTO: 25s (PASSING)
-- ✅ P95: 28s (PASSING)
-- ✅ P99: 32s (MARGINAL)
+**Requirement:** Backup machine must take over within 30 seconds
 
-**Status:** ✅ **PASSING** — Failover speed meets requirement
+**Why:** Crypto can move 1-2% in 30s; longer = lost opportunity/loss
+
+**Measurement:** Time from main machine failure to first backup trade
+
+**Test:** Kill main machine process, measure time to backup executing signals
 
 ---
 
 ### NFR-009: Recovery Point Objective (RPO)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | ≤1 trade lost on failover | <€10 impact |
-| **Test Coverage** | ⚠️ PARTIAL | test_failover_trade_loss exists but incomplete |
-| **Gaps** | ⚠️ MINOR | Edge cases during rapid ordering |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | ≤1 trade lost, impact <€10 | Lose ≤1 trade on failover (≤€10 in lost opportunity) |
 
-**Test Results:**
-- ✅ Typical failover: 0 trades lost
-- ⚠️ Rapid order scenario: up to 2 trades lost (FAILING)
-- Reason: Race condition between main and backup
+**Requirement:** Lose ≤1 trade on failover (≤€10 in lost opportunity)
 
-**Status:** ⚠️ **PARTIAL** — Typical case passing, edge cases need fix
+**Why:** Perfect sync is impossible; accept small loss during handover
+
+**Measurement:** Trades executed by main but not backup in final 2 seconds
+
+**Test:** Analyze logs during forced failover
 
 ---
 
 ### NFR-010: Platform-Wide Data Consistency
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | All components (PRIMARY.memory, PRIMARY.db, BACKUP.memory, BACKUP.db) 100% match |
-| **Test Coverage** | ❌ CRITICAL GAP | Only 9% coverage |
-| **Gaps** | ❌ CRITICAL | Most consistency checks failing |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance |  | In-memory state MUST sync permanently with SQLite database |
 
-**Test Results:**
-- ❌ test_account_state_matches_across_machines (FAILING)
-- ❌ test_trade_details_match_across_machines (FAILING)
-- ❌ test_positions_match_across_machines (FAILING)
-- ⚠️ Reason: Backup not syncing all state fields
+**Requirement:** In-memory state MUST sync permanently with SQLite database
 
-**Status:** ❌ **FAILING** — Critical gap in platform consistency
-
----
-
-### NFR-010B: Database Durability (API-Database Sync)
-
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | In-memory state persists to SQLite | State survives API restart |
-| **Test Coverage** | ⚠️ PARTIAL | test_database_persistence exists but 19% coverage |
-| **Gaps** | ⚠️ MODERATE | Some fields not persisted (realized_pnl, fees) |
-
-**Test Results:**
-- ✅ Basic persistence working
-- ⚠️ test_realized_pnl_persistence: 3/3 tests FAILING
-- ⚠️ Cash surviving restart: mostly working
-- ⚠️ Some edge cases failing
-
-**Status:** ⚠️ **PARTIAL** — Basic persistence works; realized_pnl persistence failing
+**Why:** API crashes/restarts would lose account state (cash, P&L) without this
 
 ---
 
 ### NFR-011: API Key Protection
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | No keys in code/logs/git | All keys in environment variables |
-| **Test Coverage** | ✅ PASSING | Security scan passing |
-| **Gaps** | ⚠️ NONE | No plaintext keys found |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | 0 keys found in codebase, all in environment variables | Binance API keys never stored in code, logs, or version control |
 
-**Test Results:**
-- ✅ grep found 0 keys in codebase
-- ✅ All keys loaded from env vars
-- ✅ .env not in git
+**Requirement:** Binance API keys never stored in code, logs, or version control
 
-**Status:** ✅ **PASSING** — Key protection implemented
+**Why:** Stolen keys = complete account compromise
+
+**Measurement:** Audit code + logs + git history for plaintext keys
+
+**Test:** `grep -r "BINANCE.*KEY\|api.*key" --include="*.py" --include="*.txt"`
 
 ---
 
 ### NFR-012: Input Validation
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | All user inputs validated | 50+ test cases |
-| **Test Coverage** | ⚠️ PARTIAL | 30 validation tests implemented |
-| **Gaps** | ⚠️ MODERATE | Some edge cases uncovered |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | All inputs validated, clear error messages | All user inputs validated (strategy parameters, order quantities) |
 
-**Test Results:**
-- ✅ Strategy thresholds validated (0-100)
-- ✅ Order quantities validated
-- ✅ Symbol validation (BTCUSDT format)
-- ⚠️ Missing: Position size bounds checking
-- ⚠️ Missing: API parameter validation
+**Requirement:** All user inputs validated (strategy parameters, order quantities)
 
-**Status:** ✅ **IMPLEMENTED** (70% complete) — Core validation working; edge cases need coverage
+**Why:** Bad inputs could cause loss or security issues
+
+**Test:** Unit tests for 50+ invalid inputs
 
 ---
 
 ### NFR-013: Audit Trail Immutability
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Trade audit trail append-only | Never deleted/modified |
-| **Test Coverage** | ✅ PASSING | Immutable logger implemented |
-| **Gaps** | ⚠️ NONE | Append-only enforced |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | 100% of trades logged, audit trail integrity verified | Trade audit trail is append-only, never deleted or modified |
 
-**Test Results:**
-- ✅ Audit trail file grows only (no overwrites)
-- ✅ 100% of trades logged
-- ✅ Integrity verified
+**Requirement:** Trade audit trail is append-only, never deleted or modified
 
-**Status:** ✅ **PASSING** — Immutability guaranteed
+**Why:** Regulatory requirement for live trading, forensics on losses
+
+**Measurement:** Audit trail file has no overwrites, only appends
+
+**Test:** Verify file only grows, verify all trades logged
 
 ---
 
 ### NFR-014: Structured Logging
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | JSON logging (timestamp, level, event, context) | <5KB per trade |
-| **Test Coverage** | ✅ PASSING | Structured logger implemented |
-| **Gaps** | ⚠️ MINOR | Some events not fully structured |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | 100% of events loggable as JSON, <5KB per trade | All events logged as JSON (timestamp, level, event, context) |
 
-**Test Results:**
-- ✅ 90% of events loggable as JSON
-- ✅ Log size <5KB per trade
-- ⚠️ Some legacy print() statements remain
+**Requirement:** All events logged as JSON (timestamp, level, event, context)
 
-**Status:** ✅ **IMPLEMENTED** (90% complete) — JSON logging mostly complete; cleanup needed
+**Why:** Easy parsing for monitoring, alerting, debugging
+
+**Test:** Parse logs into JSON, verify all events captured
 
 ---
 
 ### NFR-015: Code Organization
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Single-responsibility modules, max 500 lines | <3 dependencies per module |
-| **Test Coverage** | ✅ PARTIAL | File size audit completed |
-| **Gaps** | ⚠️ MINOR | Some files exceed 500 lines |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | No file >500 lines, <3 dependencies per module | Single-responsibility modules, max 500 lines per file |
 
-**Test Results:**
-- ✅ 85% of files <500 lines
-- ⚠️ Violations: smart_executor.py (159 lines), ha_failover.py (155 lines), database.py (290 lines)
-- ✅ Module coupling <3 dependencies
+**Requirement:** Single-responsibility modules, max 500 lines per file
 
-**Status:** ✅ **IMPLEMENTED** (85% complete) — Good organization; minor cleanups needed
+**Why:** Crypto market moves fast; bugs must be found and fixed quickly
+
+**Test:** Measure file sizes, check module coupling
 
 ---
 
 ### NFR-016: Type Hints & Linting
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | 100% type hints, mypy 0 errors, black formatted |
-| **Test Coverage** | ⚠️ PARTIAL | Linting implemented |
-| **Gaps** | ⚠️ MODERATE | Type hints ~60%, mypy has warnings |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | All checks pass, 0 warnings | 100% type hints, mypy 0 errors, black formatted |
 
-**Test Results:**
-- ⚠️ Type hint coverage: 60% (target 100%)
-- ⚠️ mypy warnings: 45 (target 0)
-- ⚠️ black formatting: 95% compliant
+**Requirement:** 100% type hints, mypy 0 errors, black formatted
 
-**Status:** ⚠️ **PARTIAL** (60% complete) — Linting setup; type hints need completion
+**Why:** Catches bugs at dev time, not production
 
----
-
-### NFR-017: Code Quality Excellence
-
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Maintain highest standards (type hints, linting, coverage, complexity) |
-| **Test Coverage** | ⚠️ PARTIAL | Pre-commit hooks configured |
-| **Gaps** | ⚠️ CRITICAL | Coverage at 18%, target 85%+ |
-
-**Test Results:**
-- ❌ Test coverage: 18% (target 85%)
-- ⚠️ Cyclomatic complexity: avg 7.2 (target <10)
-- ⚠️ Duplication: 8% (target <5%)
-
-**Status:** ❌ **FAILING** — Test coverage critical gap (18% vs 85% target)
+**Test:** `mypy . && black --check . && ruff check .`
 
 ---
 
-### NFR-018: Implementation Testing
+### NFR-017: Code Quality Excellence (Lifetime Commitment)
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Every change must have passing tests |
-| **Test Coverage** | ⚠️ PARTIAL | 971 passing, 128 failing tests |
-| **Gaps** | ⚠️ MODERATE | Some features claimed without full test proof |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Code passes ALL quality gates before merge | Code quality must be maintained at highest standards throughout entire project lifetime |
 
-**Test Results:**
-- ✅ 971 tests passing (88.3%)
-- ⚠️ 128 tests failing (11.7%)
-- ⚠️ Some implementation gaps discovered during testing
+**Requirement:** Code quality must be maintained at highest standards throughout entire project lifetime
 
-**Status:** ✅ **MOSTLY PASSING** (88% pass rate)
+**Why:** Technical debt spirals; high quality prevents bugs, reduces maintenance cost, enables rapid iteration
+
+---
+
+### NFR-018: Implementation Testing (No Claims Without Tests)
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Zero "false positives" (claimed features that don't work) | EVERY code change must have passing tests BEFORE claiming success |
+
+**Requirement:** EVERY code change must have passing tests BEFORE claiming success
+
+**Why:** Prevents false claims (e.g., "realized_pnl is persisted" when it wasn't)
+
+**Test:** Every commit must have associated tests in CI/CD
 
 ---
 
 ### NFR-019: Test Coverage
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | ≥85% coverage for critical paths |
-| **Measurement** | `coverage run -m pytest` | Critical modules: signals, orders, HA |
-| **Test Coverage** | ❌ CRITICAL | Coverage at 18% (target 85%) |
-| **Gaps** | ❌ CRITICAL | Massive coverage gap |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | ≥85% coverage, <50 lines uncovered in critical modules | ≥85% test coverage for critical paths |
 
-**Coverage by Module:**
-- Exchange: 13% (target 85%)
-- Execution: 18-35% (target 85%)
-- HA/Failover: 9-30% (target 85%)
-- Strategies: 11% (target 85%)
+**Requirement:** ≥85% test coverage for critical paths
 
-**Status:** ❌ **FAILING** — Test coverage far below target
+**Test:** `coverage run -m pytest && coverage report`
 
 ---
 
 ### NFR-020: Documentation
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Strategy guides, API reference, runbooks | Docs explain 5Ws |
-| **Test Coverage** | ⚠️ PARTIAL | Some docs present, runbooks incomplete |
-| **Gaps** | ⚠️ MODERATE | Runbooks not persistent |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Docs explain 5W (what, why, when, who, how) for each feature | Every strategy and API endpoint documented with examples |
 
-**Documentation Found:**
-- ✅ API reference (routing layer)
-- ⚠️ Strategy guides (PARTIAL)
-- ❌ Runbooks (not persistent, in-memory only)
+**Requirement:** Every strategy and API endpoint documented with examples
 
-**Status:** ⚠️ **PARTIAL** (60% complete) — Core docs exist; runbooks need completion
+**Why:** Easy onboarding, understand why trades happened
+
+**Test:** New user can run strategy without asking questions
 
 ---
 
 ### NFR-021: Operational Cost Coverage
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Strategy profitable, 2x margin over costs | Daily profit ≥€3 target |
-| **Test Coverage** | ⚠️ PARTIAL | 10-day paper test shows +€250 total |
-| **Gaps** | ⚠️ MINOR | Profitability confirmed but 30-day test needed |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Paper trading shows +€30+ profit for 10 days | Strategy must be profitable enough to cover costs with 2x safety margin |
 
-**Test Results:**
-- ✅ 10-day paper test: +€250 profit (€25/day avg)
-- ✅ Covers costs with 10x margin
-- ⚠️ 30-day test not completed
+**Requirement:** Strategy must be profitable enough to cover costs with 2x safety margin
 
-**Status:** ✅ **PASSING** — Profitable in testing; live validation pending
+**Why:** Otherwise, even if strategy works, losses to fees eat profit
+
+**Test:** 10-day paper test must show avg +€3/day profit
 
 ---
 
 ### NFR-022: Asset Expansion
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Support new pairs without code changes | Config file driven |
-| **Test Coverage** | ✅ PASSING | Asset config system working |
-| **Gaps** | ⚠️ NONE | Currently implemented |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Can add pair in <5 minutes, no code changes | Support adding new trading pairs without code changes |
 
-**Test Results:**
-- ✅ Can add 5 new pairs in <5 minutes
-- ✅ No code changes needed
-- ✅ All pairs trade correctly
+**Requirement:** Support adding new trading pairs without code changes
 
-**Status:** ✅ **PASSING** — Asset expansion working
+**Why:** Want to trade BTCUSDT, ETHUSDT, DOGEUSDT, etc.
+
+**Test:** Add 5 new pairs, verify all trade correctly
 
 ---
 
 ### NFR-023: Strategy Expansion
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Support new strategies without core modification | Strategy interface |
-| **Test Coverage** | ✅ PASSING | Strategy registry working |
-| **Gaps** | ⚠️ NONE | Currently implemented |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Can plug in new strategy, all existing tests pass | Support adding new strategies without modifying core system |
 
-**Test Results:**
-- ✅ Can add new strategy in <30 minutes
-- ✅ Existing tests pass
-- ✅ Strategy interface clean
+**Requirement:** Support adding new strategies without modifying core system
 
-**Status:** ✅ **PASSING** — Strategy expansion working
+**Why:** Want to test momentum, mean reversion, grid trading, etc.
+
+**Test:** Add 2 new strategies in <30 minutes
 
 ---
 
 ### NFR-024: Zero-Downtime Deployment
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | Deploy code without stopping trading | <5s pause |
-| **Test Coverage** | ⚠️ PARTIAL | Blue-green deployment not fully implemented |
-| **Gaps** | ⚠️ MODERATE | Need rolling restart mechanism |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 2 file(s) found |
+| Test Coverage | ❌ NO TESTS | 0 test file(s) |
+| Acceptance | Code updated, 0 trades lost, <5s pause in execution | Deploy code updates without stopping trading |
 
-**Test Results:**
-- ⚠️ Current approach: Brief API restart (~5s pause)
-- ❌ Zero-downtime not achieved
-- ⚠️ Blue-green deployment framework exists but incomplete
+**Requirement:** Deploy code updates without stopping trading
 
-**Status:** ⚠️ **PARTIAL** (40% complete) — Mechanism exists; full zero-downtime not yet implemented
+**Why:** Crypto markets 24/7; downtime = missed trades
+
+**Test:** Deploy during trading hours, verify no orders missed
 
 ---
 
 ### NFR-025: Configuration Management
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | All settings via environment variables | No hardcoding |
-| **Test Coverage** | ✅ PASSING | Config system working |
-| **Gaps** | ⚠️ NONE | Currently implemented |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Code works with 0 hardcoded values | All settings via environment variables (no hardcoding) |
 
-**Test Results:**
-- ✅ All settings in .env
-- ✅ No hardcoded values in code
-- ✅ Config hot-reload working
+**Requirement:** All settings via environment variables (no hardcoding)
 
-**Status:** ✅ **PASSING** — Config management complete
+**Why:** Same code runs on dev, testnet, mainnet with different configs
+
+**Test:** Verify each var controls behavior correctly
 
 ---
 
 ### NFR-026: Paper Trading Acceptance
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | 10-day test: >55% win rate, positive P&L | €10,000 virtual capital |
-| **Test Coverage** | ✅ PASSING | 10-day test completed |
-| **Gaps** | ⚠️ NONE | Criteria met |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance |  | Pass 10-day paper trading run with >55% win rate and positive P&L |
 
-**Test Results:**
-- ✅ 87 trades executed
-- ✅ 58% win rate (target 55%)
-- ✅ +€250 profit (target positive)
-- ✅ Profit factor 1.45x (target 1.2x)
-- ✅ Sharpe 0.62 (target 0.5)
-- ✅ Daily max drawdown 2.8% (target ≤5%)
-
-**Status:** ✅ **PASSING** — Paper trading acceptance criteria met
+**Requirement:** Pass 10-day paper trading run with >55% win rate and positive P&L
 
 ---
 
 ### NFR-027: Live Trading Acceptance
 
-| Item | Status | Details |
-|------|--------|---------|
-| **Requirement** | 2-week live test: >55% win rate, €50 profit | Real Binance, €1,000 |
-| **Test Coverage** | ❌ NOT STARTED | Live testing deferred |
-| **Gaps** | ❌ CRITICAL | Requires split-brain bug fix first |
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Implementation | ⚠️ PARTIAL | 5 file(s) found |
+| Test Coverage | ⚠️ Tests found but not run | 5 test file(s) |
+| Acceptance | Both machines have identical `.env` + `trading_config.json` after startup | After git pull or .env file change, both machines must manually sync |
 
-**Status:** ❌ **NOT STARTED** — Blocked on NFR-006 (split-brain bug)
-
----
-
-## Part 3: Configuration Requirements (CFR-001 through CFR-012)
-
-All configuration requirements are **✅ IMPLEMENTED** in the runtime config system.
-
-| CFR ID | Requirement | Status | Details |
-|--------|-------------|--------|---------|
-| CFR-001 | Entry Signal Threshold (60.0) | ✅ | Enforced, tested |
-| CFR-002 | Position Size Per Trade (2.5%) | ✅ | Enforced, tested |
-| CFR-003 | Maximum Concurrent Positions (8) | ✅ | Enforced, tested |
-| CFR-004 | Exit Stop Loss (3.0%) | ✅ | Enforced, tested |
-| CFR-005 | Exit Profit Target (4.5%) | ✅ | Enforced, tested |
-| CFR-006 | Entry Quality Gate (90.0%) | ✅ | Enforced, tested |
-| CFR-007 | Exit Quality Gate (60.0%) | ✅ | Enforced, tested |
-| CFR-008 | Loop Sleep Seconds (10.0) | ✅ | Enforced, tested |
-| CFR-009 | Maximum Daily Loss Circuit Breaker (5.0%) | ✅ | Enforced, tested |
-| CFR-010 | Automatic Config Sync | ✅ | SSH tunnel implemented |
-| CFR-011 | Startup Config Sync | ✅ | Manual sync working |
-| CFR-012 | Critical Data Sync (Phase 2) | ⏳ | Deferred to Phase 2 |
+**Requirement:** After git pull or .env file change, both machines must manually sync
 
 ---
-
-## Part 4: Coverage Analysis & Gaps Summary
-
-### Implementation Status Overview
-
-**✅ COMPLETE (17 FRs):**
-- FR-001: Binance API Integration (98%)
-- FR-005: Manual Order Entry (95%)
-- FR-006: Manual Stop/Profit Override (90%)
-- FR-009: Real-Time Portfolio Monitoring (88%)
-- FR-013: HA Redundancy (85%)
-- FR-015: Database Authority Resolution (90%)
-- FR-017: Emergency Market Crash Response (100%)
-- FR-020: Emergency Stop (100%)
-- All CFR-001 through CFR-009
-
-**⚠️ PARTIAL (11 FRs):**
-- FR-002: Paper Trading (70% — slippage needs ATR-based calculation)
-- FR-003: Signal Generation (95% — latency tuning needed)
-- FR-003B: Dynamic Allocation (90% — dashboard UI incomplete)
-- FR-003C: Time-Based Params (85% — manual override testing incomplete)
-- FR-004: Signal Alerts (60% — email/SMS missing)
-- FR-007: System States (85% — state transitions incomplete)
-- FR-008: Position Sizing (70% — volatility adjustment incomplete)
-- FR-010: Strategy Analytics (80% — time/pair breakdown incomplete)
-- FR-011: Critical Alerts (60% — runbooks not persistent)
-- FR-012: Trade Quality (85% — alternative scenarios incomplete)
-- FR-014: Overnight Mode (40% — automation missing)
-- FR-016: Autonomous Trading (85% — 8+ hour stress test missing)
-- FR-018: Signal Override (90% — daily reset incomplete)
-- FR-019: Strategy Learning (85% — recommendation accuracy needs validation)
-
-**❌ NOT FOUND (0 FRs) — All have at least partial implementation**
-
-### Test Coverage Status
-
-**High Coverage (≥80%):**
-- FR-001, FR-005, FR-006, FR-008 (position sizing logic)
-- FR-017, FR-020 (emergency stop)
-
-**Moderate Coverage (50-79%):**
-- FR-002, FR-003, FR-010, FR-012, FR-013, FR-015
-
-**Low Coverage (<50%):**
-- FR-004, FR-007, FR-011, FR-014, FR-016, FR-019
-- NFR-006, NFR-010, NFR-010B
-
-### Critical Gaps (Block Production)
-
-| Priority | Gap | Impact | Effort | Due Date |
-|----------|-----|--------|--------|----------|
-| **P1** | NFR-006: Availability — Split-brain bug (30% vs 99.5%) | CRITICAL | 18h | Jul 6 |
-| **P1** | NFR-010: Platform Consistency — Data not syncing (9% coverage) | CRITICAL | 12h | Jul 7 |
-| **P1** | NFR-010B: Database Durability — realized_pnl not persisting | CRITICAL | 8h | Jul 6 |
-| **P2** | FR-002: Paper Trading slippage ATR-based | HIGH | 6h | Jul 8 |
-| **P2** | NFR-019: Test coverage (18% vs 85% target) | HIGH | 40h | Jul 15 |
-| **P2** | FR-011: Runbooks not persistent | HIGH | 4h | Jul 9 |
-| **P3** | FR-014: Overnight mode not automated | MEDIUM | 8h | Jul 12 |
-| **P3** | FR-004: Email/SMS alerts | MEDIUM | 10h | Jul 14 |
-
-### Test Failures by Category
-
-**Infrastructure & HA (most failures):**
-- test_ha_system: 4 failing (split-brain, state sync)
-- test_platform_consistency: 5 failing (data divergence)
-- test_realized_pnl_persistence: 3 failing (durability)
-- test_websocket_resilience: 6 failing (staleness detection)
-
-**Monitoring & Alerts:**
-- test_monitoring: 13 failing (endpoint issues)
-
-**Configuration:**
-- test_config_hot_reload: 2 failing (reload not atomic)
-
-**Total: 128 failing tests (11.7% of 1,102)**
-
----
-
-## Part 5: Recommendations & Next Steps
-
-### Immediate Actions (Before Production)
-
-1. **Fix Split-Brain Bug (NFR-006)** ⚠️ BLOCKING
-   - Root cause: Database timestamps diverge during failover
-   - Fix: Implement consistent timestamp synchronization
-   - Timeline: 18 hours (scheduled completion: Jul 6)
-   - See: `SPLIT_BRAIN_BUG_ANALYSIS.md`
-
-2. **Implement Platform Consistency (NFR-010)** ⚠️ BLOCKING
-   - Root cause: BACKUP not syncing all state (cash, P&L, trades)
-   - Fix: Add bidirectional sync for all state fields
-   - Timeline: 12 hours (scheduled completion: Jul 7)
-   - See: `P2_RISK_LANDSCAPE_ANALYSIS.md`
-
-3. **Fix Database Durability (NFR-010B)** ⚠️ BLOCKING
-   - Root cause: `realized_pnl` not persisted to SQLite
-   - Fix: Add persistence for all trade fields (fees, realized_pnl)
-   - Timeline: 8 hours (scheduled completion: Jul 6)
-   - Test: test_realized_pnl_persistence must pass
-
-### High Priority (Week 1)
-
-4. **Enhance Paper Trading Slippage (FR-002)** — ATR-based calculation
-   - Current: Hardcoded 0.05-0.1%
-   - Target: Dynamic based on volatility
-   - Effort: 6 hours
-
-5. **Increase Test Coverage (NFR-019)** — 18% → 85%
-   - Add tests for critical paths (signals, HA, database)
-   - Effort: 40 hours (spread over 2 weeks)
-
-6. **Persistent Runbooks (FR-011)** — Move from memory to database
-   - Effort: 4 hours
-
-### Medium Priority (Week 2)
-
-7. **Automate Overnight Mode (FR-014)** — Remove manual prompts
-   - Implement auto-close at market close
-   - Effort: 8 hours
-
-8. **Email/SMS Alerts (FR-004)** — Integrate notification providers
-   - Effort: 10 hours
-
-9. **Signal Latency Optimization (NFR-001)** — 650ms → 500ms
-   - Profile hot paths, optimize indicator calculations
-   - Effort: 6 hours
-
-### Quality Improvements
-
-10. **Type Hint Completion (NFR-016)** — 60% → 100%
-    - Add missing type annotations across codebase
-    - Effort: 12 hours
-
-11. **Duplication Reduction (NFR-017)** — 8% → <5%
-    - Consolidate similar modules
-    - Effort: 8 hours
-
----
-
-## Summary Table: Phase 1 Readiness
-
-| Pillar | Maturity | Blockers | Timeline |
-|--------|----------|----------|----------|
-| **Core Trading (FRs 001-006)** | 90% | None | Ready for testing |
-| **Advanced Strategies (FRs 007-012)** | 75% | Overnight mode | Week 1 |
-| **Manual Control (FRs 013-020)** | 80% | Alerts/Runbooks | Week 1-2 |
-| **HA & Recovery (FRs 013, 015)** | 70% | Split-brain bug | CRITICAL |
-| **Performance (NFRs 001-005)** | 75% | Latency tuning | Week 1 |
-| **Reliability (NFRs 006-009)** | 40% | Platform consistency | CRITICAL |
-| **Quality (NFRs 014-020)** | 60% | Test coverage | Ongoing |
-| **Configuration (CFRs)** | 100% | None | Ready |
-
-**Overall Phase 1 Readiness: 70% (Blocked on NFR-006 & NFR-010)**
-
----
-
-## Key Findings
-
-### What's Working Well ✅
-1. **Core trading engine** — Binance API, paper trading, signal generation all functional
-2. **Manual controls** — Order entry, exits, position management working
-3. **Configuration system** — Hot-reload, parameter switching working
-4. **Deduplication** — No duplicate trades during failover
-5. **Emergency controls** — CLOSE ALL, HALT working perfectly
-6. **Paper trading profitability** — 58% win rate, +€250 in 10 days
-
-### Critical Issues ❌
-1. **Split-brain bug** — Database timestamps diverge, causing failover failures
-2. **Data consistency** — BACKUP not syncing all state fields (only 9% coverage)
-3. **Database durability** — realized_pnl not persisting (causes state loss on restart)
-4. **Test coverage** — 18% vs 85% target (massive gap in critical paths)
-5. **Platform consistency** — Memory and database states diverging
-
-### Recommendations for Next Phase
-1. **Deploy with single machine** until split-brain bug fixed (expected Jul 6)
-2. **Run 7-day paper test** with latest code to validate profitability
-3. **Implement platform consistency** before going live with HA
-4. **Add test coverage** incrementally during development
-
----
-
-**Report Generated:** 2026-07-03  
-**Last Updated:** Test run with 971 passing, 128 failing  
-**Next Review:** After split-brain bug fix (scheduled Jul 6)
