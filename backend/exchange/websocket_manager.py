@@ -237,7 +237,7 @@ class WebSocketManager:
                             source="websocket",
                         )
                         self.last_ws_message = datetime.utcnow()
-                        logger.debug(f"✓ {symbol}: ${price:.2f}")
+                        logger.info(f"✓ {symbol}: ${price:.2f} (updated {len(self.price_callbacks)} callbacks)")
 
                         # Call callbacks
                         await self._call_callbacks(symbol, price)
