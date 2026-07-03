@@ -204,10 +204,10 @@ class WebSocketManager:
                         payload = data["data"]
                         symbol = stream_name.split("@")[0].upper()
 
-                        # Handle kline data (has "k" key)
+                        # Handle kline data (has "k" key) - use current time, not kline T (which is candle close time in future)
                         if "k" in payload:
                             price = float(payload["k"].get("c"))
-                            timestamp = datetime.utcfromtimestamp(payload["k"].get("T", 0) / 1000)
+                            timestamp = datetime.utcnow()  # Message arrival time, not kline T
                         # Handle trade data (has "p" key)
                         elif "p" in payload:
                             price = float(payload.get("p"))
@@ -219,10 +219,10 @@ class WebSocketManager:
                     elif "e" in data and "s" in data:
                         symbol = data["s"].upper()
 
-                        # Handle kline data
+                        # Handle kline data - use current time, not kline T (which is candle close time in future)
                         if "k" in data:
                             price = float(data["k"].get("c"))
-                            timestamp = datetime.utcfromtimestamp(data["k"].get("T", 0) / 1000)
+                            timestamp = datetime.utcnow()  # Message arrival time, not kline T
                         # Handle trade data
                         elif "p" in data:
                             price = float(data.get("p"))
