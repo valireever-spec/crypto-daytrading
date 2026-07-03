@@ -41,6 +41,13 @@ class TradingConfig:
     enabled: bool = True  # Whether trading is enabled
     symbols: list = None  # List of trading symbols
 
+    # Data quality gates
+    quality_gate_entry: int = 80  # Minimum data quality % to enter positions
+    quality_gate_exit: int = 60  # Minimum data quality % to exit positions
+
+    # Recovery parameters
+    retry_sleep_seconds: int = 5  # Seconds to sleep between recovery attempts
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         if self.symbols is None:
