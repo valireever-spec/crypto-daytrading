@@ -156,11 +156,11 @@ class WebSocketManager:
             return await self._connect_websocket()
 
     async def _subscribe_streams(self) -> None:
-        """Subscribe to @trade streams for all symbols."""
+        """Subscribe to @kline_1m streams for all symbols (testnet has no trade volume)."""
         if not self.ws:
             return
 
-        streams = [f"{sym.lower()}@trade" for sym in self.symbols]
+        streams = [f"{sym.lower()}@kline_1m" for sym in self.symbols]
 
         subscribe_msg = {
             "method": "SUBSCRIBE",
@@ -193,19 +193,37 @@ class WebSocketManager:
                     price = None
                     timestamp = None
 
-                    # Format 1: Wrapped (individual stream URLs) - {"stream": "btcusdt@trade", "data": {...}}
+                    # Format 1: Wrapped (individual stream URLs) - {"stream": "btcusdt@kline_1m", "data": {"k": {"c": "62030.01", "T": ...}}}
                     if "stream" in data and "data" in data:
                         stream_name = data["stream"]
                         payload = data["data"]
                         symbol = stream_name.split("@")[0].upper()
-                        price = float(payload.get("p"))
-                        timestamp = datetime.utcfromtimestamp(payload.get("T", 0) / 1000)
 
-                    # Format 2: Unwrapped (subscription on single connection) - {"e": "trade", "s": "BTCUSDT", "p": "62030.01"}
-                    elif "e" in data and "s" in data and "p" in data:
+                        # Handle kline data (has "k" key)
+                        if "k" in payload:
+                            price = float(payload["k"].get("c"))
+                            timestamp = datetime.utcfromtimestamp(payload["k"].get("T", 0) / 1000)
+                        # Handle trade data (has "p" key)
+                        elif "p" in payload:
+                            price = float(payload.get("p"))
+                            timestamp = datetime.utcfromtimestamp(payload.get("T", 0) / 1000)
+                        else:
+                            continue
+
+                    # Format 2: Unwrapped (subscription on single connection) - {"e": "kline", "s": "BTCUSDT", "k": {"c": "62030.01", "T": ...}}
+                    elif "e" in data and "s" in data:
                         symbol = data["s"].upper()
-                        price = float(data.get("p"))
-                        timestamp = datetime.utcfromtimestamp(data.get("T", 0) / 1000)
+
+                        # Handle kline data
+                        if "k" in data:
+                            price = float(data["k"].get("c"))
+                            timestamp = datetime.utcfromtimestamp(data["k"].get("T", 0) / 1000)
+                        # Handle trade data
+                        elif "p" in data:
+                            price = float(data.get("p"))
+                            timestamp = datetime.utcfromtimestamp(data.get("T", 0) / 1000)
+                        else:
+                            continue
                     else:
                         # Unknown format, skip
                         continue
