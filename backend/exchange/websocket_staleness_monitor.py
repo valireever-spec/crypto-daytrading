@@ -32,10 +32,10 @@ class StreamHealth:
 class WebSocketStalenessMonitor:
     """Monitors WebSocket price feed staleness and triggers auto-reconnect."""
 
-    # Tunable thresholds (seconds)
-    WARN_THRESHOLD = 10.0      # Log warning, start tracking
-    CRITICAL_THRESHOLD = 30.0  # Attempt reconnect (increased for low-volume periods)
-    BREAKER_THRESHOLD = 60.0   # Let circuit breaker handle it
+    # Tunable thresholds (seconds) - adjusted for Binance testnet slowness
+    WARN_THRESHOLD = 20.0      # Log warning, start tracking
+    CRITICAL_THRESHOLD = 60.0  # Attempt reconnect (increased for testnet/low-volume)
+    BREAKER_THRESHOLD = 120.0  # Let circuit breaker handle it
     MAX_RECONNECT_ATTEMPTS = 3
     BACKOFF_BASE = 2.0  # exponential backoff: 2s, 4s, 8s
 
