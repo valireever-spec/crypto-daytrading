@@ -71,7 +71,7 @@ class ExplicitHeartbeatSender:
                 async with httpx.AsyncClient(timeout=1.0) as client:
                     try:
                         resp = await client.post(
-                            f"{self.backup_url}/api/ha/explicit-heartbeat",
+                            f"{self.backup_url}/api/ha/heartbeat",
                             json=heartbeat,
                         )
                         if resp.status_code == 200:

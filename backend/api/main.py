@@ -335,11 +335,12 @@ async def receive_heartbeat(data: dict = None) -> JSONResponse:
     Used for explicit failover detection (not just HTTP checks).
     """
     try:
-        machine_id = os.getenv("MACHINE_ID", "main")
-        if machine_id != "backup":
+        machine_id = os.getenv("MACHINE_ID", "primary").lower()
+        # Accept heartbeats on BACKUP machine only
+        if machine_id not in ["backup", "secondary"]:
             return JSONResponse(
                 status_code=403,
-                content={"error": "This endpoint is for BACKUP only"}
+                content={"error": f"This endpoint is for BACKUP only (machine_id={machine_id})"}
             )
 
         if not data:
