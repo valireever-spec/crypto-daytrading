@@ -75,6 +75,7 @@ heartbeat_task = None
 systemd_watchdog_task = None
 staleness_monitor_task = None
 staleness_monitor = None
+monitoring_logger = None
 ws = None
 
 
@@ -101,7 +102,7 @@ async def systemd_watchdog_heartbeat():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
-    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task, heartbeat_task, systemd_watchdog_task, staleness_monitor_task, staleness_monitor, ws
+    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task, heartbeat_task, systemd_watchdog_task, staleness_monitor_task, staleness_monitor, monitoring_logger, ws
 
     logger.info("Starting crypto daytrading platform...")
 
@@ -518,6 +519,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to initialize CB recovery: {e}")
 
+    # Initialize monitoring logger (logs baseline metrics every 60s)
+    try:
+        from backend.core.monitoring_logger import init_monitoring_logger
+        monitoring_logger = init_monitoring_logger(interval=60.0)
+        await monitoring_logger.start()
+        logger.info("📊 Monitoring logger started (baseline metrics every 60s)")
+    except Exception as e:
+        logger.warning(f"Failed to start monitoring logger: {e}")
+
     # Signal to systemd that we're ready (for Type=notify)
     try:
         import systemd.daemon
@@ -566,6 +576,9 @@ async def lifespan(app: FastAPI):
 
     if systemd_watchdog_task:
         systemd_watchdog_task.cancel()
+
+    if monitoring_logger:
+        await monitoring_logger.stop()
 
     logger.info("✅ Crypto daytrading platform shut down complete")
 
