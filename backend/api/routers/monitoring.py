@@ -1,6 +1,7 @@
 """API endpoints for production monitoring and health checks."""
 
 import logging
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
@@ -207,3 +208,197 @@ async def get_metrics():
             },
         }
     )
+
+
+@router.get("/health/websocket")
+async def get_websocket_staleness():
+    """Get WebSocket staleness status (SKILL #1: Staleness Monitor).
+
+    Returns real-time status of price feeds:
+    - staleness_secs: Age of last price update
+    - is_healthy: Whether reconnect recovery is active
+    - reconnect_attempts: Number of reconnect attempts
+    """
+    from backend.api import lifecycle
+
+    if not lifecycle.staleness_monitor:
+        return JSONResponse(
+            {
+                "status": "unavailable",
+                "detail": "Staleness monitor not initialized",
+            },
+            status_code=503,
+        )
+
+    status = lifecycle.staleness_monitor.get_status()
+
+    # Check if any critical staleness
+    any_critical = any(
+        s["staleness_secs"] > 30
+        for s in status["streams"].values()
+    )
+
+    return JSONResponse(
+        {
+            "status": "unhealthy" if any_critical else "healthy",
+            "details": status,
+        }
+    )
+
+
+# ============================================================================
+# SKILL #3: EXPLICIT HEARTBEAT (HA FAILOVER)
+# ============================================================================
+
+@router.post("/ha/explicit-heartbeat")
+async def receive_explicit_heartbeat(heartbeat: dict):
+    """BACKUP: Receive explicit heartbeat from PRIMARY.
+
+    Skill #3: Reliable heartbeat monitoring for auto-failover.
+    PRIMARY sends every 2s; if BACKUP misses 3, auto-promote.
+    """
+    from backend.failover.explicit_heartbeat import get_explicit_heartbeat_monitor
+
+    monitor = get_explicit_heartbeat_monitor()
+    if monitor:
+        heartbeat_id = heartbeat.get("heartbeat_id", 0)
+        monitor.record_heartbeat(heartbeat_id)
+
+        return JSONResponse(
+            {
+                "status": "received",
+                "heartbeat_id": heartbeat_id,
+                "timestamp": heartbeat.get("timestamp"),
+            }
+        )
+    else:
+        return JSONResponse(
+            {"status": "monitor_not_initialized"},
+            status_code=503,
+        )
+
+
+@router.get("/ha/explicit-heartbeat/stats")
+async def get_explicit_heartbeat_stats():
+    """Get heartbeat statistics (BACKUP monitoring PRIMARY)."""
+    from backend.failover.explicit_heartbeat import get_explicit_heartbeat_monitor
+
+    monitor = get_explicit_heartbeat_monitor()
+    if monitor:
+        stats = monitor.get_stats()
+        return JSONResponse(
+            {
+                "monitor_active": monitor.running,
+                "stats": stats,
+            }
+        )
+    else:
+        return JSONResponse(
+            {"monitor_active": False, "stats": None},
+            status_code=503,
+        )
+
+
+# ============================================================================
+# SKILL #2: PROCESS HEALTH MONITORING (STUCK DETECTION)
+# ============================================================================
+
+@router.get("/process/health")
+async def get_process_health():
+    """Get current process health metrics (Skill #2).
+
+    Monitors: socket count, thread count, memory, CPU.
+    Detects: stuck processes (high sockets for >60s), runaway restarts.
+    """
+    from backend.core.process_health_monitor import get_process_health_monitor
+
+    monitor = get_process_health_monitor()
+    if monitor:
+        stats = monitor.get_stats()
+        is_stuck = monitor.is_stuck()
+        runaway_alert = monitor.get_runaway_restart_alert()
+
+        return JSONResponse(
+            {
+                "health": "stuck" if is_stuck else "healthy",
+                "stats": stats,
+                "alerts": [runaway_alert] if runaway_alert else [],
+            }
+        )
+    else:
+        return JSONResponse(
+            {"health": "unknown", "stats": None, "alerts": []},
+            status_code=503,
+        )
+
+
+# ============================================================================
+# SKILL #5: CIRCUIT BREAKER PERSISTENCE & MANUAL RESET
+# ============================================================================
+
+@router.get("/circuit-breaker/stats")
+async def get_circuit_breaker_stats():
+    """Get CB statistics and history (Skill #5).
+
+    Shows: current state, trip count, recent trips/recoveries.
+    """
+    from backend.core.circuit_breaker_recovery import get_circuit_breaker_recovery
+
+    recovery = get_circuit_breaker_recovery()
+    if recovery:
+        stats = recovery.get_stats()
+        return JSONResponse(
+            {
+                "circuit_breaker": stats,
+            }
+        )
+    else:
+        return JSONResponse(
+            {"circuit_breaker": None},
+            status_code=503,
+        )
+
+
+@router.post("/admin/circuit-breaker/reset")
+async def reset_circuit_breaker(reason: str = "admin override"):
+    """ADMIN ENDPOINT: Manually reset CB without restart (Skill #5).
+
+    This allows recovery from a tripped CB without restarting the entire service.
+    Typical use: after issue is resolved, manually reset to resume trading.
+
+    Args:
+        reason: Why the reset is being triggered (logged for audit trail)
+
+    Returns:
+        Success status and updated CB state
+    """
+    from backend.core.circuit_breaker_recovery import get_circuit_breaker_recovery
+
+    recovery = get_circuit_breaker_recovery()
+    if not recovery:
+        return JSONResponse(
+            {"success": False, "error": "CB recovery not initialized"},
+            status_code=503,
+        )
+
+    # Attempt reset
+    success = recovery.manual_reset(reason)
+
+    if success:
+        return JSONResponse(
+            {
+                "success": True,
+                "message": f"Circuit breaker manually reset (reason: {reason})",
+                "new_state": recovery.current_state,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
+    else:
+        return JSONResponse(
+            {
+                "success": False,
+                "error": f"Cannot reset CB (current state: {recovery.current_state})",
+                "current_state": recovery.current_state,
+            },
+            status_code=400,
+        )

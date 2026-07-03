@@ -72,13 +72,36 @@ autonomous_trader_task = None
 sync_task = None
 failover_task = None
 heartbeat_task = None
+systemd_watchdog_task = None
+staleness_monitor_task = None
+staleness_monitor = None
 ws = None
+
+
+async def systemd_watchdog_heartbeat():
+    """Send WATCHDOG=1 notification to systemd every 20s.
+
+    Systemd will auto-restart the service if this heartbeat stops for >30s.
+    This prevents hung API processes from blocking recovery.
+    """
+    while True:
+        try:
+            import systemd.daemon
+            systemd.daemon.notify("WATCHDOG=1")
+            logger.debug("📍 Systemd watchdog heartbeat sent")
+        except ImportError:
+            # systemd not available, likely running outside systemd (dev/test)
+            logger.debug("Systemd watchdog unavailable (running outside systemd)")
+        except Exception as e:
+            logger.warning(f"Failed to send systemd watchdog: {e}")
+
+        await asyncio.sleep(20)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
-    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task, heartbeat_task, ws
+    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task, heartbeat_task, systemd_watchdog_task, staleness_monitor_task, staleness_monitor, ws
 
     logger.info("Starting crypto daytrading platform...")
 
@@ -141,6 +164,7 @@ async def lifespan(app: FastAPI):
     from backend.exchange.paper_trading import init_paper_trading
     from backend.exchange.binance_stream import init_stream_client
     from backend.exchange.websocket_manager import init_manager
+    from backend.exchange.websocket_staleness_monitor import WebSocketStalenessMonitor
     from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
     from backend.trading.autonomous_trader import TradingConfig
     from backend.execution.smart_executor import init_smart_executor
@@ -174,11 +198,29 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize circuit breaker: {e}")
 
     # Initialize new WebSocket manager (with automatic recovery + REST fallback)
+    ws_manager = None
     try:
         ws_manager = await init_manager(symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"])
         logger.info("✅ WebSocket manager initialized (automatic recovery + REST fallback)")
     except Exception as e:
         logger.error(f"Failed to initialize WebSocket manager: {e}")
+
+    # SKILL #1: Initialize WebSocket staleness detection + auto-reconnect
+    if ws_manager:
+        try:
+            staleness_monitor = WebSocketStalenessMonitor(ws_manager)
+            # Register callback to detect price updates
+            ws_manager.register_callback(
+                lambda symbol, price: staleness_monitor.on_price_update(symbol)
+            )
+            # Start monitor in background
+            staleness_monitor_task = asyncio.create_task(
+                staleness_monitor.start_monitoring(["BTCUSDT", "ETHUSDT", "BNBUSDT"])
+            )
+            logger.info("✅ WebSocket staleness monitor initialized (SKILL #1: Early detection + auto-reconnect)")
+        except Exception as e:
+            logger.error(f"Failed to initialize staleness monitor: {e}")
+            staleness_monitor = None
 
     # Initialize Binance stream (legacy, kept for backward compatibility)
     try:
@@ -272,10 +314,32 @@ async def lifespan(app: FastAPI):
                     logger.debug(f"Failed to get positions: {pos_err}")
                     open_positions = []
 
+                # Include configuration in state sync (critical blocker #2)
+                from backend.core.runtime_config import get_config_manager
+                from backend.core.ha_deduplication import get_ha_deduplicator
+
+                config_manager = get_config_manager()
+                current_config = config_manager.get_config()
+                deduplicator = get_ha_deduplicator()
+
                 state = {
                     "cash": engine.cash,
                     "total_pnl": engine.total_pnl,
-                    "positions": open_positions
+                    "positions": open_positions,
+                    "config": {
+                        "entry_threshold": current_config.entry_threshold,
+                        "exit_profit_target": current_config.exit_profit_target,
+                        "exit_stop_loss": current_config.exit_stop_loss,
+                        "max_positions": current_config.max_positions,
+                        "position_size_pct": current_config.position_size_pct,
+                        "max_daily_loss_pct": current_config.max_daily_loss_pct,
+                        "max_position_loss_pct": current_config.max_position_loss_pct,
+                        "enabled": current_config.enabled,
+                        "symbols": current_config.symbols
+                    },
+                    "deduplicator_state": {
+                        "seen_orders": {k: v.isoformat() for k, v in deduplicator.seen_orders.items()}
+                    }
                 }
 
                 # Try HTTP sync first
@@ -311,14 +375,15 @@ async def lifespan(app: FastAPI):
                     logger.warning(f"🔴 BACKUP sync error recurring ({consecutive_failures} failures): {e}")
 
     async def failover_monitor():
-        """BACKUP: Monitor PRIMARY health via heartbeat + HTTP, enable trading on failure."""
+        """BACKUP: Monitor PRIMARY health via explicit heartbeat (Skill #3) + HTTP, enable trading on failure."""
         import httpx
         from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
         from backend.core.heartbeat import init_heartbeat_monitor, get_heartbeat_monitor
+        from backend.failover.explicit_heartbeat import init_explicit_heartbeat_monitor
 
         trader = None
 
-        # Initialize heartbeat monitor using config constants
+        # Initialize old heartbeat monitor (backward compatibility)
         monitor = init_heartbeat_monitor(
             check_interval=constants.HEARTBEAT_CHECK_INTERVAL,
             failure_threshold=constants.HEARTBEAT_FAILURE_THRESHOLD
@@ -328,14 +393,25 @@ async def lifespan(app: FastAPI):
             f"({constants.HEARTBEAT_FAILURE_THRESHOLD} misses = {constants.HEARTBEAT_TIMEOUT_SECONDS}s timeout)"
         )
 
+        # NEW: Explicit heartbeat monitor (Skill #3) - primary detection method
+        explicit_monitor = init_explicit_heartbeat_monitor()
+        await explicit_monitor.start()
+        logger.info(
+            f"💓 BACKUP explicit heartbeat monitor started (Skill #3) "
+            f"(3 misses = 6s failover, interval: 1s)"
+        )
+
         while True:
             try:
-                await asyncio.sleep(constants.HEARTBEAT_CHECK_INTERVAL)
+                await asyncio.sleep(1)  # Check every second for responsive failover
 
-                # Check heartbeat timeout
+                # Priority 1: Check explicit heartbeat (Skill #3, most reliable)
+                explicit_failed = explicit_monitor.is_primary_failed()
+
+                # Priority 2: Check old heartbeat (backward compatibility)
                 primary_failed = monitor.check_timeout()
 
-                # Fallback: Check HTTP health via PRIMARY_API_URL
+                # Priority 3: Fallback to HTTP health check
                 try:
                     async with httpx.AsyncClient(timeout=constants.HEALTH_CHECK_TIMEOUT) as client:
                         resp = await client.get(f"{constants.PRIMARY_API_URL}/api/health")
@@ -344,30 +420,40 @@ async def lifespan(app: FastAPI):
                     logger.debug(f"PRIMARY health check failed: {e}")
                     primary_healthy = False
 
-                # Trigger failover if PRIMARY failed (either heartbeat or HTTP check)
-                if (primary_failed or not primary_healthy) and not (trader and trader.running):
+                # Use explicit heartbeat detection if available, fall back to other methods
+                should_failover = explicit_failed or primary_failed or not primary_healthy
+
+                # Trigger failover if PRIMARY failed
+                if should_failover and not (trader and trader.running):
+                    failover_reason = []
+                    if explicit_failed:
+                        failover_reason.append("Explicit heartbeat: 3+ misses")
+                    if primary_failed:
+                        failover_reason.append("Old heartbeat timeout")
+                    if not primary_healthy:
+                        failover_reason.append("HTTP health check failed")
+
                     logger.critical(
-                        "🚨 PRIMARY FAILURE DETECTED - "
-                        f"Heartbeat: {primary_failed}, HTTP: {not primary_healthy} - "
+                        f"🚨 PRIMARY FAILURE DETECTED (Skill #3) - {', '.join(failover_reason)} - "
                         "Enabling BACKUP trading"
                     )
                     try:
                         trader = init_autonomous_trader()
                         global autonomous_trader_task
                         autonomous_trader_task = asyncio.create_task(trader.start())
-                        logger.info("✅ BACKUP autonomous trader ACTIVATED")
+                        logger.info("✅ BACKUP autonomous trader ACTIVATED (PRIMARY promoted to BACKUP)")
                     except Exception as e:
                         logger.error(f"Failed to activate BACKUP trader: {e}")
 
-                # Disable trading if PRIMARY recovered (both heartbeat and HTTP healthy)
-                elif primary_healthy and (trader and trader.running):
+                # Disable trading if PRIMARY recovered (all checks healthy)
+                elif not should_failover and (trader and trader.running):
                     logger.info("✅ PRIMARY RECOVERED - Disabling BACKUP trading")
                     try:
                         if trader:
                             await trader.stop()
                         if autonomous_trader_task:
                             autonomous_trader_task.cancel()
-                        logger.info("BACKUP autonomous trader DEACTIVATED")
+                        logger.info("BACKUP autonomous trader DEACTIVATED (PRIMARY demoted to PRIMARY)")
                     except Exception as e:
                         logger.error(f"Failed to deactivate BACKUP trader: {e}")
 
@@ -378,9 +464,15 @@ async def lifespan(app: FastAPI):
     async def heartbeat_sender():
         """PRIMARY: Send heartbeat to BACKUP at configured interval."""
         from backend.core.heartbeat import init_heartbeat_sender
+        from backend.failover.explicit_heartbeat import init_explicit_heartbeat_sender
 
+        # Old heartbeat (for backward compatibility)
         sender = init_heartbeat_sender(constants.BACKUP_API_URL, interval=constants.HEARTBEAT_CHECK_INTERVAL)
         await sender.start()
+
+        # NEW: Explicit heartbeat (Skill #3) - more reliable, faster failover
+        explicit_sender = init_explicit_heartbeat_sender(constants.BACKUP_API_URL)
+        await explicit_sender.start()
 
     if constants.IS_PRIMARY:
         global sync_task, heartbeat_task
@@ -392,6 +484,10 @@ async def lifespan(app: FastAPI):
             f"💓 PRIMARY heartbeat sender started "
             f"(→ {constants.BACKUP_API_URL} every {constants.HEARTBEAT_CHECK_INTERVAL}s)"
         )
+        logger.info(
+            f"💓 PRIMARY explicit heartbeat (Skill #3) started "
+            f"(→ {constants.BACKUP_API_URL} every 2.0s, threshold: 3 misses = 6s failover)"
+        )
     else:
         global failover_task
         failover_task = asyncio.create_task(failover_monitor())
@@ -399,6 +495,36 @@ async def lifespan(app: FastAPI):
             f"📡 BACKUP failover monitor started "
             f"(check every {constants.HEARTBEAT_CHECK_INTERVAL}s with heartbeat detection)"
         )
+
+    # Start systemd watchdog heartbeat (Skill #4 hardening)
+    global systemd_watchdog_task
+    systemd_watchdog_task = asyncio.create_task(systemd_watchdog_heartbeat())
+    logger.info("⏰ Systemd watchdog heartbeat started (every 20s, timeout 30s)")
+
+    # Start process health monitor (Skill #2 hardening)
+    try:
+        from backend.core.process_health_monitor import init_process_health_monitor
+        process_monitor = init_process_health_monitor()
+        await process_monitor.start()
+        logger.info("📊 Process health monitor started (Skill #2 - detects stuck processes)")
+    except Exception as e:
+        logger.warning(f"Failed to start process health monitor: {e}")
+
+    # Initialize circuit breaker recovery (Skill #5 hardening)
+    try:
+        from backend.core.circuit_breaker_recovery import init_circuit_breaker_recovery
+        cb_recovery = init_circuit_breaker_recovery()
+        logger.info("🔄 Circuit breaker recovery initialized (Skill #5 - manual reset capability)")
+    except Exception as e:
+        logger.warning(f"Failed to initialize CB recovery: {e}")
+
+    # Signal to systemd that we're ready (for Type=notify)
+    try:
+        import systemd.daemon
+        systemd.daemon.notify("READY=1")
+        logger.info("📢 Systemd READY signal sent")
+    except (ImportError, Exception):
+        pass  # Not running under systemd or signal failed, ignore
 
     # Startup complete
     logger.info("✅ Crypto daytrading platform started successfully")
@@ -423,6 +549,9 @@ async def lifespan(app: FastAPI):
     if websocket_task:
         websocket_task.cancel()
 
+    if staleness_monitor_task:
+        staleness_monitor_task.cancel()
+
     if simulator_task:
         simulator_task.cancel()
 
@@ -434,6 +563,9 @@ async def lifespan(app: FastAPI):
 
     if heartbeat_task:
         heartbeat_task.cancel()
+
+    if systemd_watchdog_task:
+        systemd_watchdog_task.cancel()
 
     logger.info("✅ Crypto daytrading platform shut down complete")
 
