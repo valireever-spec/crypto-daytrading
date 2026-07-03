@@ -176,7 +176,7 @@ class WebSocketManager:
             self.connected = False
 
     async def _ws_listen(self) -> None:
-        """Listen to WebSocket messages."""
+        """Listen to WebSocket messages (supports both wrapped and unwrapped formats)."""
         if not self.ws:
             return
 
@@ -185,30 +185,46 @@ class WebSocketManager:
                 try:
                     data = json.loads(message)
 
-                    # Skip non-price messages
-                    if "stream" not in data or "data" not in data:
+                    # Skip subscription confirmations and control messages
+                    if "result" in data or "id" in data:
                         continue
 
-                    stream_name = data["stream"]
-                    payload = data["data"]
+                    symbol = None
+                    price = None
+                    timestamp = None
 
-                    # Extract symbol and price
-                    symbol = stream_name.split("@")[0].upper()
-                    price = float(payload.get("p"))
+                    # Format 1: Wrapped (individual stream URLs) - {"stream": "btcusdt@trade", "data": {...}}
+                    if "stream" in data and "data" in data:
+                        stream_name = data["stream"]
+                        payload = data["data"]
+                        symbol = stream_name.split("@")[0].upper()
+                        price = float(payload.get("p"))
+                        timestamp = datetime.utcfromtimestamp(payload.get("T", 0) / 1000)
 
-                    # Update cache
-                    self.prices[symbol] = PriceUpdate(
-                        symbol=symbol,
-                        price=price,
-                        timestamp=datetime.utcfromtimestamp(payload.get("T", 0) / 1000),
-                        source="websocket",
-                    )
-                    self.last_ws_message = datetime.utcnow()
+                    # Format 2: Unwrapped (subscription on single connection) - {"e": "trade", "s": "BTCUSDT", "p": "62030.01"}
+                    elif "e" in data and "s" in data and "p" in data:
+                        symbol = data["s"].upper()
+                        price = float(data.get("p"))
+                        timestamp = datetime.utcfromtimestamp(data.get("T", 0) / 1000)
+                    else:
+                        # Unknown format, skip
+                        continue
 
-                    # Call callbacks
-                    await self._call_callbacks(symbol, price)
+                    if symbol and price and timestamp:
+                        # Update cache
+                        self.prices[symbol] = PriceUpdate(
+                            symbol=symbol,
+                            price=price,
+                            timestamp=timestamp,
+                            source="websocket",
+                        )
+                        self.last_ws_message = datetime.utcnow()
+                        logger.debug(f"✓ {symbol}: ${price:.2f}")
 
-                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                        # Call callbacks
+                        await self._call_callbacks(symbol, price)
+
+                except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
                     logger.debug(f"Invalid message: {e}")
                     continue
 
