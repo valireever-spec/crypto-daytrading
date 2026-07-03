@@ -180,8 +180,13 @@ class WebSocketManager:
         if not self.ws:
             return
 
+        logger.info(f"🔍 WebSocket listen loop started")
+        msg_count = 0
         try:
             async for message in self.ws:
+                msg_count += 1
+                if msg_count % 100 == 0:
+                    logger.debug(f"WebSocket received {msg_count} total messages")
                 try:
                     data = json.loads(message)
 
