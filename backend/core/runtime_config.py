@@ -47,6 +47,7 @@ class TradingConfig:
 
     # Recovery parameters
     retry_sleep_seconds: int = 5  # Seconds to sleep between recovery attempts
+    loop_sleep_seconds: int = 1  # Seconds to sleep between trading loop iterations
 
     def __post_init__(self):
         """Validate configuration after initialization."""
