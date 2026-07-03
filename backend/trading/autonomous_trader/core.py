@@ -159,8 +159,20 @@ class AutonomousTrader:
 
     def __init__(self, config: TradingConfig = None):
         """Initialize autonomous trader with all safety hardening."""
-        self.config = config or TradingConfig()
+        # Load config from RuntimeConfigManager if not provided
+        if config is None:
+            try:
+                from backend.core.runtime_config import get_config_manager
+                config = get_config_manager().get_config()
+                logger.info("✅ Loaded config from RuntimeConfigManager (hot-reload enabled)")
+            except ImportError:
+                config = TradingConfig()
+                logger.warning("⚠️  RuntimeConfigManager not available, using hardcoded defaults")
+
+        self.config = config
         self.running = False
+        self.config_last_check = datetime.utcnow()
+        self.config_check_interval = 10  # Check every 10 seconds
 
         # Initialize hardening managers (Phase 1 Safety)
         self.order_safety = OrderSafetyManager()
@@ -210,6 +222,36 @@ class AutonomousTrader:
         self.running = False
         logger.info("Autonomous trader stopped")
 
+    def _refresh_config(self) -> None:
+        """Check if configuration has been updated and reload if needed (hot-reload)."""
+        now = datetime.utcnow()
+        if (now - self.config_last_check).total_seconds() < self.config_check_interval:
+            return
+
+        self.config_last_check = now
+
+        try:
+            from backend.core.runtime_config import get_config_manager
+            new_config = get_config_manager().get_config()
+
+            # Check if config changed
+            if (new_config.entry_threshold != self.config.entry_threshold or
+                new_config.exit_profit_target != self.config.exit_profit_target or
+                new_config.exit_stop_loss != self.config.exit_stop_loss or
+                new_config.max_positions != self.config.max_positions or
+                new_config.enabled != self.config.enabled):
+
+                logger.info(
+                    f"♻️  Configuration updated (hot-reload): "
+                    f"entry_threshold {self.config.entry_threshold}→{new_config.entry_threshold}, "
+                    f"exit_profit {self.config.exit_profit_target:.3f}→{new_config.exit_profit_target:.3f}, "
+                    f"enabled {self.config.enabled}→{new_config.enabled}"
+                )
+                self.config = new_config
+
+        except Exception as e:
+            logger.debug(f"Config refresh check failed (non-critical): {e}")
+
     async def _trading_loop(self):
         """Main 10-second trading loop with Phase 1 hardening.
 
@@ -227,6 +269,9 @@ class AutonomousTrader:
 
         while self.running:
             try:
+                # Check for configuration updates (hot-reload, every 10 seconds)
+                self._refresh_config()
+
                 loop_count += 1
                 logger.debug(f"🔄 Trading loop iteration {loop_count} (hardening active)")
 

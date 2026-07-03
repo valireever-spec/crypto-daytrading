@@ -1,0 +1,535 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Crypto-DayTrading API",
+    "description": "Autonomous trading platform with HA failover and portfolio management",
+    "version": "1.0.0",
+    "license": {
+      "name": "Proprietary",
+      "url": "http://localhost:8000"
+    },
+    "contact": {
+      "name": "Development Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/api/paper/account": {
+      "get": {
+        "summary": "Get paper trading account state",
+        "tags": [
+          "Trading Account"
+        ],
+        "responses": {
+          "200": {
+            "description": "Account state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/paper/positions": {
+      "get": {
+        "summary": "Get open positions",
+        "tags": [
+          "Trading Account"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of positions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Position"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/paper/trades": {
+      "get": {
+        "summary": "Get trade history",
+        "tags": [
+          "Trading Account"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Maximum number of trades"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Trade"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        }
+      }
+    },
+    "/api/paper/reset": {
+      "post": {
+        "summary": "Reset paper trading account",
+        "tags": [
+          "Trading Account"
+        ],
+        "parameters": [
+          {
+            "name": "capital",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            },
+            "description": "Custom starting capital (optional)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reset successful"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        }
+      }
+    },
+    "/api/paper/status": {
+      "get": {
+        "summary": "Get paper trading status",
+        "tags": [
+          "Trading Account"
+        ],
+        "responses": {
+          "200": {
+            "description": "Trading status"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "System health check",
+        "tags": [
+          "Monitoring"
+        ],
+        "responses": {
+          "200": {
+            "description": "Healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "circuit_breaker": {
+                      "type": "object"
+                    },
+                    "websocket": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unhealthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/autonomous/status": {
+      "get": {
+        "summary": "Get autonomous trader status",
+        "tags": [
+          "Autonomous Trading"
+        ],
+        "responses": {
+          "200": {
+            "description": "Trader status"
+          },
+          "500": {
+            "description": "Trader not initialized"
+          }
+        }
+      }
+    },
+    "/api/autonomous/start": {
+      "post": {
+        "summary": "Start autonomous trading",
+        "tags": [
+          "Autonomous Trading"
+        ],
+        "responses": {
+          "200": {
+            "description": "Trading started"
+          },
+          "500": {
+            "description": "Error"
+          }
+        }
+      }
+    },
+    "/api/autonomous/stop": {
+      "post": {
+        "summary": "Stop autonomous trading",
+        "tags": [
+          "Autonomous Trading"
+        ],
+        "responses": {
+          "200": {
+            "description": "Trading stopped"
+          },
+          "500": {
+            "description": "Error"
+          }
+        }
+      }
+    },
+    "/api/autonomous/config": {
+      "get": {
+        "summary": "Get trading configuration",
+        "tags": [
+          "Autonomous Trading"
+        ],
+        "responses": {
+          "200": {
+            "description": "Current configuration"
+          },
+          "500": {
+            "description": "Error"
+          }
+        }
+      }
+    },
+    "/api/autonomous/config/update": {
+      "post": {
+        "summary": "Update trading configuration",
+        "tags": [
+          "Autonomous Trading"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuration updated"
+          },
+          "500": {
+            "description": "Error"
+          }
+        }
+      }
+    },
+    "/api/ha/status": {
+      "get": {
+        "summary": "Get HA status",
+        "tags": [
+          "High Availability"
+        ],
+        "responses": {
+          "200": {
+            "description": "HA status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HAStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error"
+          }
+        }
+      }
+    },
+    "/api/ha/heartbeat": {
+      "post": {
+        "summary": "Receive heartbeat from PRIMARY",
+        "tags": [
+          "High Availability"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Heartbeat received"
+          },
+          "403": {
+            "description": "Not BACKUP"
+          },
+          "500": {
+            "description": "Error"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Get system metrics (Prometheus)",
+        "tags": [
+          "Monitoring"
+        ],
+        "produces": [
+          "text/plain"
+        ],
+        "responses": {
+          "200": {
+            "description": "Prometheus metrics"
+          },
+          "500": {
+            "description": "Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Account": {
+        "type": "object",
+        "properties": {
+          "cash": {
+            "type": "number",
+            "description": "Available cash balance (EUR)"
+          },
+          "equity": {
+            "type": "number",
+            "description": "Total equity including positions"
+          },
+          "pnl": {
+            "type": "number",
+            "description": "Unrealized P&L"
+          },
+          "pnl_percent": {
+            "type": "number",
+            "description": "P&L as percentage"
+          },
+          "currency": {
+            "type": "string",
+            "description": "Account currency"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Position": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Trading symbol"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Position size"
+          },
+          "entry_price": {
+            "type": "number",
+            "description": "Entry price"
+          },
+          "current_price": {
+            "type": "number",
+            "description": "Current market price"
+          },
+          "pnl": {
+            "type": "number",
+            "description": "Position P&L"
+          },
+          "entry_time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Trade": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ]
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "price": {
+            "type": "number"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "status_code": {
+            "type": "integer"
+          }
+        }
+      },
+      "ConfigUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "entry_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "exit_profit_target": {
+            "type": "number"
+          },
+          "exit_stop_loss": {
+            "type": "number"
+          },
+          "position_size_pct": {
+            "type": "number"
+          },
+          "max_positions": {
+            "type": "integer"
+          },
+          "max_daily_loss_pct": {
+            "type": "number"
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "loop_sleep_seconds": {
+            "type": "number"
+          },
+          "quality_gate_entry": {
+            "type": "number"
+          },
+          "quality_gate_exit": {
+            "type": "number"
+          }
+        }
+      },
+      "HAStatus": {
+        "type": "object",
+        "properties": {
+          "machine_id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PRIMARY",
+              "BACKUP"
+            ]
+          },
+          "primary_healthy": {
+            "type": "boolean"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "security": []
+}

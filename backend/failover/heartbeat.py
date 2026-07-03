@@ -63,7 +63,7 @@ class HeartbeatMonitor:
             True if PRIMARY is healthy, False otherwise
         """
         try:
-            response = requests.get(f"{self.primary_url}/api/paper/account", timeout=3)
+            response = requests.get(f"{self.primary_url}/api/paper/account", timeout=10)
 
             if response.status_code == 200:
                 self.consecutive_failures = 0
@@ -90,7 +90,7 @@ class HeartbeatMonitor:
         except requests.ConnectionError:
             self._handle_failure("Connection refused")
         except requests.Timeout:
-            self._handle_failure("Timeout (>3s)")
+            self._handle_failure("Timeout (>10s)")
         except Exception as e:
             self._handle_failure(str(e))
 

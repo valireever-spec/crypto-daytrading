@@ -1,0 +1,41 @@
+[Unit]
+Description=Crypto Daytrading Autonomous Trader
+After=network.target
+
+[Service]
+Type=simple
+User=vali
+WorkingDirectory=/home/vali/projects/crypto-daytrading
+Environment="PATH=/home/vali/projects/crypto-daytrading/venv/bin"
+EnvironmentFile=/home/vali/projects/crypto-daytrading/.env
+
+# Start command
+ExecStart=/home/vali/projects/crypto-daytrading/venv/bin/python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8001
+
+# Restart policy: auto-restart on crash or watchdog timeout
+Restart=on-abnormal
+RestartSec=5
+StartLimitInterval=120
+StartLimitBurst=5
+
+# Watchdog: app must send heartbeat every 20s, or systemd auto-restarts after 30s
+WatchdogSec=30s
+
+# Process management
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crypto-trading
+
+# Resource limits
+MemoryMax=500M
+MemoryAccounting=true
+
+# Graceful shutdown timeout
+TimeoutStopSec=30
+
+# Signal handling: graceful shutdown on systemctl stop
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

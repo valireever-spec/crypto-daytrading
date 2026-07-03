@@ -265,68 +265,32 @@ class WebSocketManager:
         return None
 
     async def _monitor_loop(self) -> None:
-        """HARDENED: Monitor WebSocket health and trigger recovery proactively.
+        """Monitor WebSocket connection health (passive monitoring only).
 
-        Key improvements (Skill #1: WebSocket Stale Detection):
-        - Check every 1s (was 5s) to catch failures early
-        - Reconnect at 5s stale (was 10s) before circuit breaker sees it
-        - Prevent the 30s+ stale data that crashes trading
-        - Exponential backoff with jitter to avoid hammering Binance
+        NOTE: Staleness detection and reconnection is delegated to
+        websocket_staleness_monitor.py (Skill #1) to avoid conflicts.
+
+        This loop only logs health status without triggering reconnects.
         """
-        last_reconnect = None
-        reconnect_cooldown = 0  # Exponential backoff: 0s, 1s, 2s, 4s, 8s...
-
         while self.monitoring:
             try:
-                # Check every 1 second (was 5s) - catch failures early
+                # Check every 1 second
                 await asyncio.sleep(1)
 
-                # Update age for all prices
+                # Update age for all prices (passive monitoring only)
                 for price in self.prices.values():
                     price.update_age()
 
-                # Check staleness: warn at 2s, reconnect at 5s (was 10s)
-                stale_2s = sum(1 for p in self.prices.values() if 2 < p.age_seconds <= 5)
+                # Passive monitoring: Just log, don't reconnect
                 stale_5s = sum(1 for p in self.prices.values() if p.age_seconds > 5)
                 total = len(self.symbols)
 
-                # WARNING: Any price stale for 2+ seconds
-                if stale_2s > 0 and stale_5s == 0:
-                    logger.info(
-                        f"⚠️  Price age: {stale_2s}/{total} stale 2-5s "
-                        f"(WebSocket: {self.connected})"
-                    )
-
-                # CRITICAL: Any price stale for 5+ seconds - reconnect immediately
-                if stale_5s > 0:
+                if stale_5s > 0 and total > 0:
                     ages = {s: self.prices[s].age_seconds for s in self.symbols if s in self.prices}
-                    logger.critical(
-                        f"🔴 STALE PRICES DETECTED: {stale_5s}/{total} stale >5s {ages} "
-                        f"→ Triggering reconnect"
+                    logger.debug(
+                        f"Price staleness detected: {stale_5s}/{total} stale >5s {ages} "
+                        f"(WebSocket: {self.connected}) - staleness monitor will handle reconnection"
                     )
-
-                    # Reconnect only if cooldown expired (exponential backoff)
-                    now = datetime.utcnow()
-                    if last_reconnect is None or (now - last_reconnect).total_seconds() >= reconnect_cooldown:
-                        self.connected = False
-                        if self.ws:
-                            try:
-                                await self.ws.close()
-                            except:
-                                pass
-
-                        self.reconnect_attempts = 0
-                        last_reconnect = now
-
-                        # Exponential backoff: start at 1s, double each time (max 30s)
-                        reconnect_cooldown = min(2 ** max(0, self.reconnect_attempts - 1), 30)
-                        logger.info(
-                            f"🔄 Reconnecting WebSocket (cooldown: {reconnect_cooldown}s)..."
-                        )
-                        await self._connect_websocket()
-                    else:
-                        wait_remaining = reconnect_cooldown - (now - last_reconnect).total_seconds()
-                        logger.debug(f"Reconnect on cooldown ({wait_remaining:.1f}s remaining)")
 
             except asyncio.CancelledError:
                 logger.info("WebSocket monitor cancelled")

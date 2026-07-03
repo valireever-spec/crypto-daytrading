@@ -474,6 +474,42 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
             if "total_pnl" in state:
                 engine.total_pnl = state["total_pnl"]
 
+            # Sync configuration from PRIMARY (critical blocker #2)
+            if "config" in state:
+                from backend.core.runtime_config import get_config_manager
+                config_manager = get_config_manager()
+                config_updates = state["config"]
+
+                # Update config with values from PRIMARY
+                if config_manager.update_config(config_updates):
+                    config_manager.save_config()
+                    logger.info(
+                        f"♻️  Configuration synced from PRIMARY: "
+                        f"entry_threshold={config_updates.get('entry_threshold')}, "
+                        f"exit_profit={config_updates.get('exit_profit_target'):.3f}, "
+                        f"enabled={config_updates.get('enabled')}"
+                    )
+                else:
+                    logger.warning(f"⚠️  Failed to apply config from PRIMARY (validation error)")
+
+            # Sync deduplication state from PRIMARY (critical blocker #4)
+            if "deduplicator_state" in state:
+                from backend.core.ha_deduplication import get_ha_deduplicator
+                from datetime import datetime
+                dedup = get_ha_deduplicator()
+
+                seen_orders = state.get("deduplicator_state", {}).get("seen_orders", {})
+                for order_key, timestamp_str in seen_orders.items():
+                    try:
+                        timestamp = datetime.fromisoformat(timestamp_str)
+                        dedup.seen_orders[order_key] = timestamp
+                    except Exception as e:
+                        logger.warning(f"Failed to restore dedup entry {order_key}: {e}")
+
+                logger.info(
+                    f"♻️  Deduplication state synced: {len(dedup.seen_orders)} order IDs registered"
+                )
+
             # Validate consistency before returning success
             # (cash + positions_value should ≈ total_equity)
             positions_value = sum(
