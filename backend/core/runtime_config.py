@@ -21,9 +21,9 @@ class TradingConfig:
     """Runtime trading configuration."""
 
     # Entry/Exit parameters
-    entry_threshold: int = 50  # Entry signal threshold (0-100)
-    exit_profit_target: float = 0.025  # Exit profit target (2.5%)
-    exit_stop_loss: float = 0.015  # Exit stop loss (1.5%)
+    entry_threshold: int = 65  # Entry signal threshold (0-100) - CRITICAL FIX
+    exit_profit_target: float = 2.0  # Exit profit target (2.0%) - CRITICAL FIX (risk ratio 2:1)
+    exit_stop_loss: float = 1.0  # Exit stop loss (1.0%) - CRITICAL FIX (risk ratio 2:1)
 
     # Position sizing
     max_positions: int = 10  # Maximum concurrent positions
