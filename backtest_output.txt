@@ -496,3 +496,144 @@
 2026-07-04 23:08:01,166 - __main__ - INFO -   117000/157481 candles processed, trades: 0, cash: €1000.00
 2026-07-04 23:08:02,714 - __main__ - INFO -   118000/157481 candles processed, trades: 0, cash: €1000.00
 2026-07-04 23:08:04,238 - __main__ - INFO -   119000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:05,819 - __main__ - INFO -   120000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:07,237 - __main__ - INFO -   121000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:08,575 - __main__ - INFO -   122000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:09,944 - __main__ - INFO -   123000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:11,391 - __main__ - INFO -   124000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:12,869 - __main__ - INFO -   125000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:14,381 - __main__ - INFO -   126000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:15,880 - __main__ - INFO -   127000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:17,290 - __main__ - INFO -   128000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:18,777 - __main__ - INFO -   129000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:20,249 - __main__ - INFO -   130000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:21,708 - __main__ - INFO -   131000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:23,148 - __main__ - INFO -   132000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:24,603 - __main__ - INFO -   133000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:26,130 - __main__ - INFO -   134000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:27,726 - __main__ - INFO -   135000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:29,260 - __main__ - INFO -   136000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:30,952 - __main__ - INFO -   137000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:32,600 - __main__ - INFO -   138000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:34,238 - __main__ - INFO -   139000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:35,958 - __main__ - INFO -   140000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:37,687 - __main__ - INFO -   141000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:39,243 - __main__ - INFO -   142000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:40,858 - __main__ - INFO -   143000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:42,516 - __main__ - INFO -   144000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:44,272 - __main__ - INFO -   145000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:45,843 - __main__ - INFO -   146000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:47,430 - __main__ - INFO -   147000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:49,060 - __main__ - INFO -   148000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:50,755 - __main__ - INFO -   149000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:52,481 - __main__ - INFO -   150000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:54,377 - __main__ - INFO -   151000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:56,234 - __main__ - INFO -   152000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:08:58,284 - __main__ - INFO -   153000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:09:00,242 - __main__ - INFO -   154000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:09:01,998 - __main__ - INFO -   155000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:09:03,644 - __main__ - INFO -   156000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:09:05,266 - __main__ - INFO -   157000/157481 candles processed, trades: 0, cash: €1000.00
+2026-07-04 23:09:06,021 - __main__ - INFO - ✅ Simulation complete: 0 entries attempted, 0 trades executed
+2026-07-04 23:09:06,021 - __main__ - INFO - 
+📊 RESULTS FOR BNBUSDT:
+2026-07-04 23:09:06,021 - __main__ - INFO -    Total Trades: 0
+2026-07-04 23:09:06,021 - __main__ - INFO -    Win Rate: 0.0%
+2026-07-04 23:09:06,021 - __main__ - INFO -    Profit Factor: 0.00x
+2026-07-04 23:09:06,021 - __main__ - INFO -    Total P&L: €0.00 (0.00%)
+2026-07-04 23:09:06,021 - __main__ - INFO -    Sharpe Ratio: 0.00
+2026-07-04 23:09:06,021 - __main__ - INFO -    Max Drawdown: 0.00%
+2026-07-04 23:09:06,021 - __main__ - WARNING -    ❌ FAILED criteria:
+2026-07-04 23:09:06,022 - __main__ - WARNING -       - Win Rate 0.0% < 55%
+2026-07-04 23:09:06,022 - __main__ - WARNING -       - Profit Factor 0.00x < 1.5x
+2026-07-04 23:09:06,022 - __main__ - WARNING -       - Sharpe Ratio 0.00 < 1.0
+2026-07-04 23:09:06,052 - __main__ - INFO - ✅ Results saved to backtest_results.json
+/home/vali/projects/crypto-daytrading/backtesting/run_backtest.py:215: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  report += f"Date: {datetime.utcnow().isoformat()}\n"
+2026-07-04 23:09:06,052 - __main__ - INFO - ✅ Report saved to PHASE_2_BACKTEST_REPORT.md
+2026-07-04 23:09:06,052 - __main__ - INFO - ✅ Phase 2 complete
+
+================================================================================
+PHASE 2: BACKTEST RESULTS REPORT
+Date: 2026-07-04T21:09:06.052690
+================================================================================
+
+SUMMARY
+--------------------------------------------------------------------------------
+Symbol       Trades   Win%     Profit       Factor   Status  
+--------------------------------------------------------------------------------
+BTCUSDT      0        0.0      €0.00        0.00    x ❌ FAIL  
+ETHUSDT      0        0.0      €0.00        0.00    x ❌ FAIL  
+BNBUSDT      0        0.0      €0.00        0.00    x ❌ FAIL  
+--------------------------------------------------------------------------------
+
+DETAILED RESULTS
+--------------------------------------------------------------------------------
+
+BTCUSDT:
+  Total Trades: 0
+  Winning Trades: 0
+  Losing Trades: 0
+  Win Rate: 0.0%
+  Profit Factor: 0.00x
+  Average Win: €0.00
+  Average Loss: €0.00
+  Max Win: €0.00
+  Max Loss: €0.00
+  Max Consecutive Losses: 0
+  Total P&L: €0.00 (0.00%)
+  Sharpe Ratio: 0.00
+  Max Drawdown: 0.00%
+  Avg Trade Duration: 0.0 min
+  Starting Capital: €1000.00
+  Ending Capital: €1000.00
+
+ETHUSDT:
+  Total Trades: 0
+  Winning Trades: 0
+  Losing Trades: 0
+  Win Rate: 0.0%
+  Profit Factor: 0.00x
+  Average Win: €0.00
+  Average Loss: €0.00
+  Max Win: €0.00
+  Max Loss: €0.00
+  Max Consecutive Losses: 0
+  Total P&L: €0.00 (0.00%)
+  Sharpe Ratio: 0.00
+  Max Drawdown: 0.00%
+  Avg Trade Duration: 0.0 min
+  Starting Capital: €1000.00
+  Ending Capital: €1000.00
+
+BNBUSDT:
+  Total Trades: 0
+  Winning Trades: 0
+  Losing Trades: 0
+  Win Rate: 0.0%
+  Profit Factor: 0.00x
+  Average Win: €0.00
+  Average Loss: €0.00
+  Max Win: €0.00
+  Max Loss: €0.00
+  Max Consecutive Losses: 0
+  Total P&L: €0.00 (0.00%)
+  Sharpe Ratio: 0.00
+  Max Drawdown: 0.00%
+  Avg Trade Duration: 0.0 min
+  Starting Capital: €1000.00
+  Ending Capital: €1000.00
+
+================================================================================
+SUCCESS CRITERIA
+================================================================================
+✅ All symbols must pass:
+   - Win Rate ≥ 55%
+   - Profit Factor ≥ 1.5x
+   - Sharpe Ratio ≥ 1.0
+   - Max Consecutive Losses < 5
+   - Max Drawdown < 15%
+
+⚠️  RESULT: SOME SYMBOLS FAILED - ADJUST PARAMETERS AND RETRY
+================================================================================
+

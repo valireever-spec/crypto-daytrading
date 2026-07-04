@@ -233,6 +233,9 @@ async def lifespan(app: FastAPI):
                 else:
                     return
                 logger.debug(f"{symbol}: ${price:.2f}")
+                # CRITICAL FIX: Update staleness monitor so it knows we got a fresh price
+                if staleness_monitor:
+                    staleness_monitor.on_price_update(symbol)
             except Exception as e:
                 logger.error(f"Error processing price update: {e}")
 
