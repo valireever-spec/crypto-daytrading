@@ -1,7 +1,7 @@
 {
   "entry_threshold": 50,
-  "exit_profit_target": 0.02,
-  "exit_stop_loss": 0.01,
+  "exit_profit_target": 2.0,
+  "exit_stop_loss": 1.0,
   "position_size_pct": 1.5,
   "max_positions": 2,
   "max_daily_loss_pct": 2.0,
@@ -14,6 +14,6 @@
   "loop_sleep_seconds": 1,
   "quality_gate_entry": 80,
   "quality_gate_exit": 60,
-  "_last_updated": "2026-07-04T21:22:07.015105Z",
+  "_last_updated": "2026-07-04T21:25:42.952923Z",
   "_source": "api_update"
 }
