@@ -5,6 +5,17 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+# CRITICAL: Load .env FIRST before any imports that use os.getenv()
+env_file = Path(__file__).parent.parent.parent / ".env"
+if env_file.exists():
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                key, _, value = line.partition("=")
+                if key and key not in os.environ:
+                    os.environ[key] = value.strip('"').strip("'")
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, Response
@@ -52,6 +63,7 @@ from backend.api.routers.trading_control import router as trading_control_router
 from backend.api.routers.dashboard_integration import router as dashboard_integration_router
 from backend.api.routers.allocation_management import router as allocation_management_router
 from backend.api.routers.config import router as config_router
+from backend.api.routers.metrics import router as metrics_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -123,6 +135,7 @@ routers = [
     dashboard_integration_router,
     allocation_management_router,
     config_router,
+    metrics_router,
 ]
 
 for router in routers:

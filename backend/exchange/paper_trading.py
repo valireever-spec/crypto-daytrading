@@ -3,6 +3,7 @@
 import logging
 import uuid
 import sqlite3
+from backend.exchange.order_response import OrderResponse
 import threading
 from datetime import datetime
 from typing import Dict, List, Optional, Literal
@@ -355,16 +356,18 @@ class PaperTradingEngine:
                 f"Fee: {fee:.2f} | P&L: {realized_pnl:.2f}"
             )
 
-            return {
-                "status": "FILLED",
-                "order_id": order_id,
-                "symbol": symbol,
-                "side": side,
-                "quantity": quantity,
-                "fill_price": fill_price,
-                "fee": fee,
-                "timestamp": datetime.utcnow().isoformat(),
-            }
+            response = OrderResponse(
+                status="FILLED",
+                order_id=order_id,
+                symbol=symbol,
+                side=side,
+                quantity=quantity,
+                fill_price=fill_price,
+                fee=fee,
+                timestamp=datetime.utcnow().isoformat(),
+                realized_pnl=realized_pnl if side == "SELL" else None,
+            )
+            return response.dict()
 
         except Exception as e:
             logger.error(

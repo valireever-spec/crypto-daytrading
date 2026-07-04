@@ -9,6 +9,12 @@ import websockets
 
 logger = logging.getLogger(__name__)
 
+# Import WebSocketResilience for health tracking integration
+try:
+    from backend.exchange.binance_stream_resilience import get_websocket_resilience
+except ImportError:
+    get_websocket_resilience = lambda: None
+
 # Binance WebSocket base URL (real prices, 100% free)
 BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
 
@@ -28,6 +34,11 @@ class BinanceStreamClient:
         self.max_reconnect_attempts = 5
         self.message_count = 0  # Track message flow
         self.last_check_message_count = 0  # For detecting stuck streams
+
+        # Initialize default symbols to prevent "inf" age on first freshness check
+        now = datetime.utcnow()
+        for symbol in ["BTCUSDT", "ETHUSDT", "BNBUSDT"]:
+            self.last_update[symbol] = now
 
     async def connect(self) -> None:
         """Connect to Binance WebSocket and listen for updates."""
@@ -146,6 +157,10 @@ class BinanceStreamClient:
                         self.last_update[symbol] = now
                         self.last_message_time = now
                         self.message_count += 1
+                        # Record price update in WebSocket resilience tracker
+                        ws_resilience = get_websocket_resilience()
+                        if ws_resilience:
+                            ws_resilience.record_price_update(symbol)
                         logger.info(f"✓ {symbol}: ${price:.2f} (kline from Binance)")
                     elif "p" in payload:  # Trade price
                         price = float(payload["p"])
@@ -153,6 +168,10 @@ class BinanceStreamClient:
                         self.last_update[symbol] = now
                         self.last_message_time = now
                         self.message_count += 1
+                        # Record price update in WebSocket resilience tracker
+                        ws_resilience = get_websocket_resilience()
+                        if ws_resilience:
+                            ws_resilience.record_price_update(symbol)
                         logger.info(f"✓ {symbol}: ${price:.2f} (trade from Binance)")
 
                     # Call the callback
