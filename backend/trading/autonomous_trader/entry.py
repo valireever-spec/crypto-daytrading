@@ -63,14 +63,12 @@ class Indicators:
 
 
 class SignalCalculator:
-    """Mean reversion signal - buy oversold, sell at mean or profit target"""
+    """RSI-based mean reversion - proven approach from investing-platform"""
 
-    SMA_PERIOD = 20
     RSI_PERIOD = 14
-    VOLUME_AVG_PERIOD = 20
+    RSI_OVERSOLD = 30  # Buy when RSI drops below this
+    RSI_OVERBOUGHT = 70  # Exit when RSI exceeds this
     ENTRY_THRESHOLD = 50  # Signal strength threshold
-    SIGNAL_BASE_SCORE = 60  # Base score for mean reversion trigger
-    STDDEV_THRESHOLD = 2.0  # 2 standard deviations = oversold
 
     @staticmethod
     def calculate_signal(
@@ -80,69 +78,53 @@ class SignalCalculator:
         volumes_5min: List[float],
     ) -> Tuple[Optional[float], str]:
         """
-        MEAN REVERSION signal - buy when price oversold (2 std dev below SMA).
+        RSI-BASED MEAN REVERSION signal - buy when oversold, exit when overbought.
         Returns (strength, reason) or (None, reason) if no signal.
 
-        Logic:
-        1. Calculate 20-period SMA and standard deviation
-        2. Entry: Price < (SMA - 2*StdDev) = oversold
-        3. Bonuses: High volume, RSI < 30 (heavily oversold), negative momentum
+        Proven approach: Works in crypto due to high volatility and mean reversion.
+        - Entry: RSI < 30 (oversold)
+        - Exit: RSI > 70 (overbought) [handled in exit.py]
         """
 
-        if len(prices_5min) < 20:
+        if len(prices_5min) < SignalCalculator.RSI_PERIOD + 1:
             return None, "Insufficient price history"
 
-        current_price = prices_5min[-1]
+        # Calculate RSI on 5-minute prices
+        rsi_5min = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
 
-        # Calculate 20-period SMA
-        sma20 = sum(prices_5min[-20:]) / 20
+        # CORE CONDITION: RSI is oversold (< 30)
+        if rsi_5min >= SignalCalculator.RSI_OVERSOLD:
+            return None, f"Not oversold: RSI {rsi_5min:.0f} >= {SignalCalculator.RSI_OVERSOLD}"
 
-        # Calculate 20-period standard deviation
-        variance = sum((p - sma20) ** 2 for p in prices_5min[-20:]) / 20
-        stddev = variance ** 0.5
+        # SIGNAL CONDITIONS MET - Calculate strength based on how oversold
+        # More oversold = higher confidence
+        signal_strength = 50 + ((SignalCalculator.RSI_OVERSOLD - rsi_5min) * 2)
+        signal_strength = min(signal_strength, 100.0)
 
-        # Calculate Bollinger Band lower bound (SMA - 2*StdDev)
-        lower_band = sma20 - (SignalCalculator.STDDEV_THRESHOLD * stddev)
-
-        # CORE CONDITION: Price is oversold (below lower Bollinger Band)
-        if current_price > lower_band:
-            return None, f"Not oversold: price {current_price:.2f} > lower_band {lower_band:.2f}"
-
-        # SIGNAL CONDITIONS MET - Calculate strength
-        signal_strength = SignalCalculator.SIGNAL_BASE_SCORE
         bonuses = []
 
-        # Bonus: How deep is the oversold? (further down = more likely to revert)
-        distance_from_lower = lower_band - current_price
-        pct_below_lower = (distance_from_lower / current_price) * 100
-        if pct_below_lower > 2.0:
-            signal_strength += 20
-            bonuses.append(f"deep -${distance_from_lower:.2f}")
-        elif pct_below_lower > 1.0:
+        # Bonus: Extremely oversold (RSI < 10)
+        if rsi_5min < 10:
+            signal_strength = 100
+            bonuses.append(f"extreme RSI {rsi_5min:.0f}")
+        # Bonus: Very oversold (RSI < 20)
+        elif rsi_5min < 20:
+            signal_strength += 15
+            bonuses.append(f"very oversold RSI {rsi_5min:.0f}")
+        # Bonus: Moderately oversold (RSI < 25)
+        elif rsi_5min < 25:
             signal_strength += 10
-            bonuses.append(f"oversold -{pct_below_lower:.1f}%")
+            bonuses.append(f"oversold RSI {rsi_5min:.0f}")
 
-        # Bonus: RSI heavily oversold (<30 = strong reversal signal)
-        rsi_5min = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
-        if rsi_5min < 30:
-            signal_strength += 20
-            bonuses.append(f"RSI {rsi_5min:.0f}")
-        elif rsi_5min < 40:
-            signal_strength += 10
-            bonuses.append(f"RSI {rsi_5min:.0f}")
-
-        # Bonus: Volume on the dip (high volume during reversal = confirmation)
+        # Check volume for confirmation (higher volume = more likely real reversal)
         current_volume = volumes_5min[-1]
         avg_volume_20 = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
         volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1.0
-        if volume_ratio >= 1.5:
-            signal_strength += 15
-            bonuses.append(f"vol {volume_ratio:.1f}x")
+        if volume_ratio >= 1.3:
+            signal_strength += 10
+            bonuses.append(f"volume {volume_ratio:.1f}x")
 
-        signal_strength = min(signal_strength, 100.0)
-
-        bonus_text = ", ".join(bonuses) if bonuses else "oversold"
-        reason = f"Mean reversion ({bonus_text})"
+        reason = f"Mean reversion ({''.join(bonuses)})" if bonuses else "Mean reversion (oversold)"
 
         if signal_strength >= SignalCalculator.ENTRY_THRESHOLD:
             return signal_strength, reason
