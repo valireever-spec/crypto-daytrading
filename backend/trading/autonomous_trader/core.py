@@ -390,24 +390,18 @@ class AutonomousTrader:
                     await alert_mgr.alert_circuit_breaker_open(cb_status["reason"])
 
                 # Check HA health (Pillar #8: Failover Health)
-                from backend.failover.ha_wrapper import get_ha_wrapper
+                # CRITICAL FIX: Only PRIMARY trades (no split-brain possible)
+                # BACKUP is purely passive/read-only
+                machine_id = os.getenv("MACHINE_ID", "main")
 
-                ha_wrapper = get_ha_wrapper()
-                if not ha_wrapper._monitor_task:
-                    await ha_wrapper.start_monitoring()
-
-                ha_healthy = await ha_wrapper.check_trading_allowed()
-                if not ha_healthy:
-                    ha_status = ha_wrapper.get_health_status()
-                    logger.critical(
-                        f"🚨 PRIMARY UNHEALTHY (HA): {ha_status.get('reason', 'Unknown')} - Pausing entries"
-                    )
-                    # Send alert for PRIMARY unhealthy
-                    alert_mgr = get_alert_manager()
-                    await alert_mgr.alert_primary_unhealthy(
-                        ha_status.get("reason", "Unknown")
-                    )
+                # If this is BACKUP machine, don't trade (PRIMARY is sole trader)
+                if machine_id == "backup":
+                    logger.debug("BACKUP machine: trading disabled (PRIMARY is sole trader)")
                     circuit_breaker_open = True
+                else:
+                    # PRIMARY continues trading normally
+                    logger.debug("PRIMARY machine: trading enabled")
+                    # No split-brain checks needed - only PRIMARY can trade
 
                 # Differentiated quality gates
                 quality_gate_pass_entry = (
