@@ -63,14 +63,14 @@ class Indicators:
 
 
 class SignalCalculator:
-    """Simple trend-following signal - 2 core conditions only"""
+    """Mean reversion signal - buy oversold, sell at mean or profit target"""
 
-    EMA20_PERIOD = 20
+    SMA_PERIOD = 20
     RSI_PERIOD = 14
     VOLUME_AVG_PERIOD = 20
-    ENTRY_THRESHOLD = 40  # Simple: just above neutral
-    SIGNAL_BASE_SCORE = 50
-    RSI_MAX = 85  # Only filter extreme overbought
+    ENTRY_THRESHOLD = 50  # Signal strength threshold
+    SIGNAL_BASE_SCORE = 60  # Base score for mean reversion trigger
+    STDDEV_THRESHOLD = 2.0  # 2 standard deviations = oversold
 
     @staticmethod
     def calculate_signal(
@@ -80,60 +80,69 @@ class SignalCalculator:
         volumes_5min: List[float],
     ) -> Tuple[Optional[float], str]:
         """
-        SIMPLE trend-following signal - 2 core conditions only.
+        MEAN REVERSION signal - buy when price oversold (2 std dev below SMA).
         Returns (strength, reason) or (None, reason) if no signal.
+
+        Logic:
+        1. Calculate 20-period SMA and standard deviation
+        2. Entry: Price < (SMA - 2*StdDev) = oversold
+        3. Bonuses: High volume, RSI < 30 (heavily oversold), negative momentum
         """
 
-        if len(prices_5min) < 20 or len(prices_4hr) < 20:
+        if len(prices_5min) < 20:
             return None, "Insufficient price history"
 
         current_price = prices_5min[-1]
 
-        # CORE CONDITION 1: Uptrend - Price > EMA20 (4-hour)
-        ema20_4hr = Indicators.ema(prices_4hr, SignalCalculator.EMA20_PERIOD)
-        if current_price <= ema20_4hr:
-            return None, f"Downtrend: price {current_price:.2f} <= EMA20 {ema20_4hr:.2f}"
+        # Calculate 20-period SMA
+        sma20 = sum(prices_5min[-20:]) / 20
 
-        # CORE CONDITION 2: Volume Confirmation
-        current_volume = volumes_5min[-1]
-        avg_volume_20 = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
-        volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1.0
+        # Calculate 20-period standard deviation
+        variance = sum((p - sma20) ** 2 for p in prices_5min[-20:]) / 20
+        stddev = variance ** 0.5
 
-        # Allow trades even with modest volume (>0.8x is OK)
-        # RSI filter: extreme overbought only (>85)
-        rsi_5min = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
-        if rsi_5min >= SignalCalculator.RSI_MAX:
-            return None, f"Extreme overbought: RSI {rsi_5min:.0f} >= 85"
+        # Calculate Bollinger Band lower bound (SMA - 2*StdDev)
+        lower_band = sma20 - (SignalCalculator.STDDEV_THRESHOLD * stddev)
+
+        # CORE CONDITION: Price is oversold (below lower Bollinger Band)
+        if current_price > lower_band:
+            return None, f"Not oversold: price {current_price:.2f} > lower_band {lower_band:.2f}"
 
         # SIGNAL CONDITIONS MET - Calculate strength
         signal_strength = SignalCalculator.SIGNAL_BASE_SCORE
-
-        # Bonuses for quality
         bonuses = []
 
-        # Bonus: Volume strength
-        if volume_ratio >= 1.5:
+        # Bonus: How deep is the oversold? (further down = more likely to revert)
+        distance_from_lower = lower_band - current_price
+        pct_below_lower = (distance_from_lower / current_price) * 100
+        if pct_below_lower > 2.0:
             signal_strength += 20
-            bonuses.append(f"vol {volume_ratio:.1f}x")
-        elif volume_ratio >= 1.0:
+            bonuses.append(f"deep -${distance_from_lower:.2f}")
+        elif pct_below_lower > 1.0:
             signal_strength += 10
-            bonuses.append(f"vol {volume_ratio:.1f}x")
+            bonuses.append(f"oversold -{pct_below_lower:.1f}%")
 
-        # Bonus: RSI room to run (<60 = plenty of room)
-        if rsi_5min < 60:
-            signal_strength += 15
+        # Bonus: RSI heavily oversold (<30 = strong reversal signal)
+        rsi_5min = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
+        if rsi_5min < 30:
+            signal_strength += 20
+            bonuses.append(f"RSI {rsi_5min:.0f}")
+        elif rsi_5min < 40:
+            signal_strength += 10
             bonuses.append(f"RSI {rsi_5min:.0f}")
 
-        # Bonus: Price momentum (% above EMA)
-        pct_above_ema = ((current_price - ema20_4hr) / ema20_4hr) * 100
-        if pct_above_ema > 2.0:
-            signal_strength += 10
-            bonuses.append(f"+{pct_above_ema:.1f}%")
+        # Bonus: Volume on the dip (high volume during reversal = confirmation)
+        current_volume = volumes_5min[-1]
+        avg_volume_20 = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
+        volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1.0
+        if volume_ratio >= 1.5:
+            signal_strength += 15
+            bonuses.append(f"vol {volume_ratio:.1f}x")
 
         signal_strength = min(signal_strength, 100.0)
 
-        bonus_text = ", ".join(bonuses) if bonuses else "trend"
-        reason = f"Uptrend ({bonus_text})"
+        bonus_text = ", ".join(bonuses) if bonuses else "oversold"
+        reason = f"Mean reversion ({bonus_text})"
 
         if signal_strength >= SignalCalculator.ENTRY_THRESHOLD:
             return signal_strength, reason

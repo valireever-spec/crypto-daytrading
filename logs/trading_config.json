@@ -1,15 +1,19 @@
 {
-  "entry_threshold": 60.0,
-  "exit_profit_target": 0.03,
-  "exit_stop_loss": 0.02,
-  "position_size_pct": 0.1,
-  "max_positions": 5,
-  "max_daily_loss_pct": 5.0,
-  "symbols": [],
+  "entry_threshold": 50,
+  "exit_profit_target": 0.02,
+  "exit_stop_loss": 0.01,
+  "position_size_pct": 1.5,
+  "max_positions": 2,
+  "max_daily_loss_pct": 2.0,
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT"
+  ],
   "enabled": false,
-  "loop_sleep_seconds": 10.0,
-  "quality_gate_entry": 90.0,
-  "quality_gate_exit": 60.0,
-  "_last_updated": "2026-07-03T07:48:28.137767Z",
+  "loop_sleep_seconds": 1,
+  "quality_gate_entry": 80,
+  "quality_gate_exit": 60,
+  "_last_updated": "2026-07-04T21:16:32.568117Z",
   "_source": "api_update"
 }
