@@ -136,7 +136,7 @@ async def _execute_portfolio_decision_impl(
                         current_price=current_prices.get(symbol, pos["entry_price"]),
                     )
 
-                    if result["success"]:
+                    if result.get("status") == "FILLED":
                         executed_count += 1
                         logger.info(f"✅ Sold {pos['quantity']} {symbol}")
 

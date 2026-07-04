@@ -342,6 +342,30 @@ class AutonomousTrader:
                 ws_resilience = get_websocket_resilience()
                 ws_health = ws_resilience.check_health()
 
+                # ✅ BUG FIX #4: HARD GATE - Stop trading if WebSocket is stale >30 seconds
+                # (prevents trades on stale/wrong prices)
+                # Filter out infinity values (streams with no data yet) - only check actual ages
+                finite_ages = [
+                    s['age_seconds'] for s in ws_health.get("all_streams", [])
+                    if s['age_seconds'] != float('inf')
+                ]
+                websocket_age_seconds = max(finite_ages) if finite_ages else 0
+                websocket_too_stale = websocket_age_seconds > 30 and websocket_age_seconds != float('inf')
+
+                if websocket_too_stale:
+                    logger.critical(
+                        f"🔴 HARD GATE TRIGGERED: WebSocket data stale {websocket_age_seconds:.1f}s > 30s safety threshold\n"
+                        f"   No trades allowed until WebSocket recovers\n"
+                        f"   Entries: BLOCKED | Exits: BLOCKED"
+                    )
+                    alert_mgr = get_alert_manager()
+                    await alert_mgr.alert_primary_unhealthy(
+                        f"WebSocket stale {websocket_age_seconds:.1f}s, trading halted"
+                    )
+                    # Skip both entries and exits due to stale data
+                    skip_entries = True
+                    quality_gate_pass_exit = False
+
                 if ws_health["stale_streams"]:
                     stale_str = ", ".join(
                         [f"{s['symbol']}({s['age_seconds']}s)" for s in ws_health["stale_streams"]]
@@ -563,13 +587,14 @@ class AutonomousTrader:
         # 5. Execute order
         try:
             result = await engine.place_order_async(symbol, side, quantity, price)
-            if result.get("success"):
+            # ✅ BUG FIX #2: Use correct response schema validation with "status" key
+            if result.get("status") == "FILLED":
                 self.ha_deduplicator.register_order(order_record.idempotency_key)
                 self.rate_limiter.record_request()
                 logger.info(f"✅ Order executed: {symbol} {side} {quantity}@{price}")
                 return result
             else:
-                logger.warning(f"Order execution failed: {result.get('error')}")
+                logger.warning(f"Order execution failed: {result.get('error') or result.get('status')}")
                 return result
         except Exception as e:
             logger.error(f"Order execution error: {e}")

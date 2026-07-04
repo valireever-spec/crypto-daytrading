@@ -1,15 +1,19 @@
 """Exit signal generation (stop loss, profit target)."""
 
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Dict
 
 from backend.exchange.paper_trading import get_paper_trading
+from backend.exchange.order_response import validate_order_response
 from backend.execution.smart_executor import get_smart_executor
 
 if TYPE_CHECKING:
     from .core import AutonomousTrader
 
 logger = logging.getLogger(__name__)
+
+MIN_HOLD_TIME_SECONDS = 300  # Minimum time position must be held before allowing exit (5 minutes)
 
 
 async def _check_exits_impl(trader_self: "AutonomousTrader"):
@@ -31,6 +35,20 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
 
         for position in positions:
             symbol = position["symbol"]
+
+            # ✅ BUG FIX #1: Check minimum hold time FIRST (prevents 5-10 second exits)
+            entry_time = position.get("entry_time")
+            if entry_time:
+                if isinstance(entry_time, str):
+                    entry_time = datetime.fromisoformat(entry_time)
+                hold_time = (datetime.utcnow() - entry_time).total_seconds()
+
+                if hold_time < MIN_HOLD_TIME_SECONDS:
+                    logger.info(
+                        f"⏳ {symbol}: Position held {hold_time:.1f}s, minimum hold time {MIN_HOLD_TIME_SECONDS}s not yet reached. Skipping exit check."
+                    )
+                    continue
+
             current_price = stream_client.price_cache.get(symbol)
 
             if not current_price:
@@ -98,17 +116,24 @@ async def _execute_exit_impl(
             current_price=current_price,
         )
 
-        if result.get("success"):
-            realized_pnl = result.get("realized_pnl", 0.0)
-            logger.info(
-                f"✅ SOLD {symbol}: {quantity:.4f} @ ${current_price:.2f} - {reason} - "
-                f"P&L: ${realized_pnl:.2f}"
-            )
-            return True
-        else:
-            logger.warning(
-                f"❌ Sell order failed for {symbol}: {result.get('error')}"
-            )
+        try:
+            # Validate response against OrderResponse schema
+            validated = validate_order_response(result)
+
+            if validated.status == "FILLED":
+                realized_pnl = validated.realized_pnl or 0.0
+                logger.info(
+                    f"✅ SOLD {symbol}: {quantity:.4f} @ ${current_price:.2f} - {reason} - "
+                    f"P&L: ${realized_pnl:.2f}"
+                )
+                return True
+            else:
+                logger.warning(
+                    f"❌ Sell order failed for {symbol}: {validated.status}"
+                )
+                return False
+        except Exception as e:
+            logger.error(f"Invalid order response for {symbol}: {e}")
             return False
 
     except Exception as e:
