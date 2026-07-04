@@ -164,7 +164,6 @@ async def lifespan(app: FastAPI):
     # Import essential initialization functions
     from backend.exchange.paper_trading import init_paper_trading
     from backend.exchange.binance_stream import init_stream_client
-    from backend.exchange.websocket_manager import init_manager
     from backend.exchange.websocket_staleness_monitor import WebSocketStalenessMonitor
     from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
     from backend.trading.autonomous_trader import TradingConfig
@@ -198,22 +197,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize circuit breaker: {e}")
 
-    # Initialize new WebSocket manager (with automatic recovery + REST fallback)
-    ws_manager = None
+    # Initialize unified stream client (now consolidates WebSocket + health tracking)
+    stream_client = None
     try:
-        ws_manager = await init_manager(symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"])
-        logger.info("✅ WebSocket manager initialized (automatic recovery + REST fallback)")
+        stream_client = await init_stream_client(symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"])
+        logger.info("✅ Unified stream client initialized (WebSocket + health tracking + circuit breaker)")
     except Exception as e:
-        logger.error(f"Failed to initialize WebSocket manager: {e}")
+        logger.error(f"Failed to initialize stream client: {e}")
 
     # SKILL #1: Initialize WebSocket staleness detection + auto-reconnect
-    if ws_manager:
+    if stream_client:
         try:
-            staleness_monitor = WebSocketStalenessMonitor(ws_manager)
-            # Register callback to detect price updates
-            ws_manager.register_callback(
-                lambda symbol, price: staleness_monitor.on_price_update(symbol)
-            )
+            staleness_monitor = WebSocketStalenessMonitor(stream_client)
             # Start monitor in background
             staleness_monitor_task = asyncio.create_task(
                 staleness_monitor.start_monitoring(["BTCUSDT", "ETHUSDT", "BNBUSDT"])

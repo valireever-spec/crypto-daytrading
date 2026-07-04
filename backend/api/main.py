@@ -164,11 +164,11 @@ async def health_check() -> JSONResponse:
     try:
         from backend.exchange.paper_trading import get_paper_trading
         from backend.core.circuit_breaker_v2 import get_circuit_breaker
-        from backend.exchange.websocket_manager import get_manager
+        from backend.exchange.binance_stream import get_stream_client
 
         engine = get_paper_trading()
         circuit_breaker = get_circuit_breaker()
-        ws_manager = get_manager()
+        stream_client = get_stream_client()
 
         if not engine:
             return JSONResponse(
@@ -178,14 +178,13 @@ async def health_check() -> JSONResponse:
 
         # Get statuses
         cb_status = circuit_breaker.get_status()
-        ws_health = ws_manager.get_health() if ws_manager else None
+        ws_health = stream_client.check_health() if stream_client else None
         account = engine.get_account_state()
 
-        # Determine overall health
+        # Determine overall health (unified stream client)
         ws_healthy = (
             ws_health and
-            (ws_health["websocket"]["connected"] or
-             ws_health["rest"]["active"])
+            ws_health.get("overall_healthy", False)
         )
 
         trading_allowed = cb_status["trading_allowed"]
@@ -202,7 +201,7 @@ async def health_check() -> JSONResponse:
                 "status": "healthy" if (ws_healthy and trading_allowed) else
                          "degraded" if trading_allowed else "unhealthy",
                 "circuit_breaker": cb_status,
-                "websocket": ws_health,
+                "websocket_health": ws_health,
                 "account": account,
                 "trading_allowed": trading_allowed,
             }

@@ -248,9 +248,9 @@ def get_paper_trading():
 
 
 def get_websocket_manager():
-    """Thread-safe access to WebSocket manager."""
-    from backend.exchange.websocket_manager import get_manager
-    return get_manager()
+    """Thread-safe access to unified stream client."""
+    from backend.exchange.binance_stream import get_stream_client
+    return get_stream_client()
 
 
 # === SKILLS & PLUGINS ===

@@ -7,7 +7,6 @@ import logging
 from fastapi import APIRouter, Query
 from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.binance_stream import get_stream_client
-from backend.exchange.websocket_manager import get_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["dashboard"])
@@ -25,19 +24,19 @@ async def get_prices():
         engine = get_paper_trading()
         symbols = engine.config.symbols if (engine and hasattr(engine, 'config')) else ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
 
-        # Try new WebSocket manager first
+        # Try unified stream client
         try:
-            manager = get_manager()
-            prices = manager.get_prices(symbols, max_age_seconds=10)
-            health = manager.get_health()
+            client = get_stream_client()
+            if client:
+                prices = client.get_prices(symbols)
+                health = client.check_health()
 
-            return {
-                "prices": prices,
-                "stream_status": {
-                    "connected": health["websocket"]["connected"],
-                    "source": "websocket" if prices else "fallback",
-                    "websocket": health["websocket"],
-                    "rest": health["rest"],
+                return {
+                    "prices": prices,
+                    "stream_status": {
+                        "connected": client.is_connected,
+                        "source": "websocket" if prices else "fallback",
+                        "health": health,
                     "healthy": len(prices) == len(symbols)
                 }
             }
