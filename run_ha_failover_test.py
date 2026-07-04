@@ -115,8 +115,8 @@ def start_primary() -> bool:
             with open("/tmp/crypto-trading-primary.log", "r") as f:
                 tail_lines = f.readlines()[-5:]
                 log(f"  Last log lines: {' '.join([line.strip() for line in tail_lines])}", "INFO")
-        except:
-            pass
+        except Exception as e:
+            log(f"Could not read startup log: {e}", "DEBUG")
         return False
     except Exception as e:
         log(f"✗ Error starting PRIMARY: {e}", "ERROR")

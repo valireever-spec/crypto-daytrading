@@ -72,6 +72,7 @@ class ExitManager:
         """Initialize exit manager."""
         self.positions: Dict[str, Position] = {}
         self.exit_history: List[ExitSignal] = []
+        self.max_history = 1000  # Prevent unbounded memory growth
 
     def add_position(
         self,
@@ -308,8 +309,10 @@ class ExitManager:
             )
 
             if order_result.get("status") == "filled":
-                # Record exit
+                # Record exit (with bounded memory)
                 self.exit_history.append(signal)
+                if len(self.exit_history) > self.max_history:
+                    self.exit_history.pop(0)
                 del self.positions[signal.symbol]
 
                 logger.info(

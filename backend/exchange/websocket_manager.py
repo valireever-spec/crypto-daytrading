@@ -104,8 +104,8 @@ class WebSocketManager:
         if self.ws:
             try:
                 await self.ws.close()
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"WebSocket close error during reconnect: {e}", exc_info=True)
         self.reconnect_attempts = 0
         await self._connect_websocket()
 

@@ -23,8 +23,11 @@ class BinanceStreamClient:
         self.subscriptions: Dict[str, Callable] = {}
         self.price_cache: Dict[str, float] = {}
         self.last_update: Dict[str, datetime] = {}
+        self.last_message_time: Optional[datetime] = None  # When last ANY message arrived
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 5
+        self.message_count = 0  # Track message flow
+        self.last_check_message_count = 0  # For detecting stuck streams
 
     async def connect(self) -> None:
         """Connect to Binance WebSocket and listen for updates."""
@@ -136,15 +139,20 @@ class BinanceStreamClient:
                         continue
 
                     # Update price cache and timestamp (works for both formats)
+                    now = datetime.utcnow()
                     if "k" in payload:  # Kline (candle)
                         price = float(payload["k"]["c"])
                         self.price_cache[symbol] = price
-                        self.last_update[symbol] = datetime.utcnow()
+                        self.last_update[symbol] = now
+                        self.last_message_time = now
+                        self.message_count += 1
                         logger.info(f"✓ {symbol}: ${price:.2f} (kline from Binance)")
                     elif "p" in payload:  # Trade price
                         price = float(payload["p"])
                         self.price_cache[symbol] = price
-                        self.last_update[symbol] = datetime.utcnow()
+                        self.last_update[symbol] = now
+                        self.last_message_time = now
+                        self.message_count += 1
                         logger.info(f"✓ {symbol}: ${price:.2f} (trade from Binance)")
 
                     # Call the callback
@@ -264,6 +272,62 @@ class BinanceStreamClient:
             return None
         age = (datetime.utcnow() - self.last_update[symbol]).total_seconds()
         return age
+
+    def check_data_freshness(self, symbols: list, max_age_seconds: float = 5.0) -> dict:
+        """Check freshness of each symbol independently (ACCURATE detection).
+
+        Args:
+            symbols: List of symbols to check
+            max_age_seconds: Max acceptable age (default 5 seconds, not 120!)
+
+        Returns:
+            {
+                'fresh': [list of fresh symbols],
+                'stale': [(symbol, age_seconds), ...],  # Symbols older than threshold
+                'missing': [symbols with no data],
+                'is_healthy': bool  # True if ALL symbols fresh
+            }
+        """
+        fresh = []
+        stale = []
+        missing = []
+        now = datetime.utcnow()
+
+        for symbol in symbols:
+            if symbol not in self.last_update:
+                missing.append(symbol)
+            else:
+                age = (now - self.last_update[symbol]).total_seconds()
+                if age < max_age_seconds:
+                    fresh.append(symbol)
+                else:
+                    stale.append((symbol, age))
+
+        is_healthy = len(stale) == 0 and len(missing) == 0
+
+        return {
+            'fresh': fresh,
+            'stale': stale,
+            'missing': missing,
+            'is_healthy': is_healthy,
+            'check_time': now.isoformat(),
+        }
+
+    def is_data_flowing(self) -> bool:
+        """Check if data is actively flowing (messages arriving).
+
+        Returns True only if:
+        1. Messages are being received
+        2. Message count is increasing (not stuck)
+        """
+        if not self.is_connected or not self.last_message_time:
+            return False
+
+        now = datetime.utcnow()
+        time_since_message = (now - self.last_message_time).total_seconds()
+
+        # Data is flowing if last message <3 seconds ago
+        return time_since_message < 3.0
 
 
 # Global stream client instance

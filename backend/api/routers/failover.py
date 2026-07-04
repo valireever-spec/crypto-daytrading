@@ -177,7 +177,7 @@ async def receive_position_from_primary(request: Request):
                     entry_time = datetime.fromisoformat(
                         entry_time_str.replace("Z", "+00:00")
                     )
-                except:
+                except (ValueError, TypeError):
                     entry_time = datetime.utcnow()
             else:
                 entry_time = datetime.utcnow()
@@ -207,7 +207,7 @@ async def receive_position_from_primary(request: Request):
                     timestamp = datetime.fromisoformat(
                         timestamp_str.replace("Z", "+00:00")
                     )
-                except:
+                except (ValueError, TypeError):
                     timestamp = datetime.utcnow()
             else:
                 timestamp = datetime.utcnow()

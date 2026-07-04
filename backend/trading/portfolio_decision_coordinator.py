@@ -47,6 +47,7 @@ class PortfolioDecisionCoordinator:
         self.sector_advisor = get_sector_rotation_advisor()
         self.rebalancing_engine = get_portfolio_rebalancing_engine()
         self.decision_history: List[PortfolioDecision] = []
+        self.max_history = 1000  # Prevent unbounded memory growth
         self.last_rebalance_time = None
 
     async def make_portfolio_decisions(
@@ -123,9 +124,11 @@ class PortfolioDecisionCoordinator:
                         f"(urgency {rebalance_decision.urgency}/10)"
                     )
 
-            # Store decisions in history
+            # Store decisions in history (with bounded memory)
             for decision in decisions:
                 self.decision_history.append(decision)
+                if len(self.decision_history) > self.max_history:
+                    self.decision_history.pop(0)  # Remove oldest
 
             return decisions
 

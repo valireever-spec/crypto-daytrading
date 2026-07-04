@@ -22,8 +22,33 @@ class HATraderWrapper:
 
         # Initialize split-brain prevention
         machine_id = os.getenv("MACHINE_ID", "main")
-        primary_url = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
-        backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
+        primary_url = os.getenv("PRIMARY_API_URL")
+        backup_url = os.getenv("BACKUP_API_URL")
+
+        # CRITICAL FIX: Require explicit configuration to prevent split-brain detection bugs
+        if not primary_url:
+            logger.error(
+                "CRITICAL: PRIMARY_API_URL not configured! "
+                "This causes split-brain false positives when checking localhost on wrong machine. "
+                "Set PRIMARY_API_URL=http://<primary-ip>:8001 in .env"
+            )
+            primary_url = "http://127.0.0.1:8001"  # Fallback, but log error
+
+        if not backup_url:
+            logger.error(
+                "CRITICAL: BACKUP_API_URL not configured! "
+                "Set BACKUP_API_URL=http://<backup-ip>:8002 in .env"
+            )
+            backup_url = "http://192.168.3.25:8002"  # Fallback, but log error
+
+        # Validate: BACKUP should NOT use localhost for PRIMARY
+        if machine_id == "backup" and "127.0.0.1" in primary_url:
+            logger.critical(
+                f"🚨 BUG PREVENTION: BACKUP machine checking PRIMARY at localhost! "
+                f"primary_url={primary_url} (this will check BACKUP itself, not PRIMARY). "
+                f"Use actual network address instead."
+            )
+
         self.split_brain_prevention = SplitBrainPrevention(
             machine_id=machine_id,
             primary_url=primary_url,

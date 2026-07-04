@@ -64,6 +64,7 @@ class RebalancingEngine:
         """
         self.drift_threshold_pct = drift_threshold_pct
         self.rebalancing_history: List[RebalancingPlan] = []
+        self.max_history = 1000  # Prevent unbounded memory growth
 
     def analyze_drift(
         self,
@@ -329,6 +330,8 @@ class RebalancingEngine:
     def record_rebalancing(self, plan: RebalancingPlan) -> None:
         """Record completed rebalancing in history."""
         self.rebalancing_history.append(plan)
+        if len(self.rebalancing_history) > self.max_history:
+            self.rebalancing_history.pop(0)
         logger.info(
             f"Recorded rebalancing: {len(plan.trades)} trades, cost {plan.total_cost_pct:.2f}%"
         )

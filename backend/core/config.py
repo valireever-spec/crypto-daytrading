@@ -22,8 +22,9 @@ class Settings(BaseSettings):
     )
 
     # Machine HA Configuration
-    machine_id: Literal["main", "backup"] = "main"
+    machine_id: Literal["primary", "backup", "main"] = "primary"
     backup_machine_url: str = "http://backup-machine:8002"
+    primary_machine_url: str = "http://primary-machine:8001"
     heartbeat_interval: int = 10  # seconds
 
     # API Configuration

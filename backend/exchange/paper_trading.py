@@ -623,7 +623,7 @@ class PaperTradingEngine:
                             timestamp = datetime.fromisoformat(
                                 trade_time_str.replace("Z", "+00:00")
                             )
-                        except:
+                        except (ValueError, TypeError):
                             timestamp = datetime.utcnow()
                     else:
                         timestamp = trade_time_str or datetime.utcnow()

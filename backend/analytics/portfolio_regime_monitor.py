@@ -46,6 +46,7 @@ class PortfolioRegimeMonitor:
         self.last_regime_state: Dict[str, str] = {}  # symbol → last regime
         self.regime_change_history: List[RegimeFlip] = []
         self.portfolio_regime_history: List[Tuple[datetime, str]] = []
+        self.max_history = 1000  # Prevent unbounded memory growth
 
     def check_portfolio_regime(
         self,
@@ -95,6 +96,8 @@ class PortfolioRegimeMonitor:
                 )
                 flips.append(flip)
                 self.regime_change_history.append(flip)
+                if len(self.regime_change_history) > self.max_history:
+                    self.regime_change_history.pop(0)
 
                 logger.info(
                     f"🔄 REGIME FLIP: {symbol} {previous_regime} → {current_regime} (severity: {severity:.2f})"

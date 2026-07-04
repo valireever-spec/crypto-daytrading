@@ -554,7 +554,7 @@ async def get_ha_status() -> JSONResponse:
             import httpx
             resp = httpx.get(f"{primary_url}/api/health", timeout=0.5)
             primary_healthy = resp.status_code == 200
-        except:
+        except (httpx.RequestError, httpx.TimeoutException, Exception):
             primary_healthy = False
 
         return JSONResponse({

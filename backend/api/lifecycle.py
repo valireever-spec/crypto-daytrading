@@ -558,8 +558,8 @@ async def lifespan(app: FastAPI):
             trader = get_autonomous_trader()
             await trader.stop()
             await autonomous_trader_task
-        except:
-            pass
+        except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+            pass  # Shutdown cleanup, best-effort
 
     if stream_task:
         stream_task.cancel()

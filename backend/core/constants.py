@@ -12,12 +12,10 @@ from typing import Optional
 # MACHINE & HA CONFIGURATION
 # ============================================================================
 
-PRIMARY_API_URL = os.getenv(
-    "PRIMARY_API_URL", "http://127.0.0.1:8001"
-)
-BACKUP_API_URL = os.getenv(
-    "BACKUP_API_URL", "http://192.168.3.25:8002"
-)
+# CRITICAL FIX: No defaults! Must be explicitly configured.
+# Using defaults causes split-brain bugs when localhost is used on wrong machine.
+PRIMARY_API_URL = os.getenv("PRIMARY_API_URL")
+BACKUP_API_URL = os.getenv("BACKUP_API_URL")
 PRIMARY_PORT = int(os.getenv("PRIMARY_PORT", "8001"))
 BACKUP_PORT = int(os.getenv("BACKUP_PORT", "8002"))
 
@@ -127,13 +125,24 @@ ALERT_CRITICAL_THRESHOLD = float(os.getenv("ALERT_CRITICAL_THRESHOLD", "2.0"))  
 # ============================================================================
 
 def get_primary_url() -> str:
-    """Get PRIMARY API URL, falling back to fallback if env var not set."""
-    return PRIMARY_API_URL or "http://127.0.0.1:8001"
+    """Get PRIMARY API URL. Raises error if not configured."""
+    if not PRIMARY_API_URL:
+        raise ValueError(
+            "CRITICAL: PRIMARY_API_URL not configured! "
+            "This causes split-brain false positives. "
+            "Set PRIMARY_API_URL=http://<primary-ip>:8001 in .env"
+        )
+    return PRIMARY_API_URL
 
 
 def get_backup_url() -> str:
-    """Get BACKUP API URL, falling back to default if env var not set."""
-    return BACKUP_API_URL or "http://192.168.3.25:8002"
+    """Get BACKUP API URL. Raises error if not configured."""
+    if not BACKUP_API_URL:
+        raise ValueError(
+            "CRITICAL: BACKUP_API_URL not configured! "
+            "Set BACKUP_API_URL=http://<backup-ip>:8002 in .env"
+        )
+    return BACKUP_API_URL
 
 
 def validate_urls() -> bool:

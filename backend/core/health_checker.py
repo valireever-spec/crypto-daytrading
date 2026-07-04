@@ -73,10 +73,12 @@ class HealthChecker:
         }
 
     async def _check_websocket(self) -> HealthStatus:
-        """Check WebSocket connection and data freshness.
+        """Check WebSocket connection and data freshness (ACCURATE: 5s threshold, per-symbol).
 
-        CRITICAL: WebSocket must have data within last 2 minutes.
-        Failure = stale price data = trading disabled.
+        CRITICAL: WebSocket must have FRESH data on ALL symbols (not 2 minutes old!).
+        - Threshold: 5 seconds per symbol (was 120s, way too lenient)
+        - Check: Per-symbol freshness (was checking max across all symbols, hiding gaps)
+        - Flow: Verify messages actually arriving (was just checking last timestamp)
         """
         try:
             from backend.exchange.binance_stream import get_stream_client
@@ -85,29 +87,42 @@ class HealthChecker:
             if not client:
                 return HealthStatus("websocket", False, "WebSocket not initialized")
 
-            # Get last update timestamp from cached prices
-            last_update = client.get_last_update_time()
-            if not last_update:
-                return HealthStatus("websocket", False, "No price data received yet")
+            # Check if connection exists
+            if not client.is_connected:
+                return HealthStatus("websocket", False, "WebSocket not connected")
 
-            age_seconds = (datetime.utcnow() - last_update).total_seconds()
-            max_age_seconds = 120  # 2 minutes max
+            # Check if data is ACTIVELY flowing (new messages arriving)
+            if not client.is_data_flowing():
+                return HealthStatus(
+                    "websocket",
+                    False,
+                    "Data flow stopped (no messages for 3+ seconds)",
+                    {"last_message_time": client.last_message_time.isoformat() if client.last_message_time else None},
+                )
 
-            healthy = age_seconds < max_age_seconds
-            message = f"WebSocket data age: {age_seconds:.0f}s"
+            # Check freshness of each symbol (5-second threshold, not 120!)
+            symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+            freshness = client.check_data_freshness(symbols, max_age_seconds=5.0)
 
-            if not healthy:
-                message += f" ⚠️ STALE! Max allowed: {max_age_seconds}s"
+            if not freshness["is_healthy"]:
+                stale_info = ", ".join([f"{s}({age:.1f}s)" for s, age in freshness["stale"]])
+                missing_info = ", ".join(freshness["missing"]) if freshness["missing"] else ""
+                details = f"Stale: {stale_info}" if stale_info else ""
+                if missing_info:
+                    details += f" | Missing: {missing_info}"
+
+                return HealthStatus(
+                    "websocket",
+                    False,
+                    f"⚠️ Data freshness issue: {details}",
+                    freshness,
+                )
 
             return HealthStatus(
                 "websocket",
-                healthy,
-                message,
-                {
-                    "age_seconds": age_seconds,
-                    "max_age_seconds": max_age_seconds,
-                    "last_update": last_update.isoformat(),
-                },
+                True,
+                f"All {len(freshness['fresh'])} symbols fresh (<5s)",
+                freshness,
             )
         except Exception as e:
             logger.error(f"WebSocket health check failed: {type(e).__name__}: {e}")
