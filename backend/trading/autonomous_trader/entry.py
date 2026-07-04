@@ -63,15 +63,14 @@ class Indicators:
 
 
 class SignalCalculator:
-    """Trend-following signal with relaxed entry conditions (Option A)"""
+    """Simple trend-following signal - 2 core conditions only"""
 
-    EMA5_PERIOD = 5
     EMA20_PERIOD = 20
     RSI_PERIOD = 14
     VOLUME_AVG_PERIOD = 20
-    ENTRY_THRESHOLD = 35  # Lowered from 50 (less strict)
+    ENTRY_THRESHOLD = 40  # Simple: just above neutral
     SIGNAL_BASE_SCORE = 50
-    RSI_OVERBOUGHT = 80  # Raised from 70 (less strict)
+    RSI_MAX = 85  # Only filter extreme overbought
 
     @staticmethod
     def calculate_signal(
@@ -81,80 +80,65 @@ class SignalCalculator:
         volumes_5min: List[float],
     ) -> Tuple[Optional[float], str]:
         """
-        Calculate signal strength (0-100) using 5 entry conditions.
+        SIMPLE trend-following signal - 2 core conditions only.
         Returns (strength, reason) or (None, reason) if no signal.
         """
 
-        if len(prices_5min) < 20 or len(prices_1hr) < 20 or len(prices_4hr) < 20:
+        if len(prices_5min) < 20 or len(prices_4hr) < 20:
             return None, "Insufficient price history"
 
         current_price = prices_5min[-1]
 
-        # Condition 1: Trend Filter (4-hour) - Price > EMA20_4hr
+        # CORE CONDITION 1: Uptrend - Price > EMA20 (4-hour)
         ema20_4hr = Indicators.ema(prices_4hr, SignalCalculator.EMA20_PERIOD)
         if current_price <= ema20_4hr:
-            return None, f"Trend DOWN: price {current_price:.2f} < EMA20_4hr {ema20_4hr:.2f}"
+            return None, f"Downtrend: price {current_price:.2f} <= EMA20 {ema20_4hr:.2f}"
 
-        # Condition 2: Momentum Filter (1-hour) - EMA5 > EMA20
-        ema5_1hr = Indicators.ema(prices_1hr, SignalCalculator.EMA5_PERIOD)
-        ema20_1hr = Indicators.ema(prices_1hr, SignalCalculator.EMA20_PERIOD)
-        if ema5_1hr <= ema20_1hr:
-            return None, f"Momentum DOWN: EMA5_1hr {ema5_1hr:.2f} <= EMA20_1hr {ema20_1hr:.2f}"
-
-        # Condition 3: Entry Signal (5-min momentum) - RELAXED
-        high5_5min = max(prices_5min[-5:]) if len(prices_5min) >= 5 else prices_5min[-1]
-        breakout_bonus = 10 if current_price > high5_5min else 0
-
-        # Condition 4: Volume Confirmation - OPTIONAL (relaxed)
+        # CORE CONDITION 2: Volume Confirmation
         current_volume = volumes_5min[-1]
         avg_volume_20 = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
-        volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 0
+        volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1.0
 
-        # Condition 5: Overbought Filter (RSI) - RSI < 80 (relaxed)
+        # Allow trades even with modest volume (>0.8x is OK)
+        # RSI filter: extreme overbought only (>85)
         rsi_5min = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
-        if rsi_5min >= SignalCalculator.RSI_OVERBOUGHT:
-            return None, f"Overbought: RSI {rsi_5min:.0f} >= 80"
+        if rsi_5min >= SignalCalculator.RSI_MAX:
+            return None, f"Extreme overbought: RSI {rsi_5min:.0f} >= 85"
 
-        # CONDITIONS MET - Calculate signal strength
+        # SIGNAL CONDITIONS MET - Calculate strength
         signal_strength = SignalCalculator.SIGNAL_BASE_SCORE
+
+        # Bonuses for quality
         bonuses = []
 
-        # Bonus 1: Strong momentum
-        momentum_distance = ((ema5_1hr - ema20_1hr) / ema20_1hr) * 100 if ema20_1hr > 0 else 0
-        if momentum_distance > 0.5:
+        # Bonus: Volume strength
+        if volume_ratio >= 1.5:
+            signal_strength += 20
+            bonuses.append(f"vol {volume_ratio:.1f}x")
+        elif volume_ratio >= 1.0:
+            signal_strength += 10
+            bonuses.append(f"vol {volume_ratio:.1f}x")
+
+        # Bonus: RSI room to run (<60 = plenty of room)
+        if rsi_5min < 60:
             signal_strength += 15
-            bonuses.append(f"momentum +{momentum_distance:.2f}%")
-
-        # Bonus 2: Volume surge
-        if volume_ratio > 2.0:
-            signal_strength += 10
-            bonuses.append(f"volume {volume_ratio:.1f}x")
-
-        # Bonus 3: Breakout
-        signal_strength += breakout_bonus
-        if breakout_bonus > 0:
-            bonuses.append("breakout")
-
-        # Bonus 4: RSI room to run
-        if rsi_5min < 50:
-            signal_strength += 10
             bonuses.append(f"RSI {rsi_5min:.0f}")
 
-        # Bonus 5: 5-min uptrend
-        ema5_5min = Indicators.ema(prices_5min, SignalCalculator.EMA5_PERIOD)
-        if current_price > ema5_5min:
-            signal_strength += 5
-            bonuses.append("5-min uptrend")
+        # Bonus: Price momentum (% above EMA)
+        pct_above_ema = ((current_price - ema20_4hr) / ema20_4hr) * 100
+        if pct_above_ema > 2.0:
+            signal_strength += 10
+            bonuses.append(f"+{pct_above_ema:.1f}%")
 
         signal_strength = min(signal_strength, 100.0)
 
-        bonus_text = ", ".join(bonuses) if bonuses else ""
-        reason = f"Breakout w/ {bonus_text}" if bonus_text else "Breakout signal"
+        bonus_text = ", ".join(bonuses) if bonuses else "trend"
+        reason = f"Uptrend ({bonus_text})"
 
         if signal_strength >= SignalCalculator.ENTRY_THRESHOLD:
             return signal_strength, reason
         else:
-            return None, f"Signal weak: {signal_strength:.0f} < {SignalCalculator.ENTRY_THRESHOLD}"
+            return None, f"Signal weak: {signal_strength:.0f} < threshold"
 
 
 async def _fetch_ohlcv(symbol: str, timeframe: str, limit: int = 100) -> Optional[List]:
