@@ -63,15 +63,15 @@ class Indicators:
 
 
 class SignalCalculator:
-    """Trend-following signal with 5 entry conditions"""
+    """Trend-following signal with relaxed entry conditions (Option A)"""
 
     EMA5_PERIOD = 5
     EMA20_PERIOD = 20
     RSI_PERIOD = 14
     VOLUME_AVG_PERIOD = 20
-    ENTRY_THRESHOLD = 50
+    ENTRY_THRESHOLD = 35  # Lowered from 50 (less strict)
     SIGNAL_BASE_SCORE = 50
-    RSI_OVERBOUGHT = 70
+    RSI_OVERBOUGHT = 80  # Raised from 70 (less strict)
 
     @staticmethod
     def calculate_signal(
@@ -101,24 +101,21 @@ class SignalCalculator:
         if ema5_1hr <= ema20_1hr:
             return None, f"Momentum DOWN: EMA5_1hr {ema5_1hr:.2f} <= EMA20_1hr {ema20_1hr:.2f}"
 
-        # Condition 3: Entry Signal (5-min breakout) - Close > High5
+        # Condition 3: Entry Signal (5-min momentum) - RELAXED
         high5_5min = max(prices_5min[-5:]) if len(prices_5min) >= 5 else prices_5min[-1]
-        if current_price <= high5_5min:
-            return None, f"No breakout: close {current_price:.2f} <= high5 {high5_5min:.2f}"
+        breakout_bonus = 10 if current_price > high5_5min else 0
 
-        # Condition 4: Volume Confirmation - Volume > 1.5x average
+        # Condition 4: Volume Confirmation - OPTIONAL (relaxed)
         current_volume = volumes_5min[-1]
         avg_volume_20 = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
         volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 0
-        if volume_ratio < 1.5:
-            return None, f"Low volume: {volume_ratio:.2f}x < 1.5x"
 
-        # Condition 5: Overbought Filter (RSI) - RSI < 70
+        # Condition 5: Overbought Filter (RSI) - RSI < 80 (relaxed)
         rsi_5min = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
         if rsi_5min >= SignalCalculator.RSI_OVERBOUGHT:
-            return None, f"Overbought: RSI {rsi_5min:.0f} >= 70"
+            return None, f"Overbought: RSI {rsi_5min:.0f} >= 80"
 
-        # ALL CONDITIONS MET - Calculate signal strength
+        # CONDITIONS MET - Calculate signal strength
         signal_strength = SignalCalculator.SIGNAL_BASE_SCORE
         bonuses = []
 
@@ -133,12 +130,17 @@ class SignalCalculator:
             signal_strength += 10
             bonuses.append(f"volume {volume_ratio:.1f}x")
 
-        # Bonus 3: RSI room to run
+        # Bonus 3: Breakout
+        signal_strength += breakout_bonus
+        if breakout_bonus > 0:
+            bonuses.append("breakout")
+
+        # Bonus 4: RSI room to run
         if rsi_5min < 50:
             signal_strength += 10
             bonuses.append(f"RSI {rsi_5min:.0f}")
 
-        # Bonus 4: 5-min uptrend
+        # Bonus 5: 5-min uptrend
         ema5_5min = Indicators.ema(prices_5min, SignalCalculator.EMA5_PERIOD)
         if current_price > ema5_5min:
             signal_strength += 5
