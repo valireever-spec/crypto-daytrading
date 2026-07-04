@@ -366,15 +366,13 @@ async def lifespan(app: FastAPI):
                         consecutive_failures = 0
                     else:
                         consecutive_failures += 1
-                        logger.critical(f"🔴 Both HTTP and SSH sync failed - STATE DIVERGENCE RISK ({consecutive_failures} consecutive failures)")
+                        logger.warning(f"⚠️  Both HTTP and SSH sync failed ({consecutive_failures}x) - BACKUP state may diverge, but PRIMARY trading continues (BACKUP is passive-only)")
 
-                        # After 3 consecutive failures, alert the trading system to pause
-                        if consecutive_failures >= 3:
-                            from backend.core.alerting import get_alert_manager
-                            alert_mgr = get_alert_manager()
-                            await alert_mgr.alert_primary_unhealthy(
-                                f"HA State Sync Failed ({consecutive_failures}x) - Cannot reach BACKUP, trading paused to prevent divergence"
-                            )
+                        # ✅ ARCHITECTURAL FIX: PRIMARY should NOT pause trading on BACKUP sync failure
+                        # BACKUP is passive-only replica, so PRIMARY proceeds independently
+                        # No alert needed - sync failure is non-critical
+                        if consecutive_failures % 10 == 0:
+                            logger.warning(f"⚠️  BACKUP state sync offline for {consecutive_failures * constants.STATE_SYNC_INTERVAL}s - resuming manual sync when BACKUP recovers")
 
             except Exception as e:
                 consecutive_failures += 1
@@ -536,6 +534,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start monitoring logger: {e}")
 
+    # Initialize Phase 2 Monitoring (cascade failure detection)
+    try:
+        from backend.core.phase_2_monitoring import init_phase2_monitoring
+        from backend.core.alert_routing import setup_alert_routing
+
+        phase2_monitoring = init_phase2_monitoring()
+        await phase2_monitoring.start()
+        logger.info("✅ Phase 2 Monitoring Loop started (cascade detection active)")
+
+        # Set up alert routing (connects alerts to handlers)
+        await setup_alert_routing()
+        logger.info("✅ Alert routing configured (Slack, PagerDuty, emergency stop)")
+    except Exception as e:
+        logger.error(f"Failed to initialize Phase 2 monitoring: {e}")
+
     # Signal to systemd that we're ready (for Type=notify)
     try:
         import systemd.daemon
@@ -587,6 +600,15 @@ async def lifespan(app: FastAPI):
 
     if monitoring_logger:
         await monitoring_logger.stop()
+
+    # Stop Phase 2 Monitoring
+    try:
+        from backend.core.phase_2_monitoring import get_phase2_monitoring
+        monitoring = get_phase2_monitoring()
+        await monitoring.stop()
+        logger.info("✅ Phase 2 Monitoring stopped")
+    except Exception as e:
+        logger.warning(f"Failed to stop Phase 2 monitoring: {e}")
 
     logger.info("✅ Crypto daytrading platform shut down complete")
 

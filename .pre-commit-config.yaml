@@ -19,14 +19,23 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  # Type checking
+  # Type checking (strict mode for trading/execution code)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports, --disallow-untyped-defs, --warn-unused-ignores]
-        additional_dependencies: [types-all]
-        files: ^backend/
+        args: [
+          --ignore-missing-imports,
+          --disallow-untyped-defs,
+          --disallow-incomplete-defs,
+          --warn-unused-ignores,
+          --strict,
+          --no-implicit-optional,
+          --warn-redundant-casts,
+          --warn-unused-configs
+        ]
+        additional_dependencies: [types-all, pydantic]
+        files: ^backend/(trading|exchange|execution)/
 
   # Secrets scanning
   - repo: https://github.com/Yelp/detect-secrets

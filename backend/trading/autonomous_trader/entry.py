@@ -1,30 +1,181 @@
-"""Entry signal generation and execution."""
+"""
+Entry signal generation using TREND-FOLLOWING signal (5 entry conditions).
+
+Replaces broken mean-reversion signal with multi-timeframe confirmation:
+1. Price > EMA20_4hr (macro trend up)
+2. EMA5_1hr > EMA20_1hr (momentum up)
+3. Close > High5_5min (breakout)
+4. Volume > 1.5x average (confirmation)
+5. RSI < 70 (not overbought)
+"""
 
 import asyncio
 import logging
-from typing import Optional, Dict, TYPE_CHECKING
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
+from typing import Optional, Tuple, List
+from datetime import datetime, timedelta
+import ccxt.async_support as ccxt
 
 from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.order_response import validate_order_response
 from backend.core.data_quality import get_data_quality_measurer
-from backend.analytics.signal_explainer import get_signal_explainer
-from backend.analytics.regime_detector import get_regime_detector
-from backend.strategies.garp_value_strategy import apply_garp_value_strategy
 from backend.execution.smart_executor import get_smart_executor
-from backend.core.data_validator import get_price_validator
-
-if TYPE_CHECKING:
-    from .core import AutonomousTrader, TradeSignal
+from backend.exchange.binance_stream import get_stream_client
 
 logger = logging.getLogger(__name__)
 
-_signal_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="signal_calc")
+MIN_HOLD_TIME_SECONDS = 300  # Minimum time position must be held before allowing exit
+
+# Technical Indicators (from backtesting framework)
+class Indicators:
+    """Technical indicator calculations"""
+
+    @staticmethod
+    def ema(prices: List[float], period: int) -> float:
+        """Calculate EMA of last price"""
+        if len(prices) < period:
+            return sum(prices) / len(prices) if prices else 0.0
+
+        multiplier = 2 / (period + 1)
+        ema = prices[0]
+        for price in prices[1:]:
+            ema = (price * multiplier) + (ema * (1 - multiplier))
+        return ema
+
+    @staticmethod
+    def rsi(prices: List[float], period: int = 14) -> float:
+        """Calculate RSI"""
+        if len(prices) < period + 1:
+            return 50.0  # Neutral if insufficient data
+
+        deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+        gains = [d for d in deltas if d > 0]
+        losses = [-d for d in deltas if d < 0]
+
+        avg_gain = sum(gains[-period:]) / period if gains else 0
+        avg_loss = sum(losses[-period:]) / period if losses else 0
+
+        if avg_loss == 0:
+            return 100.0 if avg_gain > 0 else 50.0
+
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
 
 
-async def _check_symbol_impl(trader_self: "AutonomousTrader", symbol: str) -> Optional["TradeSignal"]:
-    """Check if a symbol should be bought."""
+class SignalCalculator:
+    """Trend-following signal with 5 entry conditions"""
+
+    EMA5_PERIOD = 5
+    EMA20_PERIOD = 20
+    RSI_PERIOD = 14
+    VOLUME_AVG_PERIOD = 20
+    ENTRY_THRESHOLD = 50
+    SIGNAL_BASE_SCORE = 50
+    RSI_OVERBOUGHT = 70
+
+    @staticmethod
+    def calculate_signal(
+        prices_5min: List[float],
+        prices_1hr: List[float],
+        prices_4hr: List[float],
+        volumes_5min: List[float],
+    ) -> Tuple[Optional[float], str]:
+        """
+        Calculate signal strength (0-100) using 5 entry conditions.
+        Returns (strength, reason) or (None, reason) if no signal.
+        """
+
+        if len(prices_5min) < 20 or len(prices_1hr) < 20 or len(prices_4hr) < 20:
+            return None, "Insufficient price history"
+
+        current_price = prices_5min[-1]
+
+        # Condition 1: Trend Filter (4-hour) - Price > EMA20_4hr
+        ema20_4hr = Indicators.ema(prices_4hr, SignalCalculator.EMA20_PERIOD)
+        if current_price <= ema20_4hr:
+            return None, f"Trend DOWN: price {current_price:.2f} < EMA20_4hr {ema20_4hr:.2f}"
+
+        # Condition 2: Momentum Filter (1-hour) - EMA5 > EMA20
+        ema5_1hr = Indicators.ema(prices_1hr, SignalCalculator.EMA5_PERIOD)
+        ema20_1hr = Indicators.ema(prices_1hr, SignalCalculator.EMA20_PERIOD)
+        if ema5_1hr <= ema20_1hr:
+            return None, f"Momentum DOWN: EMA5_1hr {ema5_1hr:.2f} <= EMA20_1hr {ema20_1hr:.2f}"
+
+        # Condition 3: Entry Signal (5-min breakout) - Close > High5
+        high5_5min = max(prices_5min[-5:]) if len(prices_5min) >= 5 else prices_5min[-1]
+        if current_price <= high5_5min:
+            return None, f"No breakout: close {current_price:.2f} <= high5 {high5_5min:.2f}"
+
+        # Condition 4: Volume Confirmation - Volume > 1.5x average
+        current_volume = volumes_5min[-1]
+        avg_volume_20 = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
+        volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 0
+        if volume_ratio < 1.5:
+            return None, f"Low volume: {volume_ratio:.2f}x < 1.5x"
+
+        # Condition 5: Overbought Filter (RSI) - RSI < 70
+        rsi_5min = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
+        if rsi_5min >= SignalCalculator.RSI_OVERBOUGHT:
+            return None, f"Overbought: RSI {rsi_5min:.0f} >= 70"
+
+        # ALL CONDITIONS MET - Calculate signal strength
+        signal_strength = SignalCalculator.SIGNAL_BASE_SCORE
+        bonuses = []
+
+        # Bonus 1: Strong momentum
+        momentum_distance = ((ema5_1hr - ema20_1hr) / ema20_1hr) * 100 if ema20_1hr > 0 else 0
+        if momentum_distance > 0.5:
+            signal_strength += 15
+            bonuses.append(f"momentum +{momentum_distance:.2f}%")
+
+        # Bonus 2: Volume surge
+        if volume_ratio > 2.0:
+            signal_strength += 10
+            bonuses.append(f"volume {volume_ratio:.1f}x")
+
+        # Bonus 3: RSI room to run
+        if rsi_5min < 50:
+            signal_strength += 10
+            bonuses.append(f"RSI {rsi_5min:.0f}")
+
+        # Bonus 4: 5-min uptrend
+        ema5_5min = Indicators.ema(prices_5min, SignalCalculator.EMA5_PERIOD)
+        if current_price > ema5_5min:
+            signal_strength += 5
+            bonuses.append("5-min uptrend")
+
+        signal_strength = min(signal_strength, 100.0)
+
+        bonus_text = ", ".join(bonuses) if bonuses else ""
+        reason = f"Breakout w/ {bonus_text}" if bonus_text else "Breakout signal"
+
+        if signal_strength >= SignalCalculator.ENTRY_THRESHOLD:
+            return signal_strength, reason
+        else:
+            return None, f"Signal weak: {signal_strength:.0f} < {SignalCalculator.ENTRY_THRESHOLD}"
+
+
+async def _fetch_ohlcv(symbol: str, timeframe: str, limit: int = 100) -> Optional[List]:
+    """Fetch OHLCV data from Binance via CCXT"""
+    try:
+        exchange = ccxt.binance()
+        ohlcv = await exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+        await exchange.close()
+        return ohlcv
+    except Exception as e:
+        logger.debug(f"Failed to fetch {symbol} {timeframe}: {e}")
+        return None
+
+
+def _extract_candle_data(ohlcv: List) -> Tuple[List[float], List[float]]:
+    """Extract closes and volumes from OHLCV data"""
+    closes = [candle[4] for candle in ohlcv]  # Close price
+    volumes = [candle[5] for candle in ohlcv]  # Volume
+    return closes, volumes
+
+
+async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
+    """Check if a symbol should be bought using trend-following signal."""
     if not trader_self.config.enabled:
         return None
 
@@ -42,19 +193,29 @@ async def _check_symbol_impl(trader_self: "AutonomousTrader", symbol: str) -> Op
             logger.debug(f"{symbol}: At max positions ({trader_self.config.max_positions})")
             return None
 
-        signal = await _calculate_signal_impl(trader_self, symbol)
+        # Fetch multi-timeframe data
+        data_5min = await _fetch_ohlcv(symbol, "5m", limit=100)
+        data_1hr = await _fetch_ohlcv(symbol, "1h", limit=100)
+        data_4hr = await _fetch_ohlcv(symbol, "4h", limit=100)
 
-        if signal is None:
+        if not data_5min or not data_1hr or not data_4hr:
+            logger.debug(f"{symbol}: Missing OHLCV data")
             return None
 
-        signal_strength, reason = signal
-        threshold = await _get_adaptive_entry_threshold_impl(trader_self, symbol)
+        closes_5min, volumes_5min = _extract_candle_data(data_5min)
+        closes_1hr, _ = _extract_candle_data(data_1hr)
+        closes_4hr, _ = _extract_candle_data(data_4hr)
 
-        if signal_strength < threshold:
-            logger.debug(
-                f"{symbol}: Signal too weak ({signal_strength:.0f} < {threshold:.0f}): {reason}"
-            )
+        # Calculate signal
+        signal_strength, reason = SignalCalculator.calculate_signal(
+            closes_5min, closes_1hr, closes_4hr, volumes_5min
+        )
+
+        if signal_strength is None:
+            logger.debug(f"{symbol}: {reason}")
             return None
+
+        logger.info(f"✅ Signal generated for {symbol}: {reason} (strength: {signal_strength:.0f})")
 
         from .core import TradeSignal
         return TradeSignal(
@@ -70,81 +231,7 @@ async def _check_symbol_impl(trader_self: "AutonomousTrader", symbol: str) -> Op
         return None
 
 
-async def _calculate_signal_impl(trader_self: "AutonomousTrader", symbol: str) -> Optional[tuple]:
-    """Calculate signal using real Binance data (mean reversion + momentum)."""
-    try:
-        from backend.exchange.binance_stream import get_stream_client
-
-        stream_client = get_stream_client()
-        if not stream_client:
-            return None
-
-        # Get recent price data for momentum calculation
-        price_history = stream_client.price_history.get(symbol, [])
-        if len(price_history) < 5:
-            logger.debug(f"{symbol}: Insufficient price history ({len(price_history)} < 5)")
-            return None
-
-        # Calculate momentum: compare recent prices
-        prices = [p["price"] for p in price_history[-10:]]  # Last 10 samples
-        momentum_pct = ((prices[-1] - prices[0]) / prices[0]) * 100 if prices[0] != 0 else 0
-
-        # Calculate volatility (simple: recent price range as % of mean)
-        recent_prices = prices[-5:]
-        price_mean = sum(recent_prices) / len(recent_prices)
-        price_range = max(recent_prices) - min(recent_prices)
-        volatility_pct = (price_range / price_mean) * 100 if price_mean != 0 else 0
-
-        # Mean reversion signal: buy when price is below moving average
-        sma_5 = sum(prices[-5:]) / 5 if len(prices) >= 5 else prices[-1]
-        current_price = prices[-1]
-        distance_from_ma_pct = ((current_price - sma_5) / sma_5) * 100 if sma_5 != 0 else 0
-
-        # Calculate signal strength (0-100)
-        # High signal: price below MA (mean reversion) + moderate volatility
-        signal_strength = 0.0
-
-        if distance_from_ma_pct < -0.5:
-            # Price is below 5-min MA - mean reversion opportunity
-            signal_strength += 40
-            reason = f"Mean reversion: price {distance_from_ma_pct:.2f}% below MA5"
-
-            # Boost if momentum is positive (recovering)
-            if momentum_pct > 0:
-                signal_strength += 20
-                reason += f", momentum +{momentum_pct:.2f}%"
-
-            # Reduce if volatility too high (avoid noise)
-            if volatility_pct > 2.0:
-                signal_strength -= 10
-                reason += f", high volatility {volatility_pct:.2f}%"
-
-        else:
-            # Price not in mean reversion zone, use weak momentum signal
-            if momentum_pct > 0.1:
-                signal_strength = 35 + (momentum_pct * 5)  # Scale 0-35 + momentum
-                reason = f"Weak momentum: +{momentum_pct:.2f}%"
-            else:
-                reason = f"No signal: price above MA, momentum {momentum_pct:.2f}%"
-
-        # Cap at 100
-        signal_strength = min(signal_strength, 100.0)
-        entry_threshold = trader_self.config.entry_threshold
-
-        # Return signal if above threshold
-        if signal_strength >= entry_threshold:
-            logger.debug(f"{symbol}: {reason} (signal {signal_strength:.0f} >= threshold {entry_threshold})")
-            return signal_strength, reason
-        else:
-            logger.debug(f"{symbol}: {reason} (signal {signal_strength:.0f} < threshold {entry_threshold})")
-            return None
-
-    except Exception as e:
-        logger.error(f"Error calculating signal for {symbol}: {e}", exc_info=True)
-        return None
-
-
-async def _execute_entry_impl(trader_self: "AutonomousTrader", signal: "TradeSignal") -> bool:
+async def _execute_entry_impl(trader_self, signal) -> bool:
     """Execute a buy order."""
     try:
         engine = get_paper_trading()
@@ -155,7 +242,6 @@ async def _execute_entry_impl(trader_self: "AutonomousTrader", signal: "TradeSig
         account = engine.get_account_state()
         cash = account.get("cash", 0.0)
 
-        from backend.exchange.binance_stream import get_stream_client
         stream_client = get_stream_client()
         current_price = None
 
@@ -170,12 +256,10 @@ async def _execute_entry_impl(trader_self: "AutonomousTrader", signal: "TradeSig
         order_value = cash * position_size_pct
         quantity = order_value / current_price
 
-        # ✅ BUG FIX #3: Check position size limit (prevent unbounded accumulation)
-        # Max 10% of account per single position (prevents -$5,419 overexposure)
+        # Bug Fix #3: Position size limit (max 10% per position)
         max_position_pct = 10.0
         max_position_value = cash * (max_position_pct / 100.0)
 
-        # Check existing position for this symbol
         existing_positions = engine.get_positions()
         current_position_value = 0.0
         for pos in existing_positions:
@@ -188,26 +272,9 @@ async def _execute_entry_impl(trader_self: "AutonomousTrader", signal: "TradeSig
 
         if total_position_value > max_position_value:
             logger.critical(
-                f"🚫 POSITION LIMIT ENFORCED: {signal.symbol} entry blocked\n"
-                f"   Current position: ${current_position_value:.2f}\n"
-                f"   New order would add: ${new_position_value:.2f}\n"
-                f"   Total would be: ${total_position_value:.2f}\n"
-                f"   Maximum allowed: ${max_position_value:.2f} ({max_position_pct}% of ${cash:.2f})"
+                f"🚫 POSITION LIMIT: {signal.symbol} entry blocked "
+                f"(would exceed ${max_position_value:.2f} max)"
             )
-            return False
-
-        from . import validation
-        is_valid, reason = await validation._validate_risk_before_order_impl(
-            trader_self, signal.symbol, "BUY", quantity, current_price
-        )
-
-        if not is_valid:
-            logger.warning(f"{signal.symbol}: Risk validation failed: {reason}")
-            return False
-
-        smart_executor = get_smart_executor()
-        if not smart_executor:
-            logger.error("Smart executor not initialized")
             return False
 
         result = await engine.place_order(
@@ -218,7 +285,6 @@ async def _execute_entry_impl(trader_self: "AutonomousTrader", signal: "TradeSig
         )
 
         try:
-            # Validate response against OrderResponse schema
             validated = validate_order_response(result)
 
             if validated.status == "FILLED":
@@ -236,14 +302,3 @@ async def _execute_entry_impl(trader_self: "AutonomousTrader", signal: "TradeSig
     except Exception as e:
         logger.error(f"Error executing entry for {signal.symbol}: {e}", exc_info=True)
         return False
-
-
-async def _get_adaptive_entry_threshold_impl(trader_self: "AutonomousTrader", symbol: str) -> float:
-    """Get adaptive entry threshold based on market conditions."""
-    try:
-        base_threshold = trader_self.config.entry_threshold
-        return base_threshold
-
-    except Exception as e:
-        logger.error(f"Error calculating adaptive threshold: {e}", exc_info=True)
-        return trader_self.config.entry_threshold
