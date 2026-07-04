@@ -49,6 +49,17 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
                     )
                     continue
 
+            # ✅ GUARDRAIL: Force exit positions held >10 minutes (prevent black swan overnight risk)
+            MAX_HOLD_TIME_SECONDS = 600  # 10 minutes
+            if hold_time >= MAX_HOLD_TIME_SECONDS:
+                logger.critical(
+                    f"🔴 FORCED EXIT (10-min timeout): {symbol} held {hold_time:.1f}s >= {MAX_HOLD_TIME_SECONDS}s. Closing position."
+                )
+                current_price = stream_client.price_cache.get(symbol)
+                if current_price:
+                    await _execute_exit_impl(trader_self, position, current_price, "10-minute timeout")
+                continue
+
             current_price = stream_client.price_cache.get(symbol)
 
             if not current_price:

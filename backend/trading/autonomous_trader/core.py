@@ -492,8 +492,26 @@ class AutonomousTrader:
 
                     await portfolio._check_portfolio_decisions_impl(self)
 
+                # ✅ GUARDRAIL: Check daily loss limit and halt entries if exceeded (2% threshold)
+                daily_loss_halt_enabled = False
+                if engine:
+                    account = engine.get_account_state()
+                    daily_pnl = account.get("daily_pnl", 0.0)
+                    equity = account.get("total_equity", 1000.0)
+                    daily_loss_pct = abs(daily_pnl) / equity * 100 if daily_pnl < 0 else 0.0
+
+                    if daily_loss_pct >= 2.0:
+                        logger.critical(
+                            f"🔴 DAILY LOSS LIMIT HIT ({daily_loss_pct:.1f}% >= 2.0%): "
+                            f"Halting all new entries for 24 hours. Current P&L: ${daily_pnl:.2f}"
+                        )
+                        daily_loss_halt_enabled = True
+                        skip_entries = True
+                        alert_mgr = get_alert_manager()
+                        await alert_mgr.alert_daily_loss_limit_exceeded(daily_pnl, 2.0)
+
                 # Monitor symbols for entry signals
-                if not skip_entries:
+                if not skip_entries and not daily_loss_halt_enabled:
                     from . import entry
 
                     for symbol in self.config.symbols:
