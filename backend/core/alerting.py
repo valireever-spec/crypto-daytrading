@@ -27,6 +27,21 @@ class AlertManager:
         self.slack_webhook = os.getenv("SLACK_WEBHOOK_URL", "")
         self.email_enabled = os.getenv("EMAIL_ALERTS_ENABLED", "false").lower() == "true"
         self.alert_queue = []
+        # Telegram configuration
+        self._telegram_token_val = os.getenv("ALERT_TELEGRAM_BOT_TOKEN", "").strip()
+        self._telegram_chat_id_val = os.getenv("ALERT_TELEGRAM_CHAT_ID", "").strip()
+
+    def _telegram_token(self) -> str:
+        """Get Telegram bot token."""
+        return self._telegram_token_val
+
+    def _telegram_chat_id(self) -> str:
+        """Get Telegram chat ID."""
+        return self._telegram_chat_id_val
+
+    def is_telegram_configured(self) -> bool:
+        """Check if Telegram is properly configured."""
+        return bool(self._telegram_token() and self._telegram_chat_id())
 
     async def alert_circuit_breaker_open(self, reason: str) -> bool:
         """Alert that circuit breaker has opened."""
@@ -34,6 +49,8 @@ class AlertManager:
             message = f"🚨 CIRCUIT BREAKER OPENED: {reason}"
             logger.critical(message)
             await self._send_slack_alert(message, "danger")
+            if self.is_telegram_configured():
+                await self._send_telegram_alert(message, "danger")
             return True
         except Exception as e:
             logger.error(f"Failed to send circuit breaker alert: {e}")
@@ -45,6 +62,8 @@ class AlertManager:
             message = f"🚨 PRIMARY UNHEALTHY: {reason}"
             logger.critical(message)
             await self._send_slack_alert(message, "danger")
+            if self.is_telegram_configured():
+                await self._send_telegram_alert(message, "danger")
             return True
         except Exception as e:
             logger.error(f"Failed to send primary health alert: {e}")
@@ -58,6 +77,8 @@ class AlertManager:
             message = f"🛑 DAILY LOSS LIMIT EXCEEDED: €{abs(daily_pnl):.2f} ({limit_pct:.1f}% limit)"
             logger.critical(message)
             await self._send_slack_alert(message, "danger")
+            if self.is_telegram_configured():
+                await self._send_telegram_alert(message, "danger")
             return True
         except Exception as e:
             logger.error(f"Failed to send loss limit alert: {e}")
@@ -69,6 +90,8 @@ class AlertManager:
             message = f"⚠️ DATA QUALITY CRITICAL: {score:.0f}% (threshold: 30%)"
             logger.warning(message)
             await self._send_slack_alert(message, "warning")
+            if self.is_telegram_configured():
+                await self._send_telegram_alert(message, "warning")
             return True
         except Exception as e:
             logger.error(f"Failed to send data quality alert: {e}")
@@ -91,6 +114,8 @@ class AlertManager:
             message = f"🛑 STOP LOSS HIT: {symbol} ({pnl_pct:.2f}%)"
             logger.warning(message)
             await self._send_slack_alert(message, "warning")
+            if self.is_telegram_configured():
+                await self._send_telegram_alert(message, "warning")
             return True
         except Exception as e:
             logger.error(f"Failed to send stop loss alert: {e}")
@@ -140,6 +165,50 @@ class AlertManager:
             logger.error(f"Error sending Slack alert: {e}")
             return False
 
+    async def _send_telegram_alert(self, message: str, severity: str = "info") -> bool:
+        """Send alert to Telegram."""
+        if not self.is_telegram_configured():
+            logger.debug("Telegram not configured, skipping alert")
+            return False
+
+        try:
+            import aiohttp
+
+            token = self._telegram_token()
+            chat_id = self._telegram_chat_id()
+
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            payload = {
+                "chat_id": chat_id,
+                "text": message,
+                "parse_mode": "HTML"
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        logger.info(f"✅ Telegram alert sent: {message[:50]}...")
+                        return True
+                    else:
+                        logger.error(f"❌ Telegram alert failed: HTTP {resp.status}")
+                        return False
+        except Exception as e:
+            logger.error(f"Error sending Telegram alert: {e}")
+            return False
+
+    async def test_telegram(self) -> Dict[str, bool]:
+        """Test Telegram configuration."""
+        if not self.is_telegram_configured():
+            return {"success": False, "error": "Telegram not configured"}
+
+        test_msg = "🧪 Test message from crypto-daytrading backup"
+        result = await self._send_telegram_alert(test_msg, "info")
+        return {"success": result}
+
 
 # Global instance
 _alert_manager: Optional[AlertManager] = None
@@ -163,5 +232,11 @@ def init_alert_manager() -> AlertManager:
     else:
         logger.warning(
             "⚠️ Slack alerts disabled (set SLACK_WEBHOOK_URL to enable)"
+        )
+    if _alert_manager.is_telegram_configured():
+        logger.info("✅ Telegram alerts enabled")
+    else:
+        logger.warning(
+            "⚠️ Telegram alerts disabled (set ALERT_TELEGRAM_BOT_TOKEN and ALERT_TELEGRAM_CHAT_ID to enable)"
         )
     return _alert_manager
