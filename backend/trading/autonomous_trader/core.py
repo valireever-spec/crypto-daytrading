@@ -22,10 +22,7 @@ from backend.trading.portfolio_decision_coordinator import (
 from backend.core.data_quality import get_data_quality_measurer
 from backend.core.data_validator import get_price_validator
 from backend.core.circuit_breaker import get_circuit_breaker
-from backend.exchange.binance_stream_resilience import (
-    get_websocket_resilience,
-    init_websocket_resilience,
-)
+from backend.exchange.binance_stream import get_stream_client
 from backend.core.alerting import get_alert_manager
 
 # Hardening modules (Phase 1 Safety)
@@ -202,20 +199,11 @@ class AutonomousTrader:
         self.running = True
         logger.info("Autonomous trader starting with Phase 1 hardening active...")
 
-        # Initialize WebSocket resilience layer (automatic recovery)
-        ws_resilience = init_websocket_resilience(
-            symbols=self.config.symbols,
-            max_age_seconds=5.0,
-        )
-        logger.info("✅ WebSocket resilience layer initialized")
-
         try:
             await self._trading_loop()
         except Exception as e:
             logger.error(f"Autonomous trader error: {e}", exc_info=True)
             self.running = False
-        finally:
-            await ws_resilience.stop_monitoring()
 
     async def stop(self):
         """Stop the autonomous trading loop."""
@@ -338,15 +326,15 @@ class AutonomousTrader:
                         stream_client.is_connected, last_update_age
                     )
 
-                # Check WebSocket resilience (NEW: automatic recovery)
-                ws_resilience = get_websocket_resilience()
-                ws_health = ws_resilience.check_health()
+                # Check WebSocket health (unified system)
+                stream_client_unified = get_stream_client()
+                ws_health = stream_client_unified.check_health() if stream_client_unified else {}
 
                 # ✅ BUG FIX #4: HARD GATE - Stop trading if WebSocket is stale >30 seconds
                 # (prevents trades on stale/wrong prices)
                 # Filter out infinity values (streams with no data yet) - only check actual ages
                 finite_ages = [
-                    s['age_seconds'] for s in ws_health.get("all_streams", [])
+                    s['age_seconds'] for s in ws_health.get("stale_streams", [])
                     if s['age_seconds'] != float('inf')
                 ]
                 websocket_age_seconds = max(finite_ages) if finite_ages else 0
@@ -372,13 +360,12 @@ class AutonomousTrader:
                     )
                     logger.warning(f"⚠️  WebSocket stale prices: {stale_str}")
 
-                    # If >50% of streams stale, trigger recovery
+                    # If >50% of streams stale, alert and record circuit breaker event
                     stale_pct = len(ws_health["stale_streams"]) / ws_health["total_streams"]
                     if stale_pct > 0.5:
-                        logger.critical(f"🔴 >50% of streams stale, triggering WebSocket recovery")
-                        await ws_resilience.trigger_reconnection(f"Stale streams: {stale_str}")
+                        logger.critical(f"🔴 >50% of streams stale, circuit breaker should activate")
                         alert_mgr = get_alert_manager()
-                        await alert_mgr.alert_primary_unhealthy(f"WebSocket recovery triggered: {stale_str}")
+                        await alert_mgr.alert_primary_unhealthy(f"WebSocket stale >50%: {stale_str}")
 
                 # Check circuit breaker
                 circuit_breaker_open = not circuit_breaker.check_health()
