@@ -11,94 +11,101 @@
 Entry threshold: RSI < 25 or price < middle_bb
 Stop loss: 0.5%
 Profit target: +2.0%
-Win rate: 35% (optimistic)
+Win rate: 35% (claimed)
 Slippage: -0.5% (typical crypto)
 
-Expected Value = (0.35 × 2.0%) - (0.65 × 0.5%) - 0.5%
-               = 0.70% - 0.325% - 0.5%
-               = -0.125% per trade  ❌ NEGATIVE
+CORRECT CALCULATION:
+- Win: +2.0% - 0.5% slippage = +1.5% net
+- Loss: -0.5% + 0.5% avoided = -1.0% net
+- Expected Value = (0.35 × 1.5%) - (0.65 × 1.0%)
+                 = 0.525% - 0.65%
+                 = -0.125% per trade  ❌ LOSING
+
+35% win rate is BELOW breakeven. You need 50%+ to be profitable.
 ```
 
-**Problem:** Even at 35% win rate, strategy loses money due to slippage in low-volatility markets.
+**Problem:** Even at 35% win rate, strategy loses money. The old momentum strategy (52% WR) IS profitable, but only if we focus on what makes it win.
 
 ---
 
-## NEW MATH (POSITIVE EXPECTANCY) ✅
+## OPTION A: UPTREND ONLY (IMPLEMENTED) ✅
 
-### Changes Made
+### What We Changed
 
 1. **MIN_BB_WIDTH_PCT: 0.1% → 0.5%**
-   - Filters out dead markets (0.1-0.3% width)
-   - In dead markets: slippage (1.5-2%) > profit target (2%)
-   - Only trade in real volatility (0.5%+ width)
+   - Filters out dead markets where slippage > profit
+   - Only trade real volatility (0.5%+ BB width)
 
 2. **Uptrend Entry: price < middle_bb → price > EMA20**
-   - Old: Almost never triggered (requires deep pullback + still in trend)
-   - New: Triggers 3-5x per hour (buy pullbacks within uptrend)
-   - Higher entry frequency = more opportunities
+   - Old: 1 entry/hour (too strict, almost never triggers)
+   - New: 3-5 entries/hour (pullbacks within uptrend)
+   - MACD > 0 ensures we're only in uptrends
 
-3. **Ranging Entry: DISABLED**
+3. **Ranging Entry: DISABLED** ✅ (This is critical)
    - Reason: Mean-reversion fails in crypto crashes
-   - RSI < 25 doesn't guarantee bounce (could crash to RSI 5)
-   - Focus on uptrends only (momentum > mean-reversion)
+   - RSI < 25 doesn't mean bounce is coming
+   - Crashes continue 20-50% further
+   - **This is why we need 50%+ win rate, not 35%**
 
-4. **RSI Threshold: 30-50 → < 70**
-   - Old: 30-50 is too tight (RSI is noisy, < 30 happens 8-10x/hour)
-   - New: Just avoid extreme overbought (> 70)
-   - Allows more entries, filters extreme cases only
+4. **Focus: Uptrend momentum only**
+   - Same as what made the OLD momentum strategy work (52% WR)
+   - Just with better entry timing and volatility filtering
 
-### New Expected Value
+### The Correct Math for Option A
 
-**Assumptions (Conservative):**
-- Win rate: 35% (from old momentum strategy that was proven to work)
-- Profit target: +1.5% (reduced from 2% to be safe)
-- Stop loss: 0.5% (keeps losses small)
-- Slippage: -0.3% (in real volatility markets, not dead zones)
-- Entries: 3-4/hour (increased from 1/hour with old logic)
+**Win Rate Breakeven Analysis:**
 
-```
-Expected Value = (0.35 × 1.5%) - (0.65 × 0.5%) - 0.3%
-               = 0.525% - 0.325% - 0.3%
-               = -0.1%  (marginal, but with higher frequency...)
-```
+| Win Rate | Expected Value | Status |
+|----------|---|---|
+| 40% | (0.40 × 1.5%) - (0.60 × 1.0%) = -0.15% | ❌ Losing |
+| 50% | (0.50 × 1.5%) - (0.50 × 1.0%) = +0.25% | ✅ Viable |
+| 55% | (0.55 × 1.5%) - (0.45 × 1.0%) = +0.425% | ✅ Good |
+| 60% | (0.60 × 1.5%) - (0.40 × 1.0%) = +0.5% | ✅ Excellent |
 
-**Better approach: Increase win rate**
+**Key insight:** With uptrend-only + disabled ranging, the old momentum strategy's **52% historical win rate becomes the validation target**, not 35%.
 
-If we assume the OLD momentum strategy's **proven 52% historical win rate** transfers:
-```
-Expected Value = (0.52 × 1.5%) - (0.48 × 0.5%) - 0.3%
-               = 0.78% - 0.24% - 0.3%
-               = +0.24% per trade  ✅ POSITIVE
-```
+### Realistic Expectation for Validation
 
-At 3-4 entries/hour × 24h = 72-96 trades/day
-× 0.24% = **+0.17% to +0.23% daily P&L**
+**If uptrend-only logic works like the old momentum strategy:**
+- Win rate: 50-55% (momentum uptrend success rate)
+- Entries: 3-4/hour × 24h = 72-96 trades/day
+- Expected daily P&L: +0.18% to +0.40% per trade
+- Accumulation: Profitable within 24 hours
+
+**Validation Pass Threshold:**
+- ✅ **WIN RATE ≥ 50%** = Strategy is profitable
+- ⚠️ **45-50%** = Marginal, depends on exact numbers
+- ❌ **< 45%** = Strategy fails, needs redesign
 
 ---
 
-## Validation Target
+## Validation Target (CORRECTED)
 
-**What We Need to Prove:**
-- Win rate ≥ 35% (to break even with slippage)
-- Entry frequency ≥ 2/hour (to accumulate wins over time)
-- Average win > 1.0% (to cover slippage + commissions)
+**What We ACTUALLY Need to Prove:**
+- **Win rate ≥ 50%** (breakeven is 50%, not 35%)
+- Entry frequency ≥ 3/hour (to accumulate enough sample size in 24h)
+- Average win ≥ 1.5% (net of slippage)
 
-**If we achieve these:**
-- +0.3% daily → +7.5% monthly (on paper, sustainable)
-- Live trading: -5% daily loss limit triggers at 20 losing trades per day
-- Safety: Circuit breaker stops trading if win rate < 30% observed
+**If we achieve 50%+ win rate:**
+- +0.25% daily minimum → +6% monthly sustainable
+- 72-96 trades/day gives sufficient sample size for validation
+- Safety: Circuit breaker halts if live trading shows < 45% WR
+
+**Critical:** 35% win rate is BELOW breakeven and will show losses in validation. The strategy only works if we achieve what the old momentum strategy achieved: 50-55% win rate.
 
 ---
 
 ## Key Metrics to Track During Validation
 
-| Metric | Target | Threshold | Alert |
-|--------|--------|-----------|-------|
-| Win Rate | 35%+ | 30% | Fails if <20% |
-| Entry Frequency | 3-4/hr | 2/hr | Fails if <1/hr |
-| Avg Slippage | <0.3% | 0.5% | High if >0.5% |
-| Avg Win Size | >1.0% | 0.8% | Marginal if <0.8% |
-| Daily P&L | +0.1% | 0% | Circuit breaks if -5% |
+| Metric | Target | Pass | Fail |
+|--------|--------|------|------|
+| **Win Rate** | **50%+** | ✅ ≥ 50% (profitable) | ❌ < 45% (below breakeven) |
+| Entry Frequency | 3-5/hr | ✅ ≥ 3/hr | ❌ < 2/hr (too sparse) |
+| Avg Slippage | < 0.3% | ✅ < 0.3% | ❌ > 0.5% (dead markets) |
+| Avg Win Size | > 1.5% net | ✅ > 1.5% | ❌ < 1.0% (stops too tight) |
+| Daily P&L | +0.2% min | ✅ Positive | ❌ Negative (losing) |
+
+**HARD RULE:** If win rate < 50%, the math shows losses. 35% is not viable. Only uptrend momentum strategy (50-55% WR) works.
 
 ---
 
