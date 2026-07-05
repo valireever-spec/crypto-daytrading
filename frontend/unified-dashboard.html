@@ -402,6 +402,7 @@
 
     <div class="nav-tabs" id="nav-tabs">
         <button class="tab-button active" data-tab="dashboard">📊 Dashboard</button>
+        <button class="tab-button" data-tab="alerts">🚨 Alerts</button>
         <button class="tab-button" data-tab="market">📈 Market Status</button>
         <button class="tab-button" data-tab="strategies">🎯 Strategies</button>
         <button class="tab-button" data-tab="autonomous">🤖 Autonomous Trader</button>
@@ -411,6 +412,18 @@
     </div>
 
     <div class="container">
+        <!-- ALERTS TAB -->
+        <div id="alerts" class="tab-content">
+            <div class="grid full">
+                <div class="card">
+                    <h2>🚨 Critical System Alerts</h2>
+                    <div id="alerts-list" style="min-height: 200px;">
+                        <div style="color: #999; padding: 20px; text-align: center;">Loading alerts...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- DASHBOARD TAB -->
         <div id="dashboard" class="tab-content active">
             <div id="dashboard-content">
@@ -1217,7 +1230,76 @@ function validateResponse(response, requiredFields = []) {
 
         async function refreshAll() {
             // Use Promise.allSettled so one failure doesn't break the UI
-            await Promise.allSettled([refreshDashboard(), refreshMarket(), refreshHealth(), refreshAutonomous()]);
+            await Promise.allSettled([refreshDashboard(), refreshMarket(), refreshHealth(), refreshAutonomous(), updateAlerts()]);
+        }
+
+        async function updateAlerts() {
+            try {
+                const health = await fetch('/api/health').then(r => r.json()).catch(() => ({}));
+                const autonomous = await fetch('/api/autonomous/status').then(r => r.json()).catch(() => ({}));
+
+                const alerts = [];
+
+                // Check 1: Trading Halt (circuit breaker)
+                if (health.circuit_breaker && health.circuit_breaker.state === 'OPEN') {
+                    alerts.push({
+                        level: 'CRITICAL',
+                        title: '🛑 TRADING HALTED',
+                        message: health.circuit_breaker.trip_reason || 'Unknown reason',
+                        icon: '🛑'
+                    });
+                }
+
+                // Check 2: HA Sync Issues
+                if (health.websocket_health && !health.websocket_health.overall_healthy) {
+                    alerts.push({
+                        level: 'HIGH',
+                        title: '⚠️ WebSocket Issues',
+                        message: `${health.websocket_health.stale_streams?.length || 0} streams stale`,
+                        icon: '⚠️'
+                    });
+                }
+
+                // Check 3: Status Info
+                if (autonomous.enabled && autonomous.account_state?.active_positions === 0) {
+                    alerts.push({
+                        level: 'INFO',
+                        title: 'ℹ️ Waiting for Entry Signals',
+                        message: 'Momentum strategy: RSI < 50 or Volume < 1.2x',
+                        icon: 'ℹ️'
+                    });
+                }
+
+                if (alerts.length === 0) {
+                    alerts.push({
+                        level: 'OK',
+                        title: '✅ All Systems Healthy',
+                        message: 'No critical alerts',
+                        icon: '✅'
+                    });
+                }
+
+                // Render alerts
+                const alertsList = document.getElementById('alerts-list');
+                if (alertsList) {
+                    alertsList.innerHTML = alerts.map(alert => `
+                        <div style="padding: 12px; margin: 8px 0; border-left: 4px solid ${
+                            alert.level === 'CRITICAL' ? '#f44336' :
+                            alert.level === 'HIGH' ? '#ff9800' :
+                            alert.level === 'INFO' ? '#2196F3' : '#4CAF50'
+                        }; background: ${
+                            alert.level === 'CRITICAL' ? '#ffebee' :
+                            alert.level === 'HIGH' ? '#fff3e0' :
+                            alert.level === 'INFO' ? '#e3f2fd' : '#f1f8f4'
+                        };">
+                            <div style="font-weight: bold; color: #333;">${alert.title}</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 4px;">${alert.message}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Alert update error:', error);
+            }
         }
 
         async function refreshDashboard() {
