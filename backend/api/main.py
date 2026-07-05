@@ -214,6 +214,33 @@ async def health_check() -> JSONResponse:
         )
 
 
+@app.post("/api/test-telegram")
+async def test_telegram() -> JSONResponse:
+    """Test Telegram configuration by sending a test message."""
+    try:
+        from backend.core.alerting import get_alert_manager
+
+        alert_mgr = get_alert_manager()
+        result = await alert_mgr.test_telegram()
+
+        if result.get("success"):
+            return JSONResponse(
+                status_code=200,
+                content={"status": "success", "message": "Test Telegram message sent"}
+            )
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "failed", "error": result.get("error", "Unknown error")}
+            )
+    except Exception as e:
+        logger.error(f"Telegram test failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
 @app.get("/api/paper/account")
 async def get_paper_account() -> JSONResponse:
     """Get paper trading account state."""
