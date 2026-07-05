@@ -147,7 +147,7 @@ class SignalCalculatorRegimeAware:
     RSI_DIPSUPPORT_UPTREND = 40
     RSI_PROFIT_UPTREND = 70
 
-    MIN_BB_WIDTH_PCT = 0.3  # Consolidation zone (0.3-0.4% BB width) is normal & tradeable, avoids 0.1% dead markets
+    MIN_BB_WIDTH_PCT = 0.25  # Sweet spot: catches consolidations (0.25-0.4%) while avoiding dead markets (<0.15%)
     MAX_BB_WIDTH_PCT = 5.0
 
     MIN_VOLUME_SPIKE = 1.2
