@@ -30,6 +30,9 @@ class AlertManager:
         # Telegram configuration
         self._telegram_token_val = os.getenv("ALERT_TELEGRAM_BOT_TOKEN", "").strip()
         self._telegram_chat_id_val = os.getenv("ALERT_TELEGRAM_CHAT_ID", "").strip()
+        # Alert deduplication: track last alert time per symbol to prevent spam
+        self._last_alert_time = {}  # {symbol: timestamp}
+        self._alert_cooldown_seconds = 60  # Don't send same alert more than once per 60s
 
     def _telegram_token(self) -> str:
         """Get Telegram bot token."""
@@ -42,6 +45,17 @@ class AlertManager:
     def is_telegram_configured(self) -> bool:
         """Check if Telegram is properly configured."""
         return bool(self._telegram_token() and self._telegram_chat_id())
+
+    def _should_send_alert(self, symbol: str) -> bool:
+        """Check if we should send an alert for this symbol (deduplication)."""
+        import time
+        now = time.time()
+        last_time = self._last_alert_time.get(symbol, 0)
+        elapsed = now - last_time
+        if elapsed >= self._alert_cooldown_seconds:
+            self._last_alert_time[symbol] = now
+            return True
+        return False
 
     async def alert_circuit_breaker_open(self, reason: str) -> bool:
         """Alert that circuit breaker has opened."""
@@ -113,6 +127,12 @@ class AlertManager:
         try:
             message = f"🛑 STOP LOSS HIT: {symbol} ({pnl_pct:.2f}%)"
             logger.warning(message)
+
+            # Deduplication: only send alert once per 60 seconds per symbol
+            if not self._should_send_alert(f"stop_loss_{symbol}"):
+                logger.debug(f"Skipping alert for {symbol} (already sent within 60s)")
+                return False
+
             await self._send_slack_alert(message, "warning")
             if self.is_telegram_configured():
                 await self._send_telegram_alert(message, "warning")
