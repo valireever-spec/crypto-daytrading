@@ -467,26 +467,11 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
             conn = None
             try:
                 import sqlite3
-                conn = sqlite3.connect(db.db_path)
-                conn.execute("BEGIN TRANSACTION")
+                # BACKUP-safe sync: Skip database writes (avoid SQLite locking with PRIMARY)
+                # BACKUP only needs in-memory state synced; PRIMARY maintains persistent DB
+                machine_id = os.getenv("MACHINE_ID", "main")
 
-                # Clear positions inside transaction (can be rolled back)
-                conn.execute("DELETE FROM open_positions WHERE status = 'OPEN'")
-
-                # Insert all positions inside transaction
-                for pos in synced_positions:
-                    db.insert_position(
-                        symbol=pos["symbol"],
-                        quantity=pos["quantity"],
-                        entry_price=pos["entry_price"],
-                        entry_time=pos["entry_time"]
-                    )
-
-                # Commit transaction if we got here (no errors)
-                conn.commit()
-                logger.debug("✅ Position sync committed (atomic transaction)")
-
-                # NOW update in-memory cache (only after successful DB commit)
+                # Update in-memory cache (works on PRIMARY or BACKUP)
                 engine.positions.clear()
                 from backend.exchange.paper_trading import Position
                 for pos in synced_positions:
@@ -499,14 +484,36 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
                         current_price=pos["current_price"]
                     )
 
+                # Only write to database on PRIMARY (avoids SQLite locking on BACKUP)
+                if machine_id == "main":
+                    conn = sqlite3.connect(db.db_path)
+                    try:
+                        conn.execute("BEGIN TRANSACTION")
+                        # Clear positions inside transaction (can be rolled back)
+                        conn.execute("DELETE FROM open_positions WHERE status = 'OPEN'")
+                        # Insert all positions inside transaction
+                        for pos in synced_positions:
+                            db.insert_position(
+                                symbol=pos["symbol"],
+                                quantity=pos["quantity"],
+                                entry_price=pos["entry_price"],
+                                entry_time=pos["entry_time"]
+                            )
+                        # Commit transaction if we got here (no errors)
+                        conn.commit()
+                        logger.debug("✅ Position sync committed to DB (PRIMARY only)")
+                    except Exception as tx_err:
+                        conn.rollback()
+                        logger.error(f"Sync transaction rolled back: {tx_err}")
+                        raise tx_err
+                    finally:
+                        conn.close()
+                else:
+                    logger.debug("🔄 Skipping DB write on BACKUP (in-memory state synced)")
+
             except Exception as tx_err:
-                if conn:
-                    conn.rollback()  # Rollback all changes on error
-                    logger.error(f"Sync transaction rolled back: {tx_err}")
+                logger.error(f"Sync failed: {tx_err}")
                 raise tx_err
-            finally:
-                if conn:
-                    conn.close()
 
             # Update cash and P&L (atomic, simple assignments)
             if "cash" in state:
