@@ -360,16 +360,18 @@ class AutonomousTrader:
                 if websocket_too_stale:
                     logger.critical(
                         f"🔴 HARD GATE TRIGGERED: WebSocket data stale {websocket_age_seconds:.1f}s > 30s safety threshold\n"
-                        f"   No trades allowed until WebSocket recovers\n"
-                        f"   Entries: BLOCKED | Exits: BLOCKED"
+                        f"   Entries: BLOCKED (won't trade on stale prices)\n"
+                        f"   Exits: ALLOWED (positions must close to limit losses)"
                     )
                     alert_mgr = get_alert_manager()
                     await alert_mgr.alert_primary_unhealthy(
-                        f"WebSocket stale {websocket_age_seconds:.1f}s, trading halted"
+                        f"WebSocket stale {websocket_age_seconds:.1f}s, new entries blocked but exits allowed"
                     )
-                    # Skip both entries and exits due to stale data
+                    # ✅ CRITICAL FIX: Allow exits on stale prices (safer than holding)
+                    # Entering on stale prices = risky (might buy high)
+                    # Exiting on stale prices = safe (closes losing positions, limits losses)
                     skip_entries = True
-                    quality_gate_pass_exit = False
+                    quality_gate_pass_exit = True  # ← ALLOW EXITS to close positions
 
                 if ws_health["stale_streams"]:
                     stale_str = ", ".join(
