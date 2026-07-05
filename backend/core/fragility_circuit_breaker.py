@@ -19,6 +19,7 @@ class FragilityThresholds:
     exit_check_failures_threshold = 10  # failures in 60 seconds
     ha_sync_failures_threshold = 5      # failures in 60 seconds
     websocket_stale_threshold = 10      # seconds
+    sync_divergence_threshold = 300     # 5 minutes - max time BACKUP can be unsynced
 
 
 class FragilityCircuitBreaker:
@@ -35,6 +36,7 @@ class FragilityCircuitBreaker:
 
         # HA sync tracking
         self.sync_failures = []  # [(timestamp, error)]
+        self.last_sync_success = time.time()  # Track when BACKUP was last successfully synced
 
         # WebSocket staleness tracking
         self.websocket_stale_since = None
@@ -97,6 +99,35 @@ class FragilityCircuitBreaker:
 
         return self.halted
 
+    def record_sync_success(self):
+        """Record successful BACKUP sync."""
+        self.last_sync_success = time.time()
+
+    def check_sync_divergence(self) -> bool:
+        """Check if BACKUP has been unsynced for too long, halt if exceeded.
+
+        Prevents silent divergence: if PRIMARY keeps trading while BACKUP is unsynced
+        for >5 minutes, BACKUP state could be 35+ minutes stale (as documented in
+        /tmp/HA_SYNC_BUG_ANALYSIS.md). If PRIMARY crashes during divergence, failover
+        uses wrong data and causes overleveraging.
+
+        This ensures: if sync is offline >5 minutes, HALT trading rather than
+        accumulate silent divergence.
+
+        Returns: True if trading should be halted
+        """
+        now = time.time()
+        divergence_seconds = now - self.last_sync_success
+
+        if divergence_seconds > self.thresholds.sync_divergence_threshold:
+            self._halt(f"BACKUP sync offline for {int(divergence_seconds)}s (threshold: {self.thresholds.sync_divergence_threshold}s) - preventing silent divergence")
+            return True
+
+        if divergence_seconds > 180:  # Warn at 3 minutes
+            logger.warning(f"⚠️ BACKUP sync offline for {int(divergence_seconds)}s (max allowed: {self.thresholds.sync_divergence_threshold}s)")
+
+        return self.halted
+
     def is_halted(self) -> bool:
         """Check if trading is halted."""
         return self.halted
@@ -125,6 +156,7 @@ class FragilityCircuitBreaker:
         self.halt_time = None
         self.exit_failures = []
         self.sync_failures = []
+        self.last_sync_success = time.time()  # Reset divergence timer
         self.websocket_stale_since = None
 
 

@@ -359,6 +359,9 @@ async def lifespan(app: FastAPI):
                             logger.debug(f"✅ Synced to BACKUP (HTTP): {len(state['positions'])} positions, €{state['cash']:.2f} cash")
                             sync_succeeded = True
                             consecutive_failures = 0
+                            # Record successful sync to prevent divergence detection
+                            breaker = get_fragility_breaker()
+                            breaker.record_sync_success()
                     except Exception as http_err:
                         logger.debug(f"HTTP sync failed: {http_err}")
 
@@ -371,6 +374,9 @@ async def lifespan(app: FastAPI):
                         logger.info(f"✅ Synced to BACKUP (SSH tunnel): {len(state['positions'])} positions, €{state['cash']:.2f} cash")
                         sync_succeeded = True
                         consecutive_failures = 0
+                        # Record successful sync to prevent divergence detection
+                        breaker = get_fragility_breaker()
+                        breaker.record_sync_success()
                     else:
                         consecutive_failures += 1
                         logger.warning(f"⚠️  Both HTTP and SSH sync failed ({consecutive_failures}x) - BACKUP state may diverge, but PRIMARY trading continues (BACKUP is passive-only)")

@@ -36,7 +36,7 @@ from backend.core.rate_limiter import RateLimiter
 from backend.core.ha_deduplication import HADeduplicator
 from backend.core.database_persistence import get_database_persistence
 from backend.core.clock_sync import ClockSyncMonitor
-from backend.core.fragility_circuit_breaker import should_halt_trading
+from backend.core.fragility_circuit_breaker import should_halt_trading, get_fragility_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +262,15 @@ class AutonomousTrader:
                 should_halt, halt_reason = should_halt_trading()
                 if should_halt:
                     logger.critical(f"🛑 TRADING HALTED: {halt_reason}")
+                    await asyncio.sleep(5)
+                    continue
+
+                # TIER 2: Check for HA sync divergence (prevent silent divergence)
+                # If BACKUP hasn't been synced for >5 minutes, halt trading
+                # This prevents the 35+ minute divergence scenario documented in HA_SYNC_BUG_ANALYSIS.md
+                breaker = get_fragility_breaker()
+                if breaker.check_sync_divergence():
+                    logger.critical(f"🛑 TRADING HALTED: {breaker.get_halt_reason()}")
                     await asyncio.sleep(5)
                     continue
 
