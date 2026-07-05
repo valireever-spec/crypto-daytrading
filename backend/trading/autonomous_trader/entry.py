@@ -1,15 +1,16 @@
 """
-Entry signal generation using MOMENTUM STRATEGY (ported from investing-platform).
+Entry signal generation using SMA CROSSOVER STRATEGY (proven from investing-platform).
 
-Adapted for crypto 5-minute trading from proven stock strategy.
-Entry: Price above both fast MA (EMA12) AND slow MA (EMA26) AND RSI > 50
-Exit: Price drops below fast MA, hit stop loss, or trailing stop (handled in exit.py)
+Simplest possible trend-following: Buy when fast MA crosses above slow MA.
+Entry: SMA5 > SMA20 (fast MA above slow MA = uptrend)
+Exit: SMA5 <= SMA20 (downtrend), hit stop loss, or time-based (handled in exit.py)
 
-Why momentum works:
-- Rides existing trends without fighting the market
-- Entry only when uptrend is confirmed (price above both MAs)
-- Simple, objective rules (no parameter tuning needed)
-- Proven to work on stocks (52% win rate), adapting to crypto
+Why SMA crossover works:
+- Objective, mechanical rule (no guesswork)
+- Works in trending markets (crypto often trends)
+- Avoids complexity that leads to overfitting
+- Simple = less likely to have hidden bugs
+- Historical success on stocks, adapting to 5-min crypto
 """
 
 import asyncio
@@ -66,12 +67,10 @@ class Indicators:
 
 
 class SignalCalculator:
-    """Momentum strategy - ride trends when confirmed by multiple indicators"""
+    """SMA Crossover strategy - simplest possible trend-following"""
 
-    EMA_SHORT = 12  # Fast EMA for trend confirmation (intraday standard)
-    EMA_LONG = 26   # Slow EMA for trend confirmation (intraday standard)
-    RSI_PERIOD = 14
-    RSI_THRESHOLD = 50  # Entry only if RSI > 50 (momentum, not oversold)
+    SMA_FAST = 5    # Fast SMA for quick trend detection
+    SMA_SLOW = 20   # Slow SMA for trend confirmation
     ENTRY_THRESHOLD = 50  # Signal strength threshold
 
     @staticmethod
@@ -82,77 +81,50 @@ class SignalCalculator:
         volumes_5min: List[float],
     ) -> Tuple[Optional[float], str]:
         """
-        MOMENTUM STRATEGY - Buy when price above both MAs and momentum is positive.
+        SMA CROSSOVER STRATEGY - Buy when fast SMA crosses above slow SMA.
         Returns (strength, reason) or (None, reason) if no signal.
 
-        Entry Rules (must all be true):
-        1. Price > EMA12 (fast moving average crossed up)
-        2. Price > EMA26 (slow moving average crossed up)
-        3. EMA12 > EMA26 (fast MA above slow MA = uptrend)
-        4. RSI > 50 (positive momentum, not oversold)
+        Entry Rule (must be true):
+        - SMA5 > SMA20 (fast SMA above slow SMA = uptrend)
 
-        Rationale:
-        - This is proven to work: 52% win rate on stocks historically
-        - Avoids false bottoms by requiring uptrend confirmation
-        - Won't trigger on crashes, only on established moves
+        That's it. One rule. Simplicity is power.
+
+        Why this works:
+        - Mechanical, objective rule (no ambiguity)
+        - Proven historically on stocks (SMA crossover is classic)
+        - Works in trending markets (crypto often trends)
+        - Simple = fewer bugs, fewer hidden issues
+        - Avoids over-optimization that leads to overfitting
         """
 
-        if len(prices_5min) < SignalCalculator.EMA_LONG + 1:
+        if len(prices_5min) < SignalCalculator.SMA_SLOW:
             return None, "Insufficient price history"
 
-        current_price = prices_5min[-1]
+        # Calculate SMAs
+        sma_fast = sum(prices_5min[-SignalCalculator.SMA_FAST:]) / SignalCalculator.SMA_FAST
+        sma_slow = sum(prices_5min[-SignalCalculator.SMA_SLOW:]) / SignalCalculator.SMA_SLOW
 
-        # Calculate EMAs on 5-minute data
-        ema_short = Indicators.ema(prices_5min, SignalCalculator.EMA_SHORT)
-        ema_long = Indicators.ema(prices_5min, SignalCalculator.EMA_LONG)
+        # ONLY RULE: Fast SMA > Slow SMA (uptrend)
+        if sma_fast <= sma_slow:
+            return None, f"Downtrend: SMA5 {sma_fast:.2f} <= SMA20 {sma_slow:.2f}"
 
-        # CONDITION 1: Price > both EMAs (above trend lines)
-        if current_price <= ema_short or current_price <= ema_long:
-            return None, f"Price below MA: {current_price:.2f} vs EMA12 {ema_short:.2f}, EMA26 {ema_long:.2f}"
+        # RULE MET - Calculate signal strength based on trend strength
+        # How far is SMA5 above SMA20? (more = stronger trend)
+        gap_pct = ((sma_fast - sma_slow) / sma_slow) * 100
+        signal_strength = 50 + (gap_pct * 10)  # 10 points per 0.1% gap
+        signal_strength = min(signal_strength, 100.0)  # Cap at 100
 
-        # CONDITION 2: Short EMA > Long EMA (uptrend)
-        if ema_short <= ema_long:
-            return None, f"No uptrend: EMA12 {ema_short:.2f} <= EMA26 {ema_long:.2f}"
+        # Optional: Volume bonus (but not required for entry)
+        bonuses = [f"SMA5/SMA20: {gap_pct:.2f}%"]
 
-        # CONDITION 3: RSI > 50 (momentum, not oversold/overbought extremes)
-        rsi_5min = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
-        if rsi_5min < SignalCalculator.RSI_THRESHOLD:
-            return None, f"No momentum: RSI {rsi_5min:.0f} < {SignalCalculator.RSI_THRESHOLD}"
-
-        # ALL CONDITIONS MET - Calculate signal strength
-        signal_strength = 60  # Base score for valid momentum setup
-
-        bonuses = []
-
-        # Bonus: Strong uptrend (EMA gap widening)
-        ema_gap_pct = ((ema_short - ema_long) / ema_long) * 100
-        if ema_gap_pct > 1.0:
-            signal_strength += 15
-            bonuses.append(f"strong trend +{ema_gap_pct:.1f}%")
-        elif ema_gap_pct > 0.5:
-            signal_strength += 8
-            bonuses.append(f"trend +{ema_gap_pct:.1f}%")
-
-        # Bonus: Strong momentum (RSI > 60)
-        if rsi_5min > 60:
-            signal_strength += 10
-            bonuses.append(f"RSI {rsi_5min:.0f}")
-        elif rsi_5min > 55:
-            signal_strength += 5
-            bonuses.append(f"RSI {rsi_5min:.0f}")
-
-        # Bonus: Volume confirmation
         current_volume = volumes_5min[-1]
         avg_volume_20 = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
         volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1.0
         if volume_ratio >= 1.5:
-            signal_strength += 10
+            signal_strength += 15
             bonuses.append(f"vol {volume_ratio:.1f}x")
 
-        signal_strength = min(signal_strength, 100.0)
-
-        bonus_text = ", ".join(bonuses) if bonuses else "momentum confirmed"
-        reason = f"Momentum ({bonus_text})"
+        reason = f"SMA Crossover ({', '.join(bonuses)})"
 
         if signal_strength >= SignalCalculator.ENTRY_THRESHOLD:
             return signal_strength, reason
