@@ -166,7 +166,13 @@ class AlertManager:
             return False
 
     async def _send_telegram_alert(self, message: str, severity: str = "info") -> bool:
-        """Send alert to Telegram."""
+        """Send alert to Telegram (PRIMARY only - BACKUP is passive)."""
+        # Only PRIMARY machine sends alerts (BACKUP is passive and shouldn't alert)
+        machine_id = os.getenv("MACHINE_ID", "main")
+        if machine_id != "main":
+            logger.debug(f"Skipping alert on {machine_id} (alerts only sent from PRIMARY)")
+            return False
+
         if not self.is_telegram_configured():
             logger.debug("Telegram not configured, skipping alert")
             return False
