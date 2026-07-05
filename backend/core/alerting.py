@@ -130,7 +130,7 @@ class AlertManager:
                 f"📍 ENTRY: {symbol} ({utc_time})\n"
                 f"   Price: ${entry_price:.2f}\n"
                 f"   Qty: {quantity:.4f}\n"
-                f"   Value: €{position_value:.2f}\n"
+                f"   Value: ${position_value:.2f}\n"
                 f"   Cash Left: €{remaining_cash:.2f}\n"
                 f"   Signal: {signal_reason}"
             )
@@ -163,7 +163,7 @@ class AlertManager:
 
             message = (
                 f"{emoji} EXIT: {symbol} ({utc_time})\n"
-                f"   P&L: €{pnl:.2f} ({pnl_pct:+.2f}%)\n"
+                f"   P&L: ${pnl:.2f} ({pnl_pct:+.2f}%)\n"
                 f"   Cash: €{remaining_cash:.2f}\n"
                 f"   Hold: {hold_min}m {hold_sec}s\n"
                 f"   Record: {self.winning_trades}W / {self.losing_trades}L ({win_rate:.0f}%)"
