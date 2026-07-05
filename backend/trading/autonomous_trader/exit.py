@@ -38,6 +38,7 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
 
             # ✅ BUG FIX #1: Check minimum hold time FIRST (prevents 5-10 second exits)
             entry_time = position.get("entry_time")
+            hold_time = 0  # Initialize to 0 to avoid UnboundLocalError
             if entry_time:
                 if isinstance(entry_time, str):
                     entry_time = datetime.fromisoformat(entry_time)
@@ -51,7 +52,7 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
 
             # ✅ GUARDRAIL: Force exit positions held >10 minutes (prevent black swan overnight risk)
             MAX_HOLD_TIME_SECONDS = 600  # 10 minutes
-            if hold_time >= MAX_HOLD_TIME_SECONDS:
+            if hold_time > 0 and hold_time >= MAX_HOLD_TIME_SECONDS:
                 logger.critical(
                     f"🔴 FORCED EXIT (10-min timeout): {symbol} held {hold_time:.1f}s >= {MAX_HOLD_TIME_SECONDS}s. Closing position."
                 )
