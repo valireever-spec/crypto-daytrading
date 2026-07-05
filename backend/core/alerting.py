@@ -295,7 +295,9 @@ class AlertManager:
         if not self.is_telegram_configured():
             return {"success": False, "error": "Telegram not configured"}
 
-        test_msg = "🧪 Test message from crypto-daytrading backup"
+        machine_id = os.getenv("MACHINE_ID", "main")
+        machine_label = "PRIMARY" if machine_id == "main" else "BACKUP"
+        test_msg = f"🧪 Test alert from {machine_label} (crypto-daytrading)"
         result = await self._send_telegram_alert(test_msg, "info")
         return {"success": result}
 
