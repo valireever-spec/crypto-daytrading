@@ -20,6 +20,7 @@ Baseline was: Momentum 1.2%, Mean-reversion 0%
 
 import asyncio
 import logging
+import time
 from typing import Optional, Tuple, List
 from datetime import datetime, timedelta
 import ccxt.async_support as ccxt
@@ -254,7 +255,7 @@ class SignalCalculatorRegimeAware:
             )
 
         # ALL CHECKS PASSED
-        distance_pct = ((ema20 - current_price) / current_price) * 100
+        distance_pct = ((ema20 - current_price) / current_price * 100) if current_price > 0 else 0
         strength = 50 + min(50, distance_pct * 20)
         strength = min(100, max(0, strength))
 
@@ -357,7 +358,7 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             return None
 
         # Throttle OHLCV fetches to prevent WebSocket staleness
-        current_time = asyncio.get_event_loop().time()
+        current_time = time.monotonic()
         last_fetch = _last_fetch_time.get(symbol, 0)
         if current_time - last_fetch < OHLCV_FETCH_THROTTLE_SECONDS:
             logger.debug(f"{symbol}: Skipping fetch (throttled, < {OHLCV_FETCH_THROTTLE_SECONDS}s since last)")
@@ -421,11 +422,11 @@ async def _execute_entry_impl(trader_self, signal) -> bool:
             logger.warning(f"{signal.symbol}: No current price, cannot execute entry")
             return False
 
-        position_size_pct = 0.5 / 100.0
+        position_size_pct = trader_self.config.position_size_pct / 100.0
         order_value = cash * position_size_pct
         quantity = order_value / current_price
 
-        max_position_pct = 0.5
+        max_position_pct = trader_self.config.position_size_pct
         max_position_value = cash * (max_position_pct / 100.0)
 
         existing_positions = engine.get_positions()

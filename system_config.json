@@ -1,5 +1,5 @@
 {
-  "entry_threshold": 65,
+  "entry_threshold": 55,
   "exit_profit_target": 2.0,
   "exit_stop_loss": 1.0,
   "max_positions": 8,
@@ -9,5 +9,13 @@
   "websocket_reconnect_max_attempts": 5,
   "websocket_max_backoff": 60,
   "enabled": true,
-  "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT"
+  ],
+  "quality_gate_entry": 75,
+  "quality_gate_exit": 60,
+  "retry_sleep_seconds": 5,
+  "loop_sleep_seconds": 10
 }

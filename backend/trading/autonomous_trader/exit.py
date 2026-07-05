@@ -94,33 +94,6 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
             quantity = position["quantity"]
             pnl_pct = (current_price - entry_price) / entry_price * 100
 
-            # ✅ MEAN-REVERSION: Check for overbought exit (RSI > 70)
-            # Get recent price history for RSI calculation
-            from backend.trading.autonomous_trader.entry import Indicators
-
-            price_cache = stream_client.price_cache_history.get(symbol, [])
-            if price_cache and len(price_cache) >= 15:
-                rsi = Indicators.rsi(price_cache[-100:], 14)
-                if rsi > 70:
-                    logger.info(
-                        f"✅ RSI OVERBOUGHT {symbol}: {rsi:.0f} > 70 (mean-reversion exit)"
-                    )
-                    await _execute_exit_impl(
-                        trader_self, position, current_price, "RSI overbought"
-                    )
-                    # Alert on overbought exit
-                    from backend.core.alerting import get_alert_manager
-                    alert_mgr = get_alert_manager()
-                    engine = get_paper_trading()
-                    if engine:
-                        account = engine.get_account_state()
-                        remaining_cash = account.get("cash", 0.0)
-                        realized_pnl = position["quantity"] * (current_price - position["entry_price"])
-                        await alert_mgr.alert_trade_exit(
-                            symbol, realized_pnl, pnl_pct, remaining_cash, hold_time, is_win=(pnl_pct > 0)
-                        )
-                    continue
-
             if pnl_pct >= trader_self.config.exit_profit_target:
                 logger.info(
                     f"✅ PROFIT TARGET HIT {symbol}: {pnl_pct:.2f}% >= "

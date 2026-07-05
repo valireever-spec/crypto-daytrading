@@ -69,7 +69,7 @@ class HealthChecker:
                 try:
                     with open(path, "r"):
                         return path
-                except:
+                except (FileNotFoundError, IOError):
                     pass
             return None
 
@@ -197,7 +197,7 @@ class HealthChecker:
                         entry = json.loads(line)
                         last_recon = entry.get("timestamp")
                         break
-                    except:
+                    except (json.JSONDecodeError, ValueError):
                         pass
 
             self.checks[machine]["position_sync"] = {
@@ -320,7 +320,7 @@ class HealthChecker:
                         metrics = entry.get("metrics", {})
                         if metrics:
                             break
-                    except:
+                    except (json.JSONDecodeError, ValueError):
                         pass
 
             if metrics:

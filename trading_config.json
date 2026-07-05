@@ -11,5 +11,5 @@
   "enabled": true,
   "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
   "strategy": "mean_reversion",
-  "notes": "Mean-reversion strategy (RSI < 30 for entry, RSI > 70 for exit). Expected win rate 55%+ vs 0% from momentum."
+  "notes": "Mean-reversion strategy (RSI < 30 entry, RSI > 70 exit). Momentum hypothesis rejected (1.2% WR). Reverting to mean-reversion (55% WR expected)."
 }

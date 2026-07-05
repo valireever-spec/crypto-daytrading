@@ -722,7 +722,7 @@ async def receive_heartbeat(request: dict):
         # Parse JSON from request
         try:
             data = await request.json() if isinstance(request, FastAPIRequest) else request
-        except:
+        except (ValueError, RuntimeError, TypeError):
             data = request  # Already parsed if called from lifespan
 
         # Verify it's from PRIMARY
@@ -790,13 +790,13 @@ async def get_ha_status():
         try:
             sender = get_bidirectional_heartbeat_sender()
             sender_stats = sender.get_stats() if sender else None
-        except:
+        except Exception:
             pass
 
         try:
             monitor = get_bidirectional_heartbeat_monitor()
             monitor_stats = monitor.get_stats() if monitor else None
-        except:
+        except Exception:
             pass
 
         return JSONResponse({

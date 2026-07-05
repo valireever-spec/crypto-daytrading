@@ -94,11 +94,11 @@ class TradingConfig:
     """
 
     enabled: bool = True
-    entry_threshold: float = 60.0
-    exit_profit_target: float = 3.0
-    exit_stop_loss: float = 3.0
-    position_size_pct: float = 2.5
-    max_positions: int = 8
+    entry_threshold: float = 25.0  # Regime-aware v2: RSI < 25 for ranging, uptrend confluence
+    exit_profit_target: float = 2.0  # 2% target (was 3%)
+    exit_stop_loss: float = 0.5  # 0.5% tight stop (was 3%)
+    position_size_pct: float = 0.5  # 0.5% per position (was 2.5%)
+    max_positions: int = 4  # Max 4 concurrent (was 8)
     max_daily_loss_pct: float = 5.0
     symbols: List[str] = None
     loop_sleep_seconds: float = 10.0
@@ -223,16 +223,19 @@ class AutonomousTrader:
             from backend.core.runtime_config import get_config_manager
             new_config = get_config_manager().get_config()
 
-            # Check if config changed
+            # Check if config changed (including quality gates for momentum fix)
             if (new_config.entry_threshold != self.config.entry_threshold or
                 new_config.exit_profit_target != self.config.exit_profit_target or
                 new_config.exit_stop_loss != self.config.exit_stop_loss or
                 new_config.max_positions != self.config.max_positions or
+                new_config.quality_gate_entry != self.config.quality_gate_entry or
+                new_config.quality_gate_exit != self.config.quality_gate_exit or
                 new_config.enabled != self.config.enabled):
 
                 logger.info(
                     f"♻️  Configuration updated (hot-reload): "
                     f"entry_threshold {self.config.entry_threshold}→{new_config.entry_threshold}, "
+                    f"quality_gate_entry {self.config.quality_gate_entry}→{new_config.quality_gate_entry}, "
                     f"exit_profit {self.config.exit_profit_target:.3f}→{new_config.exit_profit_target:.3f}, "
                     f"enabled {self.config.enabled}→{new_config.enabled}"
                 )
@@ -416,13 +419,12 @@ class AutonomousTrader:
                     await alert_mgr.alert_circuit_breaker_open(cb_status["reason"])
 
                 # Check HA health (Pillar #8: Failover Health)
-                # CRITICAL FIX: Only PRIMARY trades (no split-brain possible)
-                # BACKUP is purely passive/read-only
                 machine_id = os.getenv("MACHINE_ID", "main")
 
-                # If this is BACKUP machine, don't trade (PRIMARY is sole trader)
+                # BACKUP failover override: if PRIMARY is down, BACKUP becomes active
+                # VALIDATION MODE: BACKUP stays passive, only PRIMARY trades
                 if machine_id == "backup":
-                    logger.debug("BACKUP machine: trading disabled (PRIMARY is sole trader)")
+                    logger.debug("BACKUP machine: passive mode (validation period)")
                     circuit_breaker_open = True
                 else:
                     # PRIMARY continues trading normally
@@ -546,11 +548,12 @@ class AutonomousTrader:
 
                 # Monitor symbols for entry signals
                 if not skip_entries and not daily_loss_halt_enabled:
-                    from . import entry
+                    logger.info(f"Checking entry signals for {self.config.symbols}...")
+                    from . import entry_regime_aware_v2 as entry
 
                     for symbol in self.config.symbols:
                         signal = await entry._check_symbol_impl(self, symbol)
-                        if signal:
+                        if signal and signal.strength >= self.config.entry_threshold:
                             logger.info(
                                 f"✅ Signal generated for {symbol}: {signal.reason}"
                             )
@@ -559,6 +562,8 @@ class AutonomousTrader:
                                 logger.info(f"✅ Entry executed for {symbol}")
                             else:
                                 logger.warning(f"⚠️  Entry execution failed for {symbol}")
+                        elif signal:
+                            logger.debug(f"{symbol}: Signal weak {signal.strength:.0f} < {self.config.entry_threshold}")
                 else:
                     logger.debug(
                         "Skipping entry signals due to data quality gate (<90%)"
