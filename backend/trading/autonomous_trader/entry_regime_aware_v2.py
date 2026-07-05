@@ -147,7 +147,7 @@ class SignalCalculatorRegimeAware:
     RSI_DIPSUPPORT_UPTREND = 40
     RSI_PROFIT_UPTREND = 70
 
-    MIN_BB_WIDTH_PCT = 0.1  # Crypto normal volatility (0.3-0.7% is healthy ranging)
+    MIN_BB_WIDTH_PCT = 0.5  # Only trade in real volatility (not dead markets where slippage > profit)
     MAX_BB_WIDTH_PCT = 5.0
 
     MIN_VOLUME_SPIKE = 1.2
@@ -209,14 +209,13 @@ class SignalCalculatorRegimeAware:
                 macd_line, histogram
             )
 
-        # === RANGING STRATEGY ===
+        # === RANGING STRATEGY - DISABLED ===
+        # CRITICAL: Mean-reversion fails in crypto crashes
+        # RSI < 25 doesn't guarantee bounce—crashes continue 20-50% lower
+        # Risk: Buy at RSI 25 (bottom), asset crashes to RSI 5 (losing 50%+)
+        # Solution: Only trade uptrends where momentum is clear
         elif regime == "ranging":
-            return SignalCalculatorRegimeAware._ranging_signal(
-                prices_5min, prices_1hr, current_price, ema20, sma20,
-                upper_bb, middle_bb, lower_bb,
-                rsi, rsi_1hr, volume_ratio, avg_volume, current_volume,
-                macd_line, histogram
-            )
+            return None, "Ranging regime: Disabled to avoid falling knife catches (crypto crashes don't bounce at BB)"
 
         return None, f"Unknown regime: {regime}"
 
@@ -227,31 +226,35 @@ class SignalCalculatorRegimeAware:
         rsi, rsi_1hr, volume_ratio, avg_volume, current_volume,
         macd_line, histogram
     ) -> Tuple[Optional[float], str]:
-        """UPTREND STRATEGY"""
+        """UPTREND STRATEGY: Buy pullbacks in established uptrends (3-5 entries/hour instead of 1)"""
 
-        if current_price < ema20:
+        # CRITICAL FIX: Was requiring price < middle_bb (almost never happens)
+        # Now: Price > EMA20 (in the uptrend) AND < upper_bb (not overbought)
+        if current_price <= ema20:
             return None, (
-                f"Uptrend but pullback too deep: Price ${current_price:.2f} <= EMA20 ${ema20:.2f}"
+                f"Uptrend rejected: Price ${current_price:.2f} <= EMA20 ${ema20:.2f} (not in uptrend)"
             )
 
-        if current_price >= middle_bb:
+        if current_price >= upper_bb:
             return None, (
-                f"Uptrend but not pulled back: Price ${current_price:.2f} >= Middle BB ${middle_bb:.2f}"
+                f"Uptrend rejected: Price ${current_price:.2f} >= Upper BB ${upper_bb:.2f} (overbought)"
             )
 
         if volume_ratio < 1.1:
             return None, (
-                f"Uptrend but low volume: {volume_ratio:.2f}x avg, need > 1.1x"
+                f"Uptrend rejected: Low volume {volume_ratio:.2f}x avg, need > 1.1x"
             )
 
         if rsi_1hr < 40:
             return None, (
-                f"Uptrend but 1hr RSI too low: {rsi_1hr:.0f} < 40 (trend weakness)"
+                f"Uptrend rejected: 1hr RSI {rsi_1hr:.0f} < 40 (weak trend)"
             )
 
-        if rsi < 30 or rsi > 50:
+        # CRITICAL FIX: Old RSI 30-50 threshold too tight, RSI noise in crypto
+        # New: Just check RSI is not extremely hot (>70 = overbought)
+        if rsi > 70:
             return None, (
-                f"Uptrend RSI out of range: {rsi:.0f} (need 30-50 for dip setup)"
+                f"Uptrend rejected: RSI {rsi:.0f} > 70 (overbought, wait for pullback)"
             )
 
         # ALL CHECKS PASSED
