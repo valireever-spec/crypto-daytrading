@@ -128,10 +128,16 @@ class BiDirectionalHeartbeatSender:
                 if success:
                     self.last_send_time = time.time()
                     self.send_failures = 0
-                    logger.debug(
-                        f"💓 Heartbeat #{self.heartbeat_count} sent "
-                        f"({scenario.value})"
-                    )
+                    if self.heartbeat_count % 30 == 0:  # Log every 30 successful heartbeats
+                        logger.info(
+                            f"💓 Heartbeat #{self.heartbeat_count} sent "
+                            f"({scenario.value})"
+                        )
+                    else:
+                        logger.debug(
+                            f"💓 Heartbeat #{self.heartbeat_count} sent "
+                            f"({scenario.value})"
+                        )
                     self.heartbeat_count += 1
                 else:
                     self.send_failures += 1
@@ -321,11 +327,17 @@ class BiDirectionalHeartbeatMonitor:
         self.heartbeats_received += 1
         self.last_received_scenario = scenario
 
-        logger.debug(
-            f"💓 Heartbeat #{heartbeat_id} received "
-            f"(scenario: {scenario}, state_hash: {state_hash[:8]}..., "
-            f"total: {self.heartbeats_received})"
-        )
+        if self.heartbeats_received % 30 == 0:  # Log every 30 received heartbeats
+            logger.info(
+                f"💓 Heartbeat #{heartbeat_id} received "
+                f"(scenario: {scenario}, total: {self.heartbeats_received})"
+            )
+        else:
+            logger.debug(
+                f"💓 Heartbeat #{heartbeat_id} received "
+                f"(scenario: {scenario}, state_hash: {state_hash[:8]}..., "
+                f"total: {self.heartbeats_received})"
+            )
 
     async def _monitor_loop(self) -> None:
         """Check for heartbeat timeout every N seconds."""
