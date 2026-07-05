@@ -802,7 +802,7 @@ async def get_ha_status():
         return JSONResponse({
             "scenario": info["current_scenario"],
             "backup_endpoint": info["backup_endpoint"],
-            "transitions": {s.value: count for s, count in info["consecutive_fails"].items()},
+            "transitions": info["consecutive_fails"],  # Already string keys
             "last_transition": info["last_transition"],
             "heartbeat_sender": sender_stats,
             "heartbeat_monitor": monitor_stats,
