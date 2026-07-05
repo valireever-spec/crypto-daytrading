@@ -36,6 +36,7 @@ from backend.core.rate_limiter import RateLimiter
 from backend.core.ha_deduplication import HADeduplicator
 from backend.core.database_persistence import get_database_persistence
 from backend.core.clock_sync import ClockSyncMonitor
+from backend.core.fragility_circuit_breaker import should_halt_trading
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +258,13 @@ class AutonomousTrader:
 
         while self.running:
             try:
+                # TIER 2: Check if fragility circuit breaker is active (halt trading)
+                should_halt, halt_reason = should_halt_trading()
+                if should_halt:
+                    logger.critical(f"🛑 TRADING HALTED: {halt_reason}")
+                    await asyncio.sleep(5)
+                    continue
+
                 # Check for configuration updates (hot-reload, every 10 seconds)
                 self._refresh_config()
 

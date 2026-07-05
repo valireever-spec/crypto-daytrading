@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Dict
 from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.order_response import validate_order_response
 from backend.execution.smart_executor import get_smart_executor
+from backend.core.fragility_circuit_breaker import get_fragility_breaker
 
 if TYPE_CHECKING:
     from .core import AutonomousTrader
@@ -112,6 +113,9 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
 
     except Exception as e:
         logger.error(f"Error checking exits: {e}", exc_info=True)
+        # Report to fragility circuit breaker (Tier 2 safeguard)
+        breaker = get_fragility_breaker()
+        breaker.check_exit_failure(str(e))
 
 
 async def _execute_exit_impl(

@@ -14,6 +14,12 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# Import fragility circuit breaker for Tier 2 safeguards
+try:
+    from backend.core.fragility_circuit_breaker import get_fragility_breaker
+except ImportError:
+    get_fragility_breaker = None
+
 
 @dataclass
 class StreamHealth:
@@ -94,6 +100,10 @@ class WebSocketStalenessMonitor:
                     f"triggering reconnect"
                 )
                 stream.is_healthy = False  # Mark as unhealthy to start recovery
+                # Report to Tier 2 fragility circuit breaker
+                if get_fragility_breaker:
+                    breaker = get_fragility_breaker()
+                    breaker.check_websocket_staleness(int(stream.staleness_secs))
                 await self._attempt_reconnect(symbol, stream)
 
     async def _attempt_reconnect(self, symbol: str, stream: StreamHealth):

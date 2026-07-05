@@ -277,6 +277,7 @@ async def lifespan(app: FastAPI):
         """PRIMARY: Periodically sync state to BACKUP with health monitoring."""
         import httpx
         from backend.exchange.paper_trading import get_paper_trading
+        from backend.core.fragility_circuit_breaker import get_fragility_breaker
 
         consecutive_failures = 0
         backup_last_healthy = False
@@ -373,6 +374,9 @@ async def lifespan(app: FastAPI):
                     else:
                         consecutive_failures += 1
                         logger.warning(f"⚠️  Both HTTP and SSH sync failed ({consecutive_failures}x) - BACKUP state may diverge, but PRIMARY trading continues (BACKUP is passive-only)")
+                        # Report to Tier 2 fragility circuit breaker
+                        breaker = get_fragility_breaker()
+                        breaker.check_sync_failure(f"Both HTTP and SSH sync failed ({consecutive_failures}x)")
 
                         # ✅ ARCHITECTURAL FIX: PRIMARY should NOT pause trading on BACKUP sync failure
                         # BACKUP is passive-only replica, so PRIMARY proceeds independently
