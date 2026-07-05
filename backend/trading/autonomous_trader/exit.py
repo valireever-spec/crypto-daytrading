@@ -80,7 +80,6 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
                 )
                 # Alert on profit with account status
                 from backend.core.alerting import get_alert_manager
-                from backend.exchange.paper_trading import get_paper_trading
                 alert_mgr = get_alert_manager()
                 engine = get_paper_trading()
                 if engine:
@@ -101,7 +100,6 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
                 )
                 # Alert on stop loss with account status
                 from backend.core.alerting import get_alert_manager
-                from backend.exchange.paper_trading import get_paper_trading
                 alert_mgr = get_alert_manager()
                 engine = get_paper_trading()
                 if engine:
