@@ -70,6 +70,19 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
                 current_price = stream_client.price_cache.get(symbol)
                 if current_price:
                     await _execute_exit_impl(trader_self, position, current_price, "10-minute timeout")
+                    # Alert on forced timeout exit
+                    from backend.core.alerting import get_alert_manager
+                    alert_mgr = get_alert_manager()
+                    engine = get_paper_trading()
+                    if engine:
+                        account = engine.get_account_state()
+                        remaining_cash = account.get("cash", 0.0)
+                        entry_price = position["entry_price"]
+                        pnl_pct = (current_price - entry_price) / entry_price * 100
+                        realized_pnl = position["quantity"] * (current_price - entry_price)
+                        await alert_mgr.alert_trade_exit(
+                            symbol, realized_pnl, pnl_pct, remaining_cash, hold_time, is_win=(pnl_pct > 0)
+                        )
                 continue
 
             current_price = stream_client.price_cache.get(symbol)
