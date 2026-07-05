@@ -100,8 +100,31 @@ class FragilityCircuitBreaker:
         return self.halted
 
     def record_sync_success(self):
-        """Record successful BACKUP sync."""
+        """Record successful BACKUP sync and auto-recover if halted."""
         self.last_sync_success = time.time()
+        if self.halted and "BACKUP sync offline" in (self.halt_reason or ""):
+            logger.info(f"✅ HA SYNC RECOVERED: Resuming trading")
+            self.halted = False
+            self.halt_reason = None
+
+    def attempt_sync_recovery(self):
+        """Actively attempt to recover BACKUP sync by pinging it.
+
+        Called when sync is offline - tries to reconnect.
+        Returns True if BACKUP responds, False if still offline.
+        """
+        try:
+            import httpx
+            import os
+            backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
+            resp = httpx.get(f"{backup_url}/api/health", timeout=1.0)
+            if resp.status_code == 200:
+                logger.info(f"✅ BACKUP recovered: health check passed")
+                self.last_sync_success = time.time()
+                return True
+        except Exception:
+            pass
+        return False
 
     def check_sync_divergence(self) -> bool:
         """Check if BACKUP has been unsynced for too long, halt if exceeded.

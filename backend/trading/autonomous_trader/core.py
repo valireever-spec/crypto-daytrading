@@ -270,9 +270,14 @@ class AutonomousTrader:
                 # This prevents the 35+ minute divergence scenario documented in HA_SYNC_BUG_ANALYSIS.md
                 breaker = get_fragility_breaker()
                 if breaker.check_sync_divergence():
-                    logger.critical(f"🛑 TRADING HALTED: {breaker.get_halt_reason()}")
-                    await asyncio.sleep(5)
-                    continue
+                    # Actively attempt to recover BACKUP connection
+                    if breaker.attempt_sync_recovery():
+                        logger.info(f"🔄 BACKUP recovered, resuming trading")
+                        breaker.record_sync_success()
+                    else:
+                        logger.critical(f"🛑 TRADING HALTED: {breaker.get_halt_reason()}")
+                        await asyncio.sleep(5)
+                        continue
 
                 # Check for configuration updates (hot-reload, every 10 seconds)
                 self._refresh_config()
