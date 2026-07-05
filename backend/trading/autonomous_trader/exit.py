@@ -37,9 +37,20 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
         for position in positions:
             symbol = position["symbol"]
 
-            # ✅ BUG FIX #1: Check minimum hold time FIRST (prevents 5-10 second exits)
+            # DEFENSIVE: Validate position has required metadata
             entry_time = position.get("entry_time")
-            hold_time = 0  # Initialize to 0 to avoid UnboundLocalError
+            if not entry_time:
+                logger.warning(
+                    f"⚠️ {symbol}: Position missing entry_time metadata. "
+                    f"Position: {position}. This indicates data corruption upstream."
+                )
+                # Report to fragility circuit breaker
+                breaker = get_fragility_breaker()
+                breaker.check_exit_failure(f"Missing entry_time for {symbol}")
+                continue  # Skip this position, don't crash
+
+            # ✅ BUG FIX #1: Check minimum hold time FIRST (prevents 5-10 second exits)
+            hold_time = 0  # Initialize to 0 (safety fallback)
             if entry_time:
                 if isinstance(entry_time, str):
                     entry_time = datetime.fromisoformat(entry_time)
