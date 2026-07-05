@@ -30,9 +30,9 @@ class AlertManager:
         # Telegram configuration
         self._telegram_token_val = os.getenv("ALERT_TELEGRAM_BOT_TOKEN", "").strip()
         self._telegram_chat_id_val = os.getenv("ALERT_TELEGRAM_CHAT_ID", "").strip()
-        # Alert deduplication: track last alert time per symbol to prevent spam
-        self._last_alert_time = {}  # {symbol: timestamp}
-        self._alert_cooldown_seconds = 60  # Don't send same alert more than once per 60s
+        # Alert deduplication: track last alert MESSAGE per symbol (content-aware)
+        # Only send if content changes, not on timer
+        self._last_alert_message = {}  # {symbol: last_message_sent}
 
     def _telegram_token(self) -> str:
         """Get Telegram bot token."""
@@ -46,16 +46,20 @@ class AlertManager:
         """Check if Telegram is properly configured."""
         return bool(self._telegram_token() and self._telegram_chat_id())
 
-    def _should_send_alert(self, symbol: str) -> bool:
-        """Check if we should send an alert for this symbol (deduplication)."""
-        import time
-        now = time.time()
-        last_time = self._last_alert_time.get(symbol, 0)
-        elapsed = now - last_time
-        if elapsed >= self._alert_cooldown_seconds:
-            self._last_alert_time[symbol] = now
-            return True
-        return False
+    def _should_send_alert(self, symbol: str, message: str) -> bool:
+        """
+        Check if we should send an alert (content-aware deduplication).
+        Only send if the message content is DIFFERENT from the last message sent.
+        This prevents repeated alerts for the same condition.
+        """
+        last_msg = self._last_alert_message.get(symbol)
+        if last_msg == message:
+            # Same message as last time - skip it
+            logger.debug(f"Alert deduplication: {symbol} unchanged, skipping")
+            return False
+        # Message is new/different - send it and remember it
+        self._last_alert_message[symbol] = message
+        return True
 
     async def alert_circuit_breaker_open(self, reason: str) -> bool:
         """Alert that circuit breaker has opened."""
@@ -116,10 +120,19 @@ class AlertManager:
         try:
             message = f"✅ PROFIT TARGET HIT: {symbol} ({pnl_pct:.2f}%)"
             logger.info(message)
-            # Don't alert on successful trades (too spammy)
+
+            # Deduplication: only send if message content is DIFFERENT from last message
+            # This prevents repeated alerts for the same position hitting same profit %
+            if not self._should_send_alert(symbol, message):
+                logger.debug(f"Deduplication: {symbol} alert already sent, skipping duplicate")
+                return False
+
+            await self._send_slack_alert(message, "info")
+            if self.is_telegram_configured():
+                await self._send_telegram_alert(message, "info")
             return True
         except Exception as e:
-            logger.error(f"Failed to log profit alert: {e}")
+            logger.error(f"Failed to send profit alert: {e}")
             return False
 
     async def alert_stop_loss_hit(self, symbol: str, pnl_pct: float) -> bool:
@@ -128,9 +141,10 @@ class AlertManager:
             message = f"🛑 STOP LOSS HIT: {symbol} ({pnl_pct:.2f}%)"
             logger.warning(message)
 
-            # Deduplication: only send alert once per 60 seconds per symbol
-            if not self._should_send_alert(f"stop_loss_{symbol}"):
-                logger.debug(f"Skipping alert for {symbol} (already sent within 60s)")
+            # Deduplication: only send if message content is DIFFERENT from last message
+            # This prevents repeated alerts for the same position hitting same loss %
+            if not self._should_send_alert(symbol, message):
+                logger.debug(f"Deduplication: {symbol} alert already sent, skipping duplicate")
                 return False
 
             await self._send_slack_alert(message, "warning")
