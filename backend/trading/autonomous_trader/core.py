@@ -390,13 +390,21 @@ class AutonomousTrader:
                     logger.debug("PRIMARY machine: trading enabled")
                     # No split-brain checks needed - only PRIMARY can trade
 
-                # Differentiated quality gates
-                quality_gate_pass_entry = (
-                    data_quality.overall_score >= self.config.quality_gate_entry
-                )
-                quality_gate_pass_exit = (
-                    data_quality.overall_score >= self.config.quality_gate_exit
-                )
+                # ✅ BUG FIX: Quality gates ONLY set if WebSocket is healthy
+                # If WebSocket is stale, quality_gate_pass_exit must stay False (hard block)
+                # This prevents the overwrite bug where data quality could override staleness check
+                if not websocket_too_stale:
+                    # Only check data quality if WebSocket is fresh
+                    # Differentiated quality gates
+                    quality_gate_pass_entry = (
+                        data_quality.overall_score >= self.config.quality_gate_entry
+                    )
+                    quality_gate_pass_exit = (
+                        data_quality.overall_score >= self.config.quality_gate_exit
+                    )
+                else:
+                    # WebSocket is stale: force both gates to fail (quality_gate_pass_exit already = False)
+                    quality_gate_pass_entry = False
 
                 quality_gate_fail = not quality_gate_pass_entry
                 skip_entries = circuit_breaker_open or quality_gate_fail
