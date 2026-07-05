@@ -568,6 +568,12 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
                 logger.warning(f"⚠️ Equity mismatch after sync: {equity_error:.2f} (may indicate corruption)")
 
             logger.info(f"✅ BACKUP synced atomically: cash={state.get('cash')}, positions={len(synced_positions)}, equity={total_equity:.2f}")
+
+            # CRITICAL: Tell fragility breaker that sync succeeded (prevents divergence detection)
+            from backend.core.fragility_circuit_breaker import get_fragility_breaker
+            breaker = get_fragility_breaker()
+            breaker.record_sync_success()
+
             return JSONResponse({"status": "synced", "timestamp": datetime.now().isoformat()})
 
         except Exception as atomic_err:
