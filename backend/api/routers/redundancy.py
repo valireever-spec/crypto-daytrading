@@ -684,3 +684,133 @@ async def configure_alerts(webhook_url: str):
             else webhook_url,
         }
     )
+
+
+# ============================================================================
+# HA THREE-SCENARIO HEARTBEAT ENDPOINTS (NEW)
+# ============================================================================
+
+@router.post("/api/ha/heartbeat")
+async def receive_heartbeat(request: dict):
+    """BACKUP receives bidirectional heartbeat from PRIMARY.
+
+    Route: /api/ha/heartbeat
+    Method: POST
+    Body: {
+      "timestamp": "2026-07-05T14:30:00.000Z",
+      "heartbeat_id": 1234,
+      "machine_id": "primary",
+      "scenario": "local_network",
+      "state_hash": "abc123..."
+    }
+
+    Response: {
+      "status": "received",
+      "timestamp": "2026-07-05T14:30:00.000Z",
+      "backup_state": {
+        "machine_id": "backup",
+        "promoted": false
+      }
+    }
+    """
+    try:
+        from backend.failover.ha_bidirectional_heartbeat import (
+            get_bidirectional_heartbeat_monitor,
+        )
+        from fastapi import Request as FastAPIRequest
+
+        # Parse JSON from request
+        try:
+            data = await request.json() if isinstance(request, FastAPIRequest) else request
+        except:
+            data = request  # Already parsed if called from lifespan
+
+        # Verify it's from PRIMARY
+        if data.get("machine_id") != "primary":
+            return JSONResponse(
+                {"status": "rejected", "reason": "Invalid machine_id"},
+                status_code=400
+            )
+
+        # Record heartbeat in BACKUP's monitor
+        monitor = get_bidirectional_heartbeat_monitor()
+        monitor.record_heartbeat(
+            heartbeat_id=data.get("heartbeat_id"),
+            scenario=data.get("scenario"),
+            state_hash=data.get("state_hash"),
+        )
+
+        # Response with BACKUP state
+        return JSONResponse({
+            "status": "received",
+            "timestamp": datetime.utcnow().isoformat(),
+            "backup_state": {
+                "machine_id": "backup",
+                "promoted": monitor.promoted,
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Heartbeat reception error: {e}")
+        return JSONResponse(
+            {"status": "error", "detail": str(e)},
+            status_code=500
+        )
+
+
+@router.get("/api/ha/status")
+async def get_ha_status():
+    """Get current HA scenario and orchestrator status.
+
+    Response: {
+      "scenario": "local_network" or "remote_ddns" or "backup_offline",
+      "backup_endpoint": "192.168.3.25" or "r33v3r.ddns.net" or null,
+      "transitions": 2,
+      "last_transition": {
+        "timestamp": "2026-07-05T14:30:00.000Z",
+        "from": "remote_ddns",
+        "to": "local_network"
+      }
+    }
+    """
+    try:
+        from backend.failover.ha_scenario_orchestrator import get_ha_orchestrator
+        from backend.failover.ha_bidirectional_heartbeat import (
+            get_bidirectional_heartbeat_sender,
+            get_bidirectional_heartbeat_monitor,
+        )
+
+        orchestrator = get_ha_orchestrator()
+        info = orchestrator.get_scenario_info()
+
+        # Include heartbeat stats if PRIMARY
+        sender_stats = None
+        monitor_stats = None
+
+        try:
+            sender = get_bidirectional_heartbeat_sender()
+            sender_stats = sender.get_stats() if sender else None
+        except:
+            pass
+
+        try:
+            monitor = get_bidirectional_heartbeat_monitor()
+            monitor_stats = monitor.get_stats() if monitor else None
+        except:
+            pass
+
+        return JSONResponse({
+            "scenario": info["current_scenario"],
+            "backup_endpoint": info["backup_endpoint"],
+            "transitions": {s.value: count for s, count in info["consecutive_fails"].items()},
+            "last_transition": info["last_transition"],
+            "heartbeat_sender": sender_stats,
+            "heartbeat_monitor": monitor_stats,
+        })
+
+    except Exception as e:
+        logger.error(f"HA status error: {e}")
+        return JSONResponse(
+            {"status": "error", "detail": str(e)},
+            status_code=500
+        )

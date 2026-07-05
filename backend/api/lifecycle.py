@@ -271,6 +271,36 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize autonomous trader: {e}")
 
+    # ========== HA THREE-SCENARIO ORCHESTRATOR (NEW) ==========
+    # Initialize HA scenario orchestrator (determines A/B/C connectivity)
+    try:
+        from backend.failover.ha_scenario_orchestrator import (
+            init_ha_orchestrator,
+            ScenarioConfig,
+        )
+
+        ha_config = ScenarioConfig(
+            backup_local_ip="192.168.3.25",
+            backup_local_port=22,
+            backup_ddns_hostname="r33v3r.ddns.net",
+            backup_ddns_port=22,
+            backup_ssh_user="openhabian",
+            local_ping_timeout_ms=1000,
+            ddns_resolve_timeout_ms=2000,
+            ddns_ping_timeout_ms=1000,
+            internet_check_timeout_ms=2000,
+            ddns_retry_interval_seconds=45,
+        )
+        orchestrator = init_ha_orchestrator(ha_config)
+        logger.info(
+            "🎯 HA Scenario Orchestrator initialized "
+            "(A:local IP, B:DDNS, C:offline with 45s retry)"
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize HA orchestrator: {e}")
+        orchestrator = None
+    # ========== End HA THREE-SCENARIO ORCHESTRATOR ==========
+
     # Add sync task for PRIMARY or failover monitor for BACKUP
 
     async def sync_to_backup():
@@ -398,43 +428,31 @@ async def lifespan(app: FastAPI):
                     logger.warning(f"🔴 BACKUP sync error recurring ({consecutive_failures} failures): {e}")
 
     async def failover_monitor():
-        """BACKUP: Monitor PRIMARY health via explicit heartbeat (Skill #3) + HTTP, enable trading on failure."""
+        """BACKUP: Monitor PRIMARY health via bidirectional heartbeat (Skill #3), enable trading on failure."""
         import httpx
         from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
-        from backend.core.heartbeat import init_heartbeat_monitor, get_heartbeat_monitor
-        from backend.failover.explicit_heartbeat import init_explicit_heartbeat_monitor
+        from backend.failover.ha_bidirectional_heartbeat import (
+            get_bidirectional_heartbeat_monitor,
+        )
 
         trader = None
 
-        # Initialize old heartbeat monitor (backward compatibility)
-        monitor = init_heartbeat_monitor(
-            check_interval=constants.HEARTBEAT_CHECK_INTERVAL,
-            failure_threshold=constants.HEARTBEAT_FAILURE_THRESHOLD
-        )
+        # NEW: Bidirectional heartbeat monitor (Skill #3) - scenario-aware routing
+        # Receives heartbeats from PRIMARY at scenario-determined endpoint
+        monitor = get_bidirectional_heartbeat_monitor()
         logger.info(
-            f"💓 BACKUP heartbeat monitor initialized "
-            f"({constants.HEARTBEAT_FAILURE_THRESHOLD} misses = {constants.HEARTBEAT_TIMEOUT_SECONDS}s timeout)"
-        )
-
-        # NEW: Explicit heartbeat monitor (Skill #3) - primary detection method
-        explicit_monitor = init_explicit_heartbeat_monitor()
-        await explicit_monitor.start()
-        logger.info(
-            f"💓 BACKUP explicit heartbeat monitor started (Skill #3) "
-            f"(3 misses = 6s failover, interval: 1s)"
+            f"💓 BACKUP bidirectional heartbeat monitor initialized "
+            f"(3 misses = 6s failover, scenario-aware)"
         )
 
         while True:
             try:
                 await asyncio.sleep(1)  # Check every second for responsive failover
 
-                # Priority 1: Check explicit heartbeat (Skill #3, most reliable)
-                explicit_failed = explicit_monitor.is_primary_failed()
+                # Primary detection: Check bidirectional heartbeat (Skill #3, scenario-aware)
+                primary_failed = monitor.is_primary_failed()
 
-                # Priority 2: Check old heartbeat (backward compatibility)
-                primary_failed = monitor.check_timeout()
-
-                # Priority 3: Fallback to HTTP health check
+                # Fallback: HTTP health check
                 try:
                     async with httpx.AsyncClient(timeout=constants.HEALTH_CHECK_TIMEOUT) as client:
                         resp = await client.get(f"{constants.PRIMARY_API_URL}/api/health")
@@ -443,16 +461,18 @@ async def lifespan(app: FastAPI):
                     logger.debug(f"PRIMARY health check failed: {e}")
                     primary_healthy = False
 
-                # Use explicit heartbeat detection if available, fall back to other methods
-                should_failover = explicit_failed or primary_failed or not primary_healthy
+                # Use bidirectional heartbeat detection, fall back to HTTP
+                should_failover = primary_failed or not primary_healthy
 
                 # Trigger failover if PRIMARY failed
                 if should_failover and not (trader and trader.running):
                     failover_reason = []
-                    if explicit_failed:
-                        failover_reason.append("Explicit heartbeat: 3+ misses")
                     if primary_failed:
-                        failover_reason.append("Old heartbeat timeout")
+                        stats = monitor.get_stats()
+                        failover_reason.append(
+                            f"Bidirectional heartbeat: {stats['consecutive_misses']} misses "
+                            f"(scenario: {stats['last_received_scenario']})"
+                        )
                     if not primary_healthy:
                         failover_reason.append("HTTP health check failed")
 
@@ -485,17 +505,19 @@ async def lifespan(app: FastAPI):
 
     # Heartbeat sender (PRIMARY) and heartbeat monitor (BACKUP)
     async def heartbeat_sender():
-        """PRIMARY: Send heartbeat to BACKUP at configured interval."""
-        from backend.core.heartbeat import init_heartbeat_sender
-        from backend.failover.explicit_heartbeat import init_explicit_heartbeat_sender
+        """PRIMARY: Send bidirectional heartbeat to BACKUP via scenario-determined endpoint."""
+        from backend.failover.ha_bidirectional_heartbeat import (
+            get_bidirectional_heartbeat_sender,
+        )
 
-        # Old heartbeat (for backward compatibility)
-        sender = init_heartbeat_sender(constants.BACKUP_API_URL, interval=constants.HEARTBEAT_CHECK_INTERVAL)
+        # NEW: Bidirectional heartbeat (Skill #3 + three-scenario logic)
+        # Routes to local IP (A), DDNS (B), or /dev/null (C) based on orchestrator
+        sender = get_bidirectional_heartbeat_sender()
         await sender.start()
-
-        # NEW: Explicit heartbeat (Skill #3) - more reliable, faster failover
-        explicit_sender = init_explicit_heartbeat_sender(constants.BACKUP_API_URL)
-        await explicit_sender.start()
+        logger.info(
+            "💓 PRIMARY bidirectional heartbeat started (every 2s, "
+            "scenario-aware routing: A→local, B→DDNS, C→offline)"
+        )
 
     if constants.IS_PRIMARY:
         global sync_task, heartbeat_task
@@ -503,14 +525,6 @@ async def lifespan(app: FastAPI):
         logger.info(f"📤 PRIMARY sync task started (→ {constants.BACKUP_API_URL} every {constants.STATE_SYNC_INTERVAL}s)")
 
         heartbeat_task = asyncio.create_task(heartbeat_sender())
-        logger.info(
-            f"💓 PRIMARY heartbeat sender started "
-            f"(→ {constants.BACKUP_API_URL} every {constants.HEARTBEAT_CHECK_INTERVAL}s)"
-        )
-        logger.info(
-            f"💓 PRIMARY explicit heartbeat (Skill #3) started "
-            f"(→ {constants.BACKUP_API_URL} every 2.0s, threshold: 3 misses = 6s failover)"
-        )
     else:
         global failover_task
         failover_task = asyncio.create_task(failover_monitor())

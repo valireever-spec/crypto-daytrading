@@ -301,6 +301,21 @@ class AutonomousTrader:
                         f"✅ Warmup complete: received prices for {list(prices.keys())} (hardening active)"
                     )
 
+                # HA Scenario determination (every 300 iterations = ~50 minutes)
+                if loop_count % 300 == 0:
+                    try:
+                        from backend.failover.ha_scenario_orchestrator import get_ha_orchestrator
+                        orchestrator = get_ha_orchestrator()
+                        scenario = await orchestrator.determine_scenario()
+                        info = orchestrator.get_scenario_info()
+                        logger.info(
+                            f"HA Scenario Check: {scenario.value} "
+                            f"→ {info['backup_endpoint']} "
+                            f"(transitions: {sum(info['consecutive_fails'].values())})"
+                        )
+                    except Exception as e:
+                        logger.debug(f"HA scenario check error: {e}")
+
                 # Clock sync check (Pillar: Clock Synchronization)
                 try:
                     from backend.exchange.binance_stream import get_stream_client
