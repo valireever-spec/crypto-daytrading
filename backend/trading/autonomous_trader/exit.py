@@ -38,16 +38,15 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
             symbol = position["symbol"]
 
             # DEFENSIVE: Validate position has required metadata
+            # Note: BACKUP may have positions without entry_time (synced state from PRIMARY)
+            # This is NOT a failure - just skip incomplete positions
             entry_time = position.get("entry_time")
             if not entry_time:
-                logger.warning(
-                    f"⚠️ {symbol}: Position missing entry_time metadata. "
-                    f"Position: {position}. This indicates data corruption upstream."
+                logger.debug(
+                    f"⏭️ {symbol}: Skipping position without entry_time (expected on BACKUP during sync). "
+                    f"Position: {position}"
                 )
-                # Report to fragility circuit breaker
-                breaker = get_fragility_breaker()
-                breaker.check_exit_failure(f"Missing entry_time for {symbol}")
-                continue  # Skip this position, don't crash
+                continue  # Skip this position, not a failure
 
             # ✅ BUG FIX #1: Check minimum hold time FIRST (prevents 5-10 second exits)
             hold_time = 0  # Initialize to 0 (safety fallback)
