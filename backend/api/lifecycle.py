@@ -119,9 +119,17 @@ async def lifespan(app: FastAPI):
 
         authority = DatabaseAuthority(divergence_threshold_seconds=60)
 
-        # Get database paths from environment or defaults
-        primary_db = os.getenv("PRIMARY_DB_PATH", "/home/vali/projects/crypto-daytrading/data/trading.db")
-        backup_db = os.getenv("BACKUP_DB_PATH", "/home/claude/crypto-daytrading/data/trading.db")
+        # Get database paths from environment or detect by machine role
+        # PRIMARY runs on /home/vali, BACKUP runs on /home/claude
+        machine_id = os.getenv("MACHINE_ID", "main")
+        if machine_id == "main":
+            # PRIMARY machine - can access both paths via SSH
+            primary_db = os.getenv("PRIMARY_DB_PATH", "/home/vali/projects/crypto-daytrading/data/trading.db")
+            backup_db = os.getenv("BACKUP_DB_PATH", "/home/claude/crypto-daytrading/data/trading.db")
+        else:
+            # BACKUP machine - local path + remote primary path (for SSH)
+            primary_db = os.getenv("PRIMARY_DB_PATH", "192.168.30.137:/home/vali/projects/crypto-daytrading/data/trading.db")
+            backup_db = os.getenv("BACKUP_DB_PATH", "/home/claude/crypto-daytrading/data/trading.db")
 
         result = authority.detect_authority(primary_db, backup_db)
         logger.info(f"Authority result: {result['authoritative']} - {result['reason']}")
