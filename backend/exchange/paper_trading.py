@@ -428,6 +428,7 @@ class PaperTradingEngine:
                 "symbol": p.symbol,
                 "quantity": p.quantity,
                 "entry_price": round(p.entry_price, 2),
+                "entry_time": p.entry_time.isoformat(),  # CRITICAL: Include entry_time for exit checks
                 "current_price": round(p.current_price, 2),
                 "unrealized_pnl": round(p.unrealized_pnl, 2),
                 "unrealized_pnl_pct": round(
