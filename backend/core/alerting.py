@@ -250,13 +250,9 @@ class AlertManager:
             return False
 
     async def _send_telegram_alert(self, message: str, severity: str = "info") -> bool:
-        """Send alert to Telegram (PRIMARY only - BACKUP is passive)."""
-        # Only PRIMARY machine sends alerts (BACKUP is passive and shouldn't alert)
-        machine_id = os.getenv("MACHINE_ID", "main")
-        if machine_id != "main":
-            logger.debug(f"Skipping alert on {machine_id} (alerts only sent from PRIMARY)")
-            return False
-
+        """Send alert to Telegram (both PRIMARY and BACKUP send alerts)."""
+        # Both machines send alerts so user has visibility during failover
+        # BACKUP alerts are prefixed with [BACKUP] so user knows PRIMARY is down
         if not self.is_telegram_configured():
             logger.debug("Telegram not configured, skipping alert")
             return False
@@ -264,13 +260,19 @@ class AlertManager:
         try:
             import aiohttp
 
+            machine_id = os.getenv("MACHINE_ID", "main")
+            machine_label = "[PRIMARY]" if machine_id == "main" else "[BACKUP 🚨]"
+
+            # Prefix message with machine label for clarity
+            prefixed_message = f"{machine_label} {message}"
+
             token = self._telegram_token()
             chat_id = self._telegram_chat_id()
 
             url = f"https://api.telegram.org/bot{token}/sendMessage"
             payload = {
                 "chat_id": chat_id,
-                "text": message,
+                "text": prefixed_message,
                 "parse_mode": "HTML"
             }
 
