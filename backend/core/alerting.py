@@ -125,8 +125,9 @@ class AlertManager:
         """Alert when a trade entry is executed."""
         try:
             position_value = quantity * entry_price
+            utc_time = datetime.utcnow().strftime("%H:%M:%S UTC")
             message = (
-                f"📍 ENTRY: {symbol}\n"
+                f"📍 ENTRY: {symbol} ({utc_time})\n"
                 f"   Price: ${entry_price:.2f}\n"
                 f"   Qty: {quantity:.4f}\n"
                 f"   Value: €{position_value:.2f}\n"
@@ -158,9 +159,10 @@ class AlertManager:
             win_rate = (self.winning_trades / self.total_trades * 100) if self.total_trades > 0 else 0
             hold_min = hold_time_sec // 60
             hold_sec = hold_time_sec % 60
+            utc_time = datetime.utcnow().strftime("%H:%M:%S UTC")
 
             message = (
-                f"{emoji} EXIT: {symbol}\n"
+                f"{emoji} EXIT: {symbol} ({utc_time})\n"
                 f"   P&L: €{pnl:.2f} ({pnl_pct:+.2f}%)\n"
                 f"   Cash: €{remaining_cash:.2f}\n"
                 f"   Hold: {hold_min}m {hold_sec}s\n"

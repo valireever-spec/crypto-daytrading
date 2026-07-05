@@ -1450,13 +1450,19 @@ function validateResponse(response, requiredFields = []) {
                 const account = await fetchWithRetry(`${API}/paper/account`);
 
                 const healthEl = document.getElementById('health-status');
-                if (healthEl) healthEl.textContent = (health.summary && health.summary.status) || 'unknown';
+                if (healthEl) healthEl.textContent = (health.status) || 'unknown';
 
                 const modeEl = document.getElementById('health-mode');
                 if (modeEl) modeEl.textContent = (account && account.mode) || 'unknown';
 
                 const wsEl = document.getElementById('health-ws');
-                if (wsEl) wsEl.textContent = (health.checks && health.checks.websocket && health.checks.websocket.healthy) ? 'Connected' : 'Disconnected';
+                if (wsEl) wsEl.textContent = (health.websocket_health && health.websocket_health.overall_healthy) ? 'Connected' : 'Disconnected';
+
+                const botStatusEl = document.getElementById('bot-status');
+                if (botStatusEl) {
+                    const machineId = health.ha && health.ha.machine_id;
+                    botStatusEl.textContent = machineId === 'main' ? 'PRIMARY' : machineId === 'backup' ? 'BACKUP' : 'unknown';
+                }
 
                 const detailsEl = document.getElementById('health-details');
                 if (detailsEl) detailsEl.textContent = JSON.stringify(health || {}, null, 2);
@@ -1797,9 +1803,13 @@ function validateResponse(response, requiredFields = []) {
                 tbody.innerHTML = '<tr><td colspan="8" class="empty">No trades yet</td></tr>';
                 return;
             }
-            tbody.innerHTML = [...trades].reverse().map(t => `
+            tbody.innerHTML = [...trades].reverse().map(t => {
+                // Format timestamp as UTC (consistent with API)
+                const date = new Date(t.timestamp);
+                const utcTime = date.toLocaleString('en-US', { timeZone: 'UTC', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return `
                 <tr>
-                    <td>${new Date(t.timestamp).toLocaleTimeString()}</td>
+                    <td title="${t.timestamp}">${utcTime} UTC</td>
                     <td class="symbol">${t.symbol}</td>
                     <td>${t.side}</td>
                     <td>${t.quantity.toFixed(6)}</td>
@@ -1810,7 +1820,8 @@ function validateResponse(response, requiredFields = []) {
                     </td>
                     <td>${t.status}</td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
         }
 
         function updatePrices(pricesData) {
