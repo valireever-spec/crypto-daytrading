@@ -508,7 +508,6 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
             # Sync deduplication state from PRIMARY (critical blocker #4)
             if "deduplicator_state" in state:
                 from backend.core.ha_deduplication import get_ha_deduplicator
-                from datetime import datetime
                 dedup = get_ha_deduplicator()
 
                 seen_orders = state.get("deduplicator_state", {}).get("seen_orders", {})
