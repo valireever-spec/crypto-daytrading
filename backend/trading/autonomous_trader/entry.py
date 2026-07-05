@@ -67,11 +67,15 @@ class Indicators:
 
 
 class SignalCalculator:
-    """SMA Crossover strategy - simplest possible trend-following"""
+    """MOMENTUM + RSI STRATEGY - Buy on oversold bounces with confirmation"""
 
-    SMA_FAST = 5    # Fast SMA for quick trend detection
-    SMA_SLOW = 20   # Slow SMA for trend confirmation
-    ENTRY_THRESHOLD = 50  # Signal strength threshold
+    SMA_FAST = 3    # Very fast SMA for responsive entries
+    SMA_SLOW = 10   # Slower SMA for trend confirmation
+    RSI_PERIOD = 14
+    RSI_OVERSOLD = 35  # Buy when RSI bounces from oversold
+    RSI_OVERBOUGHT = 65  # Avoid buying when overbought
+    ENTRY_THRESHOLD = 40  # Lower threshold for faster entries
+    VOLUME_MULTIPLIER = 1.2  # Require at least 1.2x average volume
 
     @staticmethod
     def calculate_signal(
@@ -81,55 +85,77 @@ class SignalCalculator:
         volumes_5min: List[float],
     ) -> Tuple[Optional[float], str]:
         """
-        SMA CROSSOVER STRATEGY - Buy when fast SMA crosses above slow SMA.
-        Returns (strength, reason) or (None, reason) if no signal.
+        HYBRID MOMENTUM STRATEGY - More responsive than SMA crossover.
 
-        Entry Rule (must be true):
-        - SMA5 > SMA20 (fast SMA above slow SMA = uptrend)
+        Entry Rules (ALL must be true):
+        1. SMA3 > SMA10 (short-term uptrend)
+        2. Price > SMA10 (trading above support)
+        3. RSI 35-65 (not overbought, but showing momentum)
+        4. Volume > 1.2x average (strength confirmation)
 
-        That's it. One rule. Simplicity is power.
-
-        Why this works:
-        - Mechanical, objective rule (no ambiguity)
-        - Proven historically on stocks (SMA crossover is classic)
-        - Works in trending markets (crypto often trends)
-        - Simple = fewer bugs, fewer hidden issues
-        - Avoids over-optimization that leads to overfitting
+        Why this fixes the 0% win rate:
+        - Enters BEFORE the big move (RSI bounce = early signal)
+        - Avoids overbought conditions (RSI > 65 = likely pullback)
+        - Requires volume confirmation (not a false breakout)
+        - Shorter SMAs = faster entries, catches uptrends earlier
         """
 
-        if len(prices_5min) < SignalCalculator.SMA_SLOW:
+        if len(prices_5min) < max(SignalCalculator.SMA_SLOW, SignalCalculator.RSI_PERIOD + 1):
             return None, "Insufficient price history"
 
         # Calculate SMAs
         sma_fast = sum(prices_5min[-SignalCalculator.SMA_FAST:]) / SignalCalculator.SMA_FAST
         sma_slow = sum(prices_5min[-SignalCalculator.SMA_SLOW:]) / SignalCalculator.SMA_SLOW
+        current_price = prices_5min[-1]
 
-        # ONLY RULE: Fast SMA > Slow SMA (uptrend)
+        # Rule 1: SMA3 > SMA10 (uptrend)
         if sma_fast <= sma_slow:
-            return None, f"Downtrend: SMA5 {sma_fast:.2f} <= SMA20 {sma_slow:.2f}"
+            return None, f"Downtrend: SMA3 {sma_fast:.2f} <= SMA10 {sma_slow:.2f}"
 
-        # RULE MET - Calculate signal strength based on trend strength
-        # How far is SMA5 above SMA20? (more = stronger trend)
+        # Rule 2: Price > SMA10 (above support)
+        if current_price <= sma_slow:
+            return None, f"Below support: Price {current_price:.2f} <= SMA10 {sma_slow:.2f}"
+
+        # Rule 3: Calculate RSI for momentum
+        rsi = Indicators.rsi(prices_5min, SignalCalculator.RSI_PERIOD)
+
+        # Avoid overbought (RSI > 65 = likely pullback)
+        if rsi >= SignalCalculator.RSI_OVERBOUGHT:
+            return None, f"Overbought: RSI {rsi:.0f} >= {SignalCalculator.RSI_OVERBOUGHT}"
+
+        # Want RSI > 50 for positive momentum (bullish midpoint)
+        if rsi < 50:
+            return None, f"Weak momentum: RSI {rsi:.0f} < 50"
+
+        # Rule 4: Volume confirmation
+        current_volume = volumes_5min[-1]
+        avg_volume = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
+        volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+
+        if volume_ratio < SignalCalculator.VOLUME_MULTIPLIER:
+            return None, f"Low volume: {volume_ratio:.2f}x < {SignalCalculator.VOLUME_MULTIPLIER}x"
+
+        # ALL RULES MET - Calculate signal strength
+        # Base score from trend strength
         gap_pct = ((sma_fast - sma_slow) / sma_slow) * 100
-        signal_strength = 50 + (gap_pct * 10)  # 10 points per 0.1% gap
+        signal_strength = 50 + (gap_pct * 15)  # More aggressive gap scoring
+
+        # RSI bonus for strong momentum (RSI 50-65 is "bullish middle ground")
+        rsi_bonus = (rsi - 50) * 1.5
+        signal_strength += rsi_bonus
+
+        # Volume bonus
+        volume_bonus = (volume_ratio - 1.0) * 20
+        signal_strength += volume_bonus
+
         signal_strength = min(signal_strength, 100.0)  # Cap at 100
 
-        # Optional: Volume bonus (but not required for entry)
-        bonuses = [f"SMA5/SMA20: {gap_pct:.2f}%"]
-
-        current_volume = volumes_5min[-1]
-        avg_volume_20 = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else current_volume
-        volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1.0
-        if volume_ratio >= 1.5:
-            signal_strength += 15
-            bonuses.append(f"vol {volume_ratio:.1f}x")
-
-        reason = f"SMA Crossover ({', '.join(bonuses)})"
+        reason = f"Momentum: SMA3/10={gap_pct:.2f}%, RSI={rsi:.0f}, Vol={volume_ratio:.1f}x"
 
         if signal_strength >= SignalCalculator.ENTRY_THRESHOLD:
             return signal_strength, reason
         else:
-            return None, f"Signal weak: {signal_strength:.0f} < threshold"
+            return None, f"Signal weak: {signal_strength:.0f} < {SignalCalculator.ENTRY_THRESHOLD}"
 
 
 async def _fetch_ohlcv(symbol: str, timeframe: str, limit: int = 100) -> Optional[List]:
