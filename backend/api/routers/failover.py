@@ -21,7 +21,7 @@ router = APIRouter()
 
 def get_paper_trading():
     """Get global paper trading engine instance."""
-    from backend.api.main import get_paper_trading as get_engine
+    from backend.exchange.paper_trading import get_paper_trading as get_engine
 
     return get_engine()
 

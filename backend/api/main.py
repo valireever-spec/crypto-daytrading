@@ -586,20 +586,35 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
 async def get_ha_status() -> JSONResponse:
     """Get HA status (PRIMARY or BACKUP, health)."""
     try:
-        machine_id = os.getenv("MACHINE_ID", "main")
-        primary_url = os.getenv("PRIMARY_API_URL", "http://127.0.0.1:8001")
+        # Load .env vars fresh (may not be in os.environ)
+        machine_id = "main"  # PRIMARY always checks itself as "main"
+        primary_url = "http://192.168.30.137:8001"  # Always PRIMARY IP
+
+        # Override if env vars are available
+        env_machine_id = os.getenv("MACHINE_ID")
+        if env_machine_id:
+            machine_id = env_machine_id
+
+        env_primary_url = os.getenv("PRIMARY_API_URL")
+        if env_primary_url:
+            primary_url = env_primary_url
 
         from backend.exchange.paper_trading import get_paper_trading
 
         engine = get_paper_trading()
 
-        # Check if PRIMARY is reachable (fast check, fail quickly)
+        # Check if PRIMARY is reachable (increased timeout to 2s for network reliability)
         primary_healthy = False
         try:
             import httpx
-            resp = httpx.get(f"{primary_url}/api/health", timeout=0.5)
+            # If PRIMARY is checking itself, it should always work
+            # If BACKUP is checking PRIMARY, allow up to 2 seconds
+            timeout_seconds = 0.5 if machine_id == "main" else 2.0
+            resp = httpx.get(f"{primary_url}/api/health", timeout=timeout_seconds)
             primary_healthy = resp.status_code == 200
-        except (httpx.RequestError, httpx.TimeoutException, Exception):
+        except (httpx.RequestError, httpx.TimeoutException, Exception) as e:
+            # Log timeout or connection errors for debugging
+            logger.debug(f"PRIMARY health check failed: {type(e).__name__}: {e}")
             primary_healthy = False
 
         return JSONResponse({
