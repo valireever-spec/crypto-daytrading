@@ -268,6 +268,14 @@ async def _execute_entry_impl(trader_self, signal) -> bool:
                 logger.info(
                     f"✅ BUY {signal.symbol}: {quantity:.4f} @ ${current_price:.2f} - {signal.reason}"
                 )
+                # Send entry alert with account status
+                from backend.core.alerting import get_alert_manager
+                alert_mgr = get_alert_manager()
+                new_account = engine.get_account_state()
+                new_cash = new_account.get("cash", 0.0)
+                await alert_mgr.alert_trade_entry(
+                    signal.symbol, quantity, current_price, new_cash, signal.reason
+                )
                 return True
             else:
                 logger.warning(f"❌ Buy order failed for {signal.symbol}: {validated.status}")

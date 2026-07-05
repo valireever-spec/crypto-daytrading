@@ -78,10 +78,18 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
                 await _execute_exit_impl(
                     trader_self, position, current_price, "Profit target"
                 )
-                # Alert on profit target
+                # Alert on profit with account status
                 from backend.core.alerting import get_alert_manager
+                from backend.exchange.paper_trading import get_paper_trading
                 alert_mgr = get_alert_manager()
-                await alert_mgr.alert_profit_target_hit(symbol, pnl_pct)
+                engine = get_paper_trading()
+                if engine:
+                    account = engine.get_account_state()
+                    remaining_cash = account.get("cash", 0.0)
+                    realized_pnl = position["quantity"] * (current_price - position["entry_price"])
+                    await alert_mgr.alert_trade_exit(
+                        symbol, realized_pnl, pnl_pct, remaining_cash, hold_time, is_win=True
+                    )
 
             elif pnl_pct <= -trader_self.config.exit_stop_loss:
                 logger.warning(
@@ -91,10 +99,18 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
                 await _execute_exit_impl(
                     trader_self, position, current_price, "Stop loss"
                 )
-                # Alert on stop loss
+                # Alert on stop loss with account status
                 from backend.core.alerting import get_alert_manager
+                from backend.exchange.paper_trading import get_paper_trading
                 alert_mgr = get_alert_manager()
-                await alert_mgr.alert_stop_loss_hit(symbol, pnl_pct)
+                engine = get_paper_trading()
+                if engine:
+                    account = engine.get_account_state()
+                    remaining_cash = account.get("cash", 0.0)
+                    realized_pnl = position["quantity"] * (current_price - position["entry_price"])
+                    await alert_mgr.alert_trade_exit(
+                        symbol, realized_pnl, pnl_pct, remaining_cash, hold_time, is_win=False
+                    )
 
     except Exception as e:
         logger.error(f"Error checking exits: {e}", exc_info=True)

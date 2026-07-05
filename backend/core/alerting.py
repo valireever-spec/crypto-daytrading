@@ -3,6 +3,7 @@
 import logging
 import os
 import json
+import time
 from typing import Dict, Optional
 from datetime import datetime
 from enum import Enum
@@ -30,9 +31,13 @@ class AlertManager:
         # Telegram configuration
         self._telegram_token_val = os.getenv("ALERT_TELEGRAM_BOT_TOKEN", "").strip()
         self._telegram_chat_id_val = os.getenv("ALERT_TELEGRAM_CHAT_ID", "").strip()
-        # Alert deduplication: track last alert MESSAGE per symbol (content-aware)
-        # Only send if content changes, not on timer
-        self._last_alert_message = {}  # {symbol: last_message_sent}
+        # Alert deduplication: time-based cooldown per symbol (1 min between same alert type)
+        self._last_alert_time = {}  # {symbol: timestamp}
+        self._alert_cooldown = 60  # seconds - prevent same alert type repeating
+        # Trade statistics for alerts
+        self.total_trades = 0
+        self.winning_trades = 0
+        self.losing_trades = 0
 
     def _telegram_token(self) -> str:
         """Get Telegram bot token."""
@@ -46,20 +51,20 @@ class AlertManager:
         """Check if Telegram is properly configured."""
         return bool(self._telegram_token() and self._telegram_chat_id())
 
-    def _should_send_alert(self, symbol: str, message: str) -> bool:
+    def _should_send_alert(self, symbol: str) -> bool:
         """
-        Check if we should send an alert (content-aware deduplication).
-        Only send if the message content is DIFFERENT from the last message sent.
-        This prevents repeated alerts for the same condition.
+        Check if we should send an alert (time-based deduplication).
+        Only send if 60+ seconds have passed since last alert for this symbol.
+        This prevents spam even if exact same loss % changes slightly (0.10% → 0.11%).
         """
-        last_msg = self._last_alert_message.get(symbol)
-        if last_msg == message:
-            # Same message as last time - skip it
-            logger.debug(f"Alert deduplication: {symbol} unchanged, skipping")
-            return False
-        # Message is new/different - send it and remember it
-        self._last_alert_message[symbol] = message
-        return True
+        now = time.time()
+        last_time = self._last_alert_time.get(symbol, 0)
+        elapsed = now - last_time
+        if elapsed >= self._alert_cooldown:
+            self._last_alert_time[symbol] = now
+            return True
+        logger.debug(f"Alert deduplication: {symbol} alert sent {elapsed:.0f}s ago, skipping")
+        return False
 
     async def alert_circuit_breaker_open(self, reason: str) -> bool:
         """Alert that circuit breaker has opened."""
@@ -115,37 +120,82 @@ class AlertManager:
             logger.error(f"Failed to send data quality alert: {e}")
             return False
 
-    async def alert_profit_target_hit(self, symbol: str, pnl_pct: float) -> bool:
-        """Alert that a profit target has been hit."""
+    async def alert_trade_entry(self, symbol: str, quantity: float, entry_price: float,
+                                remaining_cash: float, signal_reason: str) -> bool:
+        """Alert when a trade entry is executed."""
         try:
-            message = f"✅ PROFIT TARGET HIT: {symbol} ({pnl_pct:.2f}%)"
-            logger.info(message)
-
-            # Deduplication: only send if message content is DIFFERENT from last message
-            # This prevents repeated alerts for the same position hitting same profit %
-            if not self._should_send_alert(symbol, message):
-                logger.debug(f"Deduplication: {symbol} alert already sent, skipping duplicate")
-                return False
+            position_value = quantity * entry_price
+            message = (
+                f"📍 ENTRY: {symbol}\n"
+                f"   Price: ${entry_price:.2f}\n"
+                f"   Qty: {quantity:.4f}\n"
+                f"   Value: €{position_value:.2f}\n"
+                f"   Cash Left: €{remaining_cash:.2f}\n"
+                f"   Signal: {signal_reason}"
+            )
+            logger.info(message.replace("\n", " "))
 
             await self._send_slack_alert(message, "info")
             if self.is_telegram_configured():
                 await self._send_telegram_alert(message, "info")
             return True
         except Exception as e:
-            logger.error(f"Failed to send profit alert: {e}")
+            logger.error(f"Failed to send entry alert: {e}")
+            return False
+
+    async def alert_trade_exit(self, symbol: str, pnl: float, pnl_pct: float,
+                               remaining_cash: float, hold_time_sec: int, is_win: bool) -> bool:
+        """Alert when a trade exit is executed (profit or loss)."""
+        try:
+            self.total_trades += 1
+            if is_win:
+                self.winning_trades += 1
+                emoji = "✅"
+            else:
+                self.losing_trades += 1
+                emoji = "❌"
+
+            win_rate = (self.winning_trades / self.total_trades * 100) if self.total_trades > 0 else 0
+            hold_min = hold_time_sec // 60
+            hold_sec = hold_time_sec % 60
+
+            message = (
+                f"{emoji} EXIT: {symbol}\n"
+                f"   P&L: €{pnl:.2f} ({pnl_pct:+.2f}%)\n"
+                f"   Cash: €{remaining_cash:.2f}\n"
+                f"   Hold: {hold_min}m {hold_sec}s\n"
+                f"   Record: {self.winning_trades}W / {self.losing_trades}L ({win_rate:.0f}%)"
+            )
+            logger.info(message.replace("\n", " "))
+
+            await self._send_slack_alert(message, "info" if is_win else "warning")
+            if self.is_telegram_configured():
+                await self._send_telegram_alert(message, "info" if is_win else "warning")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send exit alert: {e}")
+            return False
+
+    async def alert_profit_target_hit(self, symbol: str, pnl_pct: float) -> bool:
+        """Alert that a profit target has been hit (legacy - use alert_trade_exit instead)."""
+        try:
+            # Just log, don't send alert (real alert sent by alert_trade_exit)
+            logger.info(f"✅ PROFIT TARGET HIT: {symbol} ({pnl_pct:.2f}%)")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to log profit alert: {e}")
             return False
 
     async def alert_stop_loss_hit(self, symbol: str, pnl_pct: float) -> bool:
-        """Alert that a stop loss has been triggered."""
+        """Alert that a stop loss has been triggered (legacy - use alert_trade_exit instead)."""
         try:
+            # Deduplication: max 1 alert per symbol per 60 seconds
+            if not self._should_send_alert(symbol):
+                logger.debug(f"Deduplication: {symbol} stop loss alert sent recently, skipping")
+                return False
+
             message = f"🛑 STOP LOSS HIT: {symbol} ({pnl_pct:.2f}%)"
             logger.warning(message)
-
-            # Deduplication: only send if message content is DIFFERENT from last message
-            # This prevents repeated alerts for the same position hitting same loss %
-            if not self._should_send_alert(symbol, message):
-                logger.debug(f"Deduplication: {symbol} alert already sent, skipping duplicate")
-                return False
 
             await self._send_slack_alert(message, "warning")
             if self.is_telegram_configured():
