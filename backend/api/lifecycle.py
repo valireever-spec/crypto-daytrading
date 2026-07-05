@@ -195,6 +195,18 @@ async def lifespan(app: FastAPI):
     init_smart_executor()
     logger.info("Smart executor initialized")
 
+    # Initialize tax calculator
+    try:
+        from backend.analytics.tax_calculator import init_tax_calculator, Jurisdiction
+        jurisdiction_str = os.getenv("TAX_JURISDICTION", "USA")
+        # Map common abbreviations to enum names
+        jurisdiction_map = {"US": "USA", "DE": "GERMANY", "GB": "UK", "NL": "NETHERLANDS", "FR": "FRANCE"}
+        jurisdiction_enum_name = jurisdiction_map.get(jurisdiction_str, jurisdiction_str)
+        init_tax_calculator(jurisdiction=Jurisdiction[jurisdiction_enum_name])
+        logger.info(f"Tax calculator initialized (jurisdiction: {jurisdiction_enum_name})")
+    except Exception as e:
+        logger.warning(f"Tax calculator initialization failed (non-critical): {e}")
+
     # Initialize new circuit breaker v2 (intelligent, not just halt)
     try:
         circuit_breaker = init_circuit_breaker(

@@ -317,7 +317,7 @@ async def get_tax_summary() -> Dict:
             calc.match_trades_fifo()
 
         liability = calc.calculate_liability()
-        jurisdiction = calc.jurisdiction.value
+        jurisdiction = calc.jurisdiction.value if hasattr(calc, 'jurisdiction') and calc.jurisdiction else "US"
 
         # Jurisdiction-specific tips
         tips = {
@@ -343,6 +343,9 @@ async def get_tax_summary() -> Dict:
             "short_term_gains": round(liability.short_term_gains, 2),
             "jurisdiction_tip": tips.get(jurisdiction, ""),
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error getting summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = f"Tax summary error: {type(e).__name__}: {str(e) or 'unknown error'}"
+        logger.error(error_msg, exc_info=True)
+        raise HTTPException(status_code=500, detail=error_msg)
