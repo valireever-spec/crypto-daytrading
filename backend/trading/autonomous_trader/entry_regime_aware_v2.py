@@ -33,6 +33,10 @@ from backend.exchange.binance_stream import get_stream_client
 logger = logging.getLogger(__name__)
 
 MIN_HOLD_TIME_SECONDS = 300
+OHLCV_FETCH_THROTTLE_SECONDS = 2  # Prevent too-frequent data fetches that can cause WebSocket staleness
+
+# Track last fetch time per symbol to prevent hammering Binance
+_last_fetch_time = {}
 
 
 class TechnicalIndicators:
@@ -351,6 +355,14 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
         if len(positions) >= trader_self.config.max_positions:
             logger.debug(f"{symbol}: At max positions ({trader_self.config.max_positions})")
             return None
+
+        # Throttle OHLCV fetches to prevent WebSocket staleness
+        current_time = asyncio.get_event_loop().time()
+        last_fetch = _last_fetch_time.get(symbol, 0)
+        if current_time - last_fetch < OHLCV_FETCH_THROTTLE_SECONDS:
+            logger.debug(f"{symbol}: Skipping fetch (throttled, < {OHLCV_FETCH_THROTTLE_SECONDS}s since last)")
+            return None
+        _last_fetch_time[symbol] = current_time
 
         data_5min = await _fetch_ohlcv(symbol, "5m", limit=100)
         data_1hr = await _fetch_ohlcv(symbol, "1h", limit=100)
