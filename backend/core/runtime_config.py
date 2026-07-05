@@ -57,10 +57,10 @@ class TradingConfig:
         # Validate ranges
         if not 0 <= self.entry_threshold <= 100:
             raise ValueError(f"entry_threshold must be 0-100, got {self.entry_threshold}")
-        if not 0 < self.exit_profit_target < 1:
-            raise ValueError(f"exit_profit_target must be 0-1, got {self.exit_profit_target}")
-        if not 0 < self.exit_stop_loss < 1:
-            raise ValueError(f"exit_stop_loss must be 0-1, got {self.exit_stop_loss}")
+        if not 0 < self.exit_profit_target <= 100:
+            raise ValueError(f"exit_profit_target must be 0-100 (percentage), got {self.exit_profit_target}")
+        if not 0 < self.exit_stop_loss <= 100:
+            raise ValueError(f"exit_stop_loss must be 0-100 (percentage), got {self.exit_stop_loss}")
         if self.max_positions < 1:
             raise ValueError(f"max_positions must be >= 1, got {self.max_positions}")
 

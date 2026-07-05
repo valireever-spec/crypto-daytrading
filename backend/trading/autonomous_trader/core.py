@@ -585,7 +585,7 @@ class AutonomousTrader:
 
         # 5. Execute order
         try:
-            result = await engine.place_order_async(symbol, side, quantity, price)
+            result = await engine.place_order(symbol, side, quantity, price)
             # ✅ BUG FIX #2: Use correct response schema validation with "status" key
             if result.get("status") == "FILLED":
                 self.ha_deduplicator.register_order(order_record.idempotency_key)

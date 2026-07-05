@@ -34,12 +34,13 @@ class HAConfig:
     heartbeat_timeout: float = float(os.getenv("HA_HEARTBEAT_TIMEOUT", "6.0"))  # seconds (5s + 1s grace)
     heartbeat_failure_threshold: int = int(os.getenv("HA_HEARTBEAT_THRESHOLD", "3"))  # 3 missed beats = 15s
 
-    # Network endpoints
-    primary_host: str = os.getenv("HA_PRIMARY_HOST", "localhost")
-    primary_port: int = int(os.getenv("HA_PRIMARY_PORT", "9998"))
+    # Network endpoints - MUST be explicitly set in environment!
+    # Using localhost defaults causes split-brain (BACKUP checks itself instead of PRIMARY)
+    primary_host: str = os.getenv("HA_PRIMARY_HOST", "")  # Required: 192.168.30.137
+    primary_port: int = int(os.getenv("HA_PRIMARY_PORT", "8001"))
 
-    backup_host: str = os.getenv("HA_BACKUP_HOST", "localhost")
-    backup_port: int = int(os.getenv("HA_BACKUP_PORT", "9999"))
+    backup_host: str = os.getenv("HA_BACKUP_HOST", "")  # Required: 192.168.3.25
+    backup_port: int = int(os.getenv("HA_BACKUP_PORT", "8002"))
 
     # Failover
     failover_validation: bool = os.getenv("HA_FAILOVER_VALIDATION", "true").lower() == "true"
@@ -68,6 +69,18 @@ class HAConfig:
         """Validate configuration."""
         if not self.enabled:
             return True  # No validation needed if disabled
+
+        # CRITICAL: Validate network endpoints are explicitly configured
+        if not self.primary_host:
+            raise ValueError(
+                "HA_PRIMARY_HOST must be set in environment (e.g., 192.168.30.137). "
+                "Using localhost default causes split-brain!"
+            )
+        if not self.backup_host:
+            raise ValueError(
+                "HA_BACKUP_HOST must be set in environment (e.g., 192.168.3.25). "
+                "Using localhost default causes split-brain!"
+            )
 
         # Validate role
         if self.role not in ("PRIMARY", "BACKUP"):
