@@ -6,8 +6,9 @@ import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from logging.handlers import RotatingFileHandler
 from typing import Any, Dict, Optional
+
+from backend.core.log_archiver import CompressedRotatingFileHandler
 
 
 class JSONFormatter(logging.Formatter):
@@ -88,9 +89,9 @@ def setup_structured_logging(
         log_path = Path(log_dir)
         log_path.mkdir(exist_ok=True)
 
-        # Main API log file (100MB, keep 10 files = ~1GB)
+        # Main API log file (100MB, keep 10 files, compress after rotation)
         api_log = log_path / "api.log"
-        api_handler = RotatingFileHandler(
+        api_handler = CompressedRotatingFileHandler(
             str(api_log),
             maxBytes=100 * 1024 * 1024,  # 100 MB
             backupCount=10,
@@ -99,9 +100,9 @@ def setup_structured_logging(
         api_handler.setFormatter(formatter)
         root_logger.addHandler(api_handler)
 
-        # Trade execution log file (50MB, keep 5 files)
+        # Trade execution log file (50MB, keep 5 files, compress after rotation)
         trades_log = log_path / "trades.jsonl"
-        trades_handler = RotatingFileHandler(
+        trades_handler = CompressedRotatingFileHandler(
             str(trades_log),
             maxBytes=50 * 1024 * 1024,  # 50 MB
             backupCount=5,

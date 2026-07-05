@@ -1,0 +1,69 @@
+# Log rotation and archival for crypto-daytrading system
+# Install to /etc/logrotate.d/ with: sudo cp crypto-trading.logrotate /etc/logrotate.d/crypto-trading
+
+/home/vali/projects/crypto-daytrading/logs/*.log
+/home/vali/projects/crypto-daytrading/logs/*.jsonl
+{
+    # Rotate when file exceeds 100MB (primary API logs)
+    size 100M
+
+    # Keep 30 days of rotated logs (compliance retention)
+    rotate 30
+
+    # Compress rotated logs immediately (saves ~90% space)
+    compress
+
+    # Use gzip compression
+    compresscmd /bin/gzip
+    compressext .gz
+
+    # Delay compression to next rotation (allows immediate re-read)
+    delaycompress
+
+    # Don't error if file is missing
+    missingok
+
+    # Don't error if directory is missing
+    nomissingok
+
+    # Don't rotate if file is empty
+    notifempty
+
+    # Keep file permissions/ownership after rotation
+    copytruncate
+
+    # Rotate daily as fallback (in case files don't hit size limit)
+    daily
+
+    # Create new empty log file after rotation
+    create 0640 vali vali
+
+    # Signal service after rotation (not needed with copytruncate)
+    # postrotate
+    #     systemctl reload crypto-trading > /dev/null 2>&1 || true
+    # endscript
+}
+
+# Trade execution logs (50MB, keep 90 days)
+/home/vali/projects/crypto-daytrading/logs/trades.jsonl*
+{
+    size 50M
+    rotate 90
+    compress
+    compresscmd /bin/gzip
+    compressext .gz
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    weekly
+    create 0640 vali vali
+}
+
+# Immutable/audit logs (never rotate - keep forever)
+# /home/vali/projects/crypto-daytrading/logs/immutable/*
+# {
+#     rotate 0
+#     missingok
+#     notifempty
+# }
