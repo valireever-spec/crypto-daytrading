@@ -436,11 +436,17 @@ class AutonomousTrader:
                     account = engine.get_account_state()
                     daily_pnl = account.get("daily_pnl", 0.0)
                     equity = account.get("total_equity", 0.0)
+                    cash = account.get("cash", 0.0)
+
+                    # Calculate typical proposed position value based on position_size_pct
+                    # This allows risk gates to check: "current_loss + proposed_position < daily_limit"
+                    position_size_pct = self.config.position_size_pct / 100.0
+                    proposed_position_value = cash * position_size_pct
 
                     gates_ok, gate_reason = self.risk_gates.enforce_all_gates(
                         daily_pnl=daily_pnl,
                         account_equity=equity,
-                        proposed_position_value=0,
+                        proposed_position_value=proposed_position_value,
                         current_positions=account.get("active_positions", 0),
                         total_position_value=account.get("positions_value", 0),
                         available_balance=account.get("cash", 0)
