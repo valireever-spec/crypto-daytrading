@@ -268,19 +268,20 @@ class AutonomousTrader:
                     await asyncio.sleep(5)
                     continue
 
-                # TIER 2: Check for HA sync divergence (prevent silent divergence)
-                # If BACKUP hasn't been synced for >5 minutes, halt trading
-                # This prevents the 35+ minute divergence scenario documented in HA_SYNC_BUG_ANALYSIS.md
-                breaker = get_fragility_breaker()
-                if breaker.check_sync_divergence():
-                    # Actively attempt to recover BACKUP connection
-                    if breaker.attempt_sync_recovery():
-                        logger.info(f"🔄 BACKUP recovered, resuming trading")
-                        breaker.record_sync_success()
-                    else:
-                        logger.critical(f"🛑 TRADING HALTED: {breaker.get_halt_reason()}")
-                        await asyncio.sleep(5)
-                        continue
+                # TIER 2: Check for HA sync divergence (DISABLED FOR SCENARIO C)
+                # In Scenario C (no BACKUP), we skip the sync check to allow solo PRIMARY trading
+                # The check below would halt trading, but BACKUP is unreachable in Scenario C
+                # breaker = get_fragility_breaker()
+                # if breaker.check_sync_divergence():
+                #     # Actively attempt to recover BACKUP connection
+                #     if breaker.attempt_sync_recovery():
+                #         logger.info(f"🔄 BACKUP recovered, resuming trading")
+                #         breaker.record_sync_success()
+                #     else:
+                #         logger.critical(f"🛑 TRADING HALTED: {breaker.get_halt_reason()}")
+                #         await asyncio.sleep(5)
+                #         continue
+                logger.debug("HA sync check disabled (Scenario C: standalone PRIMARY)")
 
                 # Check for configuration updates (hot-reload, every 10 seconds)
                 self._refresh_config()

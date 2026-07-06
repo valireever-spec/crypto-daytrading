@@ -66,6 +66,48 @@ async def resume_trading() -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/status")
+async def get_trading_status() -> JSONResponse:
+    """Get current trading status and system health."""
+    try:
+        from backend.trading.autonomous_trader import get_autonomous_trader
+        from backend.exchange.paper_trading import get_paper_trading
+        from backend.core.fragility_circuit_breaker import get_fragility_breaker
+        from backend.core.runtime_config import get_config_manager
+
+        trader = get_autonomous_trader()
+        engine = get_paper_trading()
+        breaker = get_fragility_breaker()
+        config_mgr = get_config_manager()
+
+        trading_running = trader and hasattr(trader, 'running') and trader.running
+        config = config_mgr.get_config()
+        positions = engine.get_positions() if engine else []
+
+        return {
+            "status": "active" if trading_running else "inactive",
+            "trading_enabled": config.enabled,
+            "trading_running": trading_running,
+            "circuit_breaker": {
+                "state": breaker.state if hasattr(breaker, 'state') else "UNKNOWN",
+                "halted": breaker.halted if hasattr(breaker, 'halted') else False
+            },
+            "positions": {
+                "open": len(positions),
+                "max_allowed": config.max_positions
+            },
+            "config": {
+                "entry_threshold": config.entry_threshold,
+                "exit_profit_target": config.exit_profit_target,
+                "exit_stop_loss": config.exit_stop_loss,
+                "symbols": config.symbols
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting trading status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/exit")
 async def partial_exit(symbol: str, percentage: float) -> JSONResponse:
     """Close a percentage of a position."""

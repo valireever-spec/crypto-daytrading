@@ -50,7 +50,20 @@ async def get_config():
     """
     manager = get_config_manager()
     config = manager.get_config()
-    return ConfigResponse(**config.to_dict())
+    config_dict = config.to_dict()
+
+    # Safety check: ensure no None values (defensive programming)
+    for key, value in config_dict.items():
+        if value is None:
+            logger.warning(f"⚠️ Config field {key} is None, using default")
+            # Set sensible defaults
+            defaults = {
+                'symbols': ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'],
+                'enabled': True,
+            }
+            config_dict[key] = defaults.get(key, value)
+
+    return ConfigResponse(**config_dict)
 
 
 @router.post("", response_model=ConfigResponse)

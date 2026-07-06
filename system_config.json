@@ -1,9 +1,9 @@
 {
-  "entry_threshold": 55,
+  "entry_threshold": 25,
   "exit_profit_target": 2.0,
-  "exit_stop_loss": 1.0,
-  "max_positions": 8,
-  "position_size_pct": 1.5,
+  "exit_stop_loss": 0.5,
+  "max_positions": 4,
+  "position_size_pct": 0.5,
   "max_daily_loss_pct": 5.0,
   "max_position_loss_pct": 2.0,
   "websocket_reconnect_max_attempts": 5,
@@ -14,7 +14,7 @@
     "ETHUSDT",
     "BNBUSDT"
   ],
-  "quality_gate_entry": 75,
+  "quality_gate_entry": 90,
   "quality_gate_exit": 60,
   "retry_sleep_seconds": 5,
   "loop_sleep_seconds": 10

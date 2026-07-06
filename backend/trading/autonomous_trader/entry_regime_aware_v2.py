@@ -127,13 +127,26 @@ class TechnicalIndicators:
 
     @staticmethod
     def detect_regime(prices_5min: List[float], prices_1hr: List[float]) -> str:
-        """Detect market regime: uptrend, downtrend, or ranging"""
+        """Detect market regime: uptrend, downtrend, or ranging
+
+        CRITICAL FIX: Was only checking histogram > 0 on 5min+1hr
+        This catches micro-bounces and false signals.
+
+        New: Require 1hr MACD > 0 (real uptrend) AND
+        Price > EMA50 (confirming macro uptrend) to reduce false signals
+        """
         _, _, hist_5min = TechnicalIndicators.macd(prices_5min)
         _, _, hist_1hr = TechnicalIndicators.macd(prices_1hr)
 
-        if hist_5min > 0 and hist_1hr > 0:
-            return "uptrend"
-        elif hist_5min < 0 and hist_1hr < 0:
+        # Require 1hr MACD > 0 (clear uptrend signal on higher timeframe)
+        if hist_1hr > 0:
+            # Also check that price is above medium-term EMA (not at resistance)
+            ema_50 = TechnicalIndicators.ema(prices_5min, 50)
+            current_price = prices_5min[-1]
+            if current_price > ema_50:
+                return "uptrend"
+
+        if hist_1hr < 0:
             return "downtrend"
         else:
             return "ranging"
@@ -226,13 +239,25 @@ class SignalCalculatorRegimeAware:
         rsi, rsi_1hr, volume_ratio, avg_volume, current_volume,
         macd_line, histogram
     ) -> Tuple[Optional[float], str]:
-        """UPTREND STRATEGY: Buy pullbacks in established uptrends (3-5 entries/hour instead of 1)"""
+        """UPTREND STRATEGY: Buy pullbacks in established uptrends
 
-        # CRITICAL FIX: Was requiring price < middle_bb (almost never happens)
-        # Now: Price > EMA20 (in the uptrend) AND < upper_bb (not overbought)
+        CRITICAL FIX: Require much stricter entry conditions to eliminate false signals:
+        1. Price > SMA50 (macro uptrend confirmation)
+        2. 1hr RSI > 50 (uptrend is strong, not struggling)
+        3. 5min RSI 40-70 (pullback in progress, not oversold)
+        4. MACD histogram > 0 (momentum positive on 5min)
+        """
+
         if current_price <= ema20:
             return None, (
                 f"Uptrend rejected: Price ${current_price:.2f} <= EMA20 ${ema20:.2f} (not in uptrend)"
+            )
+
+        # CRITICAL: Require SMA50 check for macro uptrend (not just EMA20)
+        sma50 = TechnicalIndicators.sma(prices_5min, 50)
+        if current_price < sma50:
+            return None, (
+                f"Uptrend rejected: Price ${current_price:.2f} < SMA50 ${sma50:.2f} (not macro uptrend)"
             )
 
         if current_price >= upper_bb:
@@ -240,21 +265,27 @@ class SignalCalculatorRegimeAware:
                 f"Uptrend rejected: Price ${current_price:.2f} >= Upper BB ${upper_bb:.2f} (overbought)"
             )
 
-        if volume_ratio < 1.1:
+        # CRITICAL: 1hr RSI must be > 50 (strong uptrend, not weak)
+        if rsi_1hr < 50:
             return None, (
-                f"Uptrend rejected: Low volume {volume_ratio:.2f}x avg, need > 1.1x"
+                f"Uptrend rejected: 1hr RSI {rsi_1hr:.0f} < 50 (weak/struggling uptrend)"
             )
 
-        if rsi_1hr < 40:
+        # CRITICAL: 5min RSI must show pullback opportunity (40-70, not oversold crash)
+        if rsi < 40 or rsi > 70:
             return None, (
-                f"Uptrend rejected: 1hr RSI {rsi_1hr:.0f} < 40 (weak trend)"
+                f"Uptrend rejected: RSI {rsi:.0f} outside 40-70 pullback zone"
             )
 
-        # CRITICAL FIX: Old RSI 30-50 threshold too tight, RSI noise in crypto
-        # New: Just check RSI is not extremely hot (>70 = overbought)
-        if rsi > 70:
+        # CRITICAL: MACD histogram must be positive (momentum in our favor)
+        if histogram <= 0:
             return None, (
-                f"Uptrend rejected: RSI {rsi:.0f} > 70 (overbought, wait for pullback)"
+                f"Uptrend rejected: MACD histogram {histogram:.4f} <= 0 (no momentum)"
+            )
+
+        if volume_ratio < 1.2:
+            return None, (
+                f"Uptrend rejected: Low volume {volume_ratio:.2f}x avg, need > 1.2x"
             )
 
         # ALL CHECKS PASSED
@@ -264,7 +295,8 @@ class SignalCalculatorRegimeAware:
 
         reason = (
             f"UPTREND BUY DIP: Price ${current_price:.2f} pullback to EMA20 ${ema20:.2f}, "
-            f"RSI 5min={rsi:.0f} 1hr={rsi_1hr:.0f}, Volume {volume_ratio:.2f}x"
+            f"SMA50=${sma50:.2f}, RSI 5min={rsi:.0f} 1hr={rsi_1hr:.0f}, "
+            f"MACD={histogram:.4f}, Volume {volume_ratio:.2f}x"
         )
 
         logger.info(f"✅ Uptrend signal: {reason} (strength: {strength:.0f})")
