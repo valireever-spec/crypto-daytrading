@@ -8,7 +8,7 @@ Tracks:
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field, asdict
 
@@ -62,7 +62,6 @@ class MetricsCollector:
     """Collects trading metrics for monitoring."""
 
     def __init__(self):
-        from datetime import timezone
         self.signals: List[SignalMetric] = []
         self.trades: List[TradeMetric] = []
         self.system: List[SystemMetric] = []
