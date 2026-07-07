@@ -495,6 +495,12 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
         from backend.core.database import get_database
 
         engine = get_paper_trading()
+        if engine is None:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Paper trading engine not initialized"}
+            )
+
         db = get_database()
 
         # PHASE 2: Atomic sync - all-or-nothing (rollback on any failure)

@@ -73,9 +73,7 @@ class MetricsSnapshot:
             "ha_sync": {
                 "success_rate": self.ha_sync_success_rate,
                 "latency_ms": self.ha_sync_latency_ms,
-                "last_sync_time": self.ha_last_sync_time.isoformat()
-                if self.ha_last_sync_time
-                else None,
+                "last_sync_time": self.ha_last_sync_time.isoformat() if self.ha_last_sync_time is not None else None,
                 "state_divergence": self.ha_state_divergence,
             },
             "exceptions": {

@@ -161,10 +161,11 @@ class HeartbeatMonitor:
 
     def get_status(self) -> Dict[str, Any]:
         """Get heartbeat status."""
+        last_check_ts = self.last_check.isoformat() if self.last_check is not None else None
         return {
             "primary_healthy": self.is_primary_healthy,
             "consecutive_failures": self.consecutive_failures,
-            "last_check": self.last_check.isoformat() if self.last_check else None,
+            "last_check": last_check_ts,
             "failure_threshold": self.failure_threshold,
         }
 

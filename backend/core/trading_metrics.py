@@ -117,19 +117,19 @@ class MetricsCollector:
         """Calculate win rate from SELL exits only."""
         if trades is None:
             trades = self.trades
-        
+
         exits = [t for t in trades if t.side == 'SELL' and t.realized_pnl is not None]
         if not exits:
             return 0.0
-        
-        winners = sum(1 for t in exits if t.realized_pnl > 0)
+
+        winners = sum(1 for t in exits if t.realized_pnl is not None and t.realized_pnl > 0)
         return (winners / len(exits) * 100) if exits else 0.0
 
     def get_statistics(self) -> Dict:
         """Get current statistics."""
         from datetime import timezone
         recent_trades = self.get_trades_since(minutes=120)
-        all_trades = [t for t in recent_trades if t.side == 'SELL']
+        all_trades = [t for t in recent_trades if t['side'] == 'SELL']
 
         return {
             'total_signals': len(self.signals),

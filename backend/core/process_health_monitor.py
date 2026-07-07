@@ -218,7 +218,7 @@ class ProcessHealthMonitor:
                 "warning_threshold": self.cpu_warning_threshold,
             },
             "restarts_last_hour": len(self.restart_count_last_hour),
-            "last_check": self.last_health_check.isoformat() if self.last_health_check else None,
+            "last_check": self.last_health_check.isoformat() if self.last_health_check is not None else None,
         }
 
     def is_stuck(self) -> bool:

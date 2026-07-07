@@ -102,9 +102,10 @@ class BiDirectionalSync:
 
     def get_status(self) -> Dict[str, Any]:
         """Get bi-directional sync status."""
+        last_sync_ts = self.last_sync_at.isoformat() if self.last_sync_at is not None else None
         return {
             "machine_id": self.machine_id,
-            "last_sync_at": self.last_sync_at.isoformat() if self.last_sync_at else None,
+            "last_sync_at": last_sync_ts,
             "sync_history_count": len(self.sync_history),
             "recent_syncs": self.get_sync_history(5)
         }

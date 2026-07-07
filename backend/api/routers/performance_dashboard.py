@@ -59,6 +59,9 @@ async def performance_summary() -> Dict[str, Any]:
             init_paper_trading()
             engine = get_paper_trading()
 
+        if engine is None:
+            return {"error": "Paper trading engine initialization failed"}
+
         account = engine.get_account_state()
         trades = engine.get_trades(limit=100)
 
@@ -179,6 +182,9 @@ async def trading_performance() -> Dict[str, Any]:
         if not engine:
             init_paper_trading()
             engine = get_paper_trading()
+
+        if engine is None:
+            return {"error": "Paper trading engine initialization failed"}
 
         account = engine.get_account_state()
         trades = engine.get_trades(limit=1000)

@@ -51,7 +51,7 @@ class CircuitBreaker:
             True if trading allowed (circuit CLOSED), False if stopped (circuit OPEN)
         """
         # If broken, check if we should auto-recover
-        if self.is_broken and self.break_duration:
+        if self.is_broken and self.break_duration and self.triggered_at is not None:
             elapsed = (datetime.utcnow() - self.triggered_at).total_seconds()
             if elapsed >= self.break_duration:
                 logger.info(
@@ -182,14 +182,12 @@ class CircuitBreaker:
         """Get circuit breaker status for logging/monitoring."""
         state = self.get_state()
 
-        if state.is_broken:
+        if state.is_broken and state.triggered_at is not None:
             elapsed = (datetime.utcnow() - state.triggered_at).total_seconds()
             return {
                 "status": "OPEN (trading stopped)",
                 "reason": state.reason,
-                "triggered_at": state.triggered_at.isoformat()
-                if state.triggered_at
-                else None,
+                "triggered_at": state.triggered_at.isoformat(),
                 "elapsed_seconds": elapsed,
                 "auto_recovery_in_seconds": (
                     state.break_duration - elapsed if state.break_duration else None

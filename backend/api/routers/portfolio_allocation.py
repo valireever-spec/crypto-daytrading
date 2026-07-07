@@ -372,6 +372,9 @@ async def get_recommended_rebalancing(
 
         # Get target allocation
         hist_service = get_historical_service()
+        if hist_service is None:
+            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
         symbols = ["BTCUSDT", "EQ_AAPL", "EQ_MSFT", "EQ_GOOGL", "EQ_NVDA"]
         returns = {}
 
@@ -439,6 +442,9 @@ async def get_risk_return_profile() -> Dict[str, Any]:
     try:
         # Get historical data
         hist_service = get_historical_service()
+        if hist_service is None:
+            raise HTTPException(status_code=500, detail="Historical data service not initialized")
+
         symbols = ["BTCUSDT", "EQ_AAPL", "EQ_MSFT", "EQ_GOOGL", "EQ_NVDA"]
         returns = {}
 

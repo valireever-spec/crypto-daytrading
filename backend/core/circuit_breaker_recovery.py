@@ -40,11 +40,14 @@ class CircuitBreakerRecovery:
         self.trip_count += 1
 
         # Persist to disk
+        trip_ts: Optional[str] = None
+        if self.trip_timestamp is not None:
+            trip_ts = self.trip_timestamp.isoformat()
         state_data = {
             "state": self.current_state,
             "reason": reason,
             "trip_count": self.trip_count,
-            "trip_timestamp": self.trip_timestamp.isoformat(),
+            "trip_timestamp": trip_ts,
             "failure_count": failure_count,
         }
 
@@ -56,8 +59,11 @@ class CircuitBreakerRecovery:
 
         # Append to history log
         try:
+            trip_ts_hist: Optional[str] = None
+            if self.trip_timestamp is not None:
+                trip_ts_hist = self.trip_timestamp.isoformat()
             history_entry = {
-                "timestamp": self.trip_timestamp.isoformat(),
+                "timestamp": trip_ts_hist,
                 "state": "OPEN",
                 "reason": reason,
                 "trip_count": self.trip_count,
@@ -83,11 +89,12 @@ class CircuitBreakerRecovery:
         self.last_recovery_time = datetime.utcnow()
 
         # Persist to disk
+        recovery_ts = self.last_recovery_time.isoformat() if self.last_recovery_time is not None else None
         state_data = {
             "state": self.current_state,
             "reason": None,
             "trip_count": self.trip_count,
-            "recovery_timestamp": self.last_recovery_time.isoformat(),
+            "recovery_timestamp": recovery_ts,
             "recovery_duration_seconds": recovery_duration,
         }
 
@@ -99,8 +106,9 @@ class CircuitBreakerRecovery:
 
         # Append to history
         try:
+            recovery_ts = self.last_recovery_time.isoformat() if self.last_recovery_time is not None else None
             history_entry = {
-                "timestamp": self.last_recovery_time.isoformat(),
+                "timestamp": recovery_ts,
                 "state": "CLOSED",
                 "reason": "Automatic recovery",
                 "recovery_duration_seconds": recovery_duration,
@@ -197,16 +205,14 @@ class CircuitBreakerRecovery:
 
     def get_stats(self) -> Dict:
         """Get current CB statistics and history."""
+        trip_ts = self.trip_timestamp.isoformat() if self.trip_timestamp is not None else None
+        recovery_ts = self.last_recovery_time.isoformat() if self.last_recovery_time is not None else None
         stats = {
             "current_state": self.current_state,
             "trip_count": self.trip_count,
             "trip_reason": self.trip_reason,
-            "trip_timestamp": self.trip_timestamp.isoformat() if self.trip_timestamp else None,
-            "last_recovery_time": (
-                self.last_recovery_time.isoformat()
-                if self.last_recovery_time
-                else None
-            ),
+            "trip_timestamp": trip_ts,
+            "last_recovery_time": recovery_ts,
         }
 
         # Add recent history (last 10 entries)

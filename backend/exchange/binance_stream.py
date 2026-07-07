@@ -206,6 +206,9 @@ class BinanceStreamClient:
         }
 
         try:
+            if self.websocket is None:
+                logger.error("WebSocket not connected, cannot subscribe to streams")
+                return
             await self.websocket.send(json.dumps(subscribe_msg))
             logger.info(f"Subscribed to {len(stream_names)} streams")
         except Exception as e:
@@ -214,6 +217,10 @@ class BinanceStreamClient:
     async def _listen(self) -> None:
         """Listen for messages from WebSocket."""
         await self._subscribe_streams()
+
+        if self.websocket is None:
+            logger.error("WebSocket not connected, cannot listen")
+            return
 
         try:
             async for message in self.websocket:

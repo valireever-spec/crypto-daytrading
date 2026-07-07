@@ -121,6 +121,10 @@ class DatabasePersistence:
         Returns:
             True if successful
         """
+        if not self.conn:
+            logger.error("❌ Database connection not initialized")
+            return False
+
         try:
             cursor = self.conn.cursor()
 
@@ -138,7 +142,8 @@ class DatabasePersistence:
             return True
 
         except Exception as e:
-            self.conn.rollback()
+            if self.conn:
+                self.conn.rollback()
             logger.error(f"❌ Trade update failed: {e}")
             return False
 
@@ -148,6 +153,10 @@ class DatabasePersistence:
         Returns:
             List of trades that need reconciliation
         """
+        if not self.conn:
+            logger.error("❌ Database connection not initialized")
+            return []
+
         cursor = self.conn.cursor()
 
         cursor.execute("""
@@ -175,6 +184,10 @@ class DatabasePersistence:
 
     def get_trade_status(self, trade_id: str) -> Optional[Dict]:
         """Get trade status (check if executed)."""
+        if not self.conn:
+            logger.error("❌ Database connection not initialized")
+            return None
+
         cursor = self.conn.cursor()
 
         cursor.execute("""
@@ -200,6 +213,10 @@ class DatabasePersistence:
 
     def get_status(self) -> Dict:
         """Get database status."""
+        if not self.conn:
+            logger.error("❌ Database connection not initialized")
+            return {}
+
         cursor = self.conn.cursor()
 
         cursor.execute("SELECT COUNT(*) FROM trades")

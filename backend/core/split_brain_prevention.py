@@ -162,12 +162,15 @@ class SplitBrainPrevention:
 
     def get_status(self) -> dict:
         """Get current failover status."""
+        primary_check_ts = self.last_primary_check.isoformat() if self.last_primary_check is not None else None
+        backup_check_ts = self.last_backup_check.isoformat() if self.last_backup_check is not None else None
+        state_updated_ts = self.state_updated_at.isoformat() if self.state_updated_at is not None else None
         return {
             "machine_id": self.machine_id,
             "current_state": self.current_state.value,
             "can_trade": self.can_trade(),
             "is_split_brain": self._is_split_brain(),
-            "last_primary_check": self.last_primary_check.isoformat() if self.last_primary_check else None,
-            "last_backup_check": self.last_backup_check.isoformat() if self.last_backup_check else None,
-            "state_updated_at": self.state_updated_at.isoformat(),
+            "last_primary_check": primary_check_ts,
+            "last_backup_check": backup_check_ts,
+            "state_updated_at": state_updated_ts,
         }

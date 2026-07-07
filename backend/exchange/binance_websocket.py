@@ -77,6 +77,10 @@ class BinanceWebSocketClient:
 
     async def _listen(self) -> None:
         """Listen for messages on WebSocket."""
+        if self.websocket is None:
+            logger.error("WebSocket not connected")
+            return
+
         try:
             async for message in self.websocket:
                 await self._handle_message(message)

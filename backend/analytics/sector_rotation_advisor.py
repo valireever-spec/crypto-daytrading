@@ -163,7 +163,7 @@ class SectorRotationAdvisor:
                 to_sector = sector
 
         # Only recommend rotation if drift is significant (>10%)
-        if max_drift < 10:
+        if max_drift < 10 or from_sector is None or to_sector is None:
             return None
 
         # Calculate confidence based on sector-level regime strength
@@ -248,30 +248,48 @@ class SectorRotationAdvisor:
           - From sector is consistently in bear/volatile
           - To sector is consistently in bull
         """
-        from_regimes = [
-            r.get("regime")
-            for s, r in symbol_regimes.items()
-            if self.symbol_sectors.get(s) == from_sector
-        ]
-        to_regimes = [
-            r.get("regime")
-            for s, r in symbol_regimes.items()
-            if self.symbol_sectors.get(s) == to_sector
-        ]
+        from_regimes = []
+        to_regimes = []
+
+        try:
+            if not symbol_regimes:
+                return 0.5
+
+            for s, r in symbol_regimes.items():
+                if r is None:
+                    continue
+
+                sector = self.symbol_sectors.get(s)
+                regime = r.get("regime") if isinstance(r, dict) else None
+
+                if regime is None:
+                    continue
+
+                if sector == from_sector:
+                    from_regimes.append(regime)
+                elif sector == to_sector:
+                    to_regimes.append(regime)
+        except Exception as e:
+            logger.error(f"Error calculating rotation confidence: {e}", exc_info=True)
+            return 0.5
 
         if not from_regimes or not to_regimes:
             return 0.5
 
         # Strength of divergence
-        from_bear_ratio = sum(
-            1 for r in from_regimes if r in ["bear", "volatile"]
-        ) / len(from_regimes)
-        to_bull_ratio = sum(1 for r in to_regimes if r in ["bull", "sideways"]) / len(
-            to_regimes
-        )
+        try:
+            from_bear_ratio = sum(
+                1 for r in from_regimes if r in ["bear", "volatile"]
+            ) / len(from_regimes)
+            to_bull_ratio = sum(1 for r in to_regimes if r in ["bull", "sideways"]) / len(
+                to_regimes
+            )
 
-        confidence = (from_bear_ratio + to_bull_ratio) / 2
-        return min(confidence, 1.0)
+            confidence = (from_bear_ratio + to_bull_ratio) / 2
+            return min(confidence, 1.0)
+        except Exception as e:
+            logger.error(f"Error computing confidence ratios: {e}", exc_info=True)
+            return 0.5
 
     def _calculate_expected_outperformance(
         self,
@@ -342,26 +360,48 @@ class SectorRotationAdvisor:
 
         Returns dict of {sector: momentum} where momentum is % change.
         """
-        sector_momentum = {}
+        try:
+            if not price_history:
+                return {}
 
-        for symbol, sector in self.symbol_sectors.items():
-            if symbol not in price_history or len(price_history[symbol]) < 2:
-                continue
+            sector_momentum = {}
 
-            prices = price_history[symbol]
-            momentum = ((prices[-1] - prices[0]) / prices[0]) * 100
+            for symbol, sector in self.symbol_sectors.items():
+                try:
+                    if symbol not in price_history:
+                        continue
 
-            if sector not in sector_momentum:
-                sector_momentum[sector] = []
+                    prices = price_history[symbol]
+                    if prices is None or len(prices) < 2:
+                        continue
 
-            sector_momentum[sector].append(momentum)
+                    # Check for zero/None first price to avoid division by zero
+                    if prices[0] is None or prices[0] == 0:
+                        logger.warning(f"Invalid starting price for {symbol}: {prices[0]}")
+                        continue
 
-        # Average momentum per sector
-        result = {}
-        for sector, momentums in sector_momentum.items():
-            result[sector] = sum(momentums) / len(momentums) if momentums else 0
+                    momentum = ((prices[-1] - prices[0]) / prices[0]) * 100
 
-        return result
+                    if sector not in sector_momentum:
+                        sector_momentum[sector] = []
+
+                    sector_momentum[sector].append(momentum)
+                except (TypeError, ValueError, IndexError) as e:
+                    logger.warning(f"Error calculating momentum for {symbol}: {e}")
+                    continue
+
+            # Average momentum per sector
+            result = {}
+            for sector, momentums in sector_momentum.items():
+                if momentums:
+                    result[sector] = sum(momentums) / len(momentums)
+                else:
+                    result[sector] = 0
+
+            return result
+        except Exception as e:
+            logger.error(f"Error in get_sector_momentum: {e}", exc_info=True)
+            return {}
 
     def should_increase_sector_exposure(
         self,
@@ -370,14 +410,25 @@ class SectorRotationAdvisor:
         portfolio_regime: str,
     ) -> bool:
         """Check if portfolio should increase exposure to a sector."""
-        if portfolio_regime not in self.regime_allocations:
+        try:
+            if portfolio_regime not in self.regime_allocations:
+                return False
+
+            if not current_allocation:
+                return False
+
+            regime_alloc = self.regime_allocations.get(portfolio_regime)
+            if regime_alloc is None:
+                return False
+
+            target = regime_alloc.get(sector, 0)
+            current = current_allocation.get(sector, 0)
+
+            # Increase if underweight by >5%
+            return (target - current) > 5
+        except Exception as e:
+            logger.error(f"Error in should_increase_sector_exposure: {e}", exc_info=True)
             return False
-
-        target = self.regime_allocations[portfolio_regime].get(sector, 0)
-        current = current_allocation.get(sector, 0)
-
-        # Increase if underweight by >5%
-        return (target - current) > 5
 
     def should_decrease_sector_exposure(
         self,
