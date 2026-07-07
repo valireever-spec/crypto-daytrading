@@ -550,7 +550,7 @@ class AutonomousTrader:
                 # Monitor symbols for entry signals
                 if not skip_entries and not daily_loss_halt_enabled:
                     logger.info(f"Checking entry signals for {self.config.symbols}...")
-                    from . import entry_regime_aware_v2 as entry
+                    from . import entry_rsi_oversold as entry
 
                     for symbol in self.config.symbols:
                         signal = await entry._check_symbol_impl(self, symbol)
