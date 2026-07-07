@@ -369,14 +369,138 @@ This loop prevents these classes of bugs:
 
 ---
 
+---
+
+## 5️⃣ FRONTEND/BACKEND CONTRACT VERIFICATION (NEW)
+
+**Problem:** Dashboard called wrong API endpoint (`/api/health` instead of `/api/paper/account`), displaying $0.00 instead of real equity.
+
+**Root Causes:**
+- No integration tests between frontend and backend
+- Frontend made assumptions about API response structure
+- No API specification documenting endpoint contracts
+- No type safety in JavaScript (typos silently returned undefined)
+- Lack of code review catching the mismatch
+
+**Prevention Checklist:**
+
+### Dashboard Integration Testing
+```bash
+✓ tests/integration/test_dashboard_api_endpoints.py
+  - Load dashboard with real API running
+  - Verify account data displays correctly
+  - Check for $0.00 or null values (data loading failure)
+  - Test all endpoints dashboard depends on
+```
+
+### API Contract Specification
+```json
+// docs/API_CONTRACT.md
+{
+  "/api/paper/account": {
+    "GET": {
+      "returns": {
+        "mode": "string ('PAPER' | 'LIVE')",
+        "cash": "float (EUR)",
+        "positions_value": "float (EUR)",
+        "total_equity": "float (EUR)",
+        "active_positions": "integer",
+        "trades_today": "integer"
+      }
+    }
+  }
+}
+```
+
+### Type Safety in Frontend
+```typescript
+// Use TypeScript for dashboard instead of plain JavaScript
+interface AccountData {
+  mode: "PAPER" | "LIVE";
+  cash: number;
+  positions_value: number;
+  total_equity: number;
+  active_positions: number;
+  trades_today: number;
+}
+
+// Compiler catches missing fields: Property 'account' does not exist on type 'health'
+const account: AccountData = health.account; // ❌ COMPILE ERROR
+```
+
+### E2E Tests for Dashboard
+```bash
+✓ tests/e2e/test_dashboard_display.py (Playwright)
+  - Open dashboard
+  - Wait for API call to complete
+  - Assert cash > 0 (not $0.00)
+  - Assert total_equity > 0
+  - Assert all metrics render correctly
+```
+
+### Code Review Checklist Before Deploy
+```markdown
+## Dashboard Changes Code Review
+
+- [ ] Does dashboard use the correct API endpoint?
+- [ ] Did you test the dashboard with the API running?
+- [ ] Are all API response fields properly handled?
+- [ ] Did you check for null/undefined values?
+- [ ] Is there an integration test?
+- [ ] Did you run the integration test locally?
+```
+
+### API Documentation
+```markdown
+docs/API_ENDPOINTS.md
+
+## GET /api/paper/account
+
+**Purpose:** Retrieve current account state (cash, equity, positions)
+
+**Response:**
+- `cash`: Current available cash (float, EUR)
+- `total_equity`: Total account equity including open positions (float, EUR)
+- `positions_value`: Value of open positions (float, EUR)
+- `active_positions`: Count of open positions (integer)
+- `trades_today`: Trades executed today (integer)
+
+**Usage in Dashboard:**
+```javascript
+const account = await fetch('/api/paper/account').then(r => r.json());
+document.getElementById('cash').textContent = account.cash; // CORRECT
+document.getElementById('equity').textContent = account.total_equity; // CORRECT
+```
+
+**Common Mistakes:**
+❌ Fetching from `/api/health` instead
+❌ Assuming `health.account` exists
+❌ Not handling missing fields
+```
+
+---
+
+## Verification Loop Summary: All 5 Parts
+
+| Part | Purpose | Prevents |
+|------|---------|----------|
+| **1. Trade Reason Chain** | End-to-end testing of critical info | Information loss bugs |
+| **2. Type Safety** | Trade dataclass + mypy | Silent parameter drops |
+| **3. API Contract** | Document what endpoints return | Frontend/backend mismatches |
+| **4. Dashboard Integration** | Test UI with real API | Display bugs ($0.00) |
+| **5. E2E Tests** | Full user flow testing | UI showing wrong data |
+
+---
+
 ## Conclusion
 
-This verification loop ensures that **information critical to trading decisions** (why we entered, why we exited) is:
+This comprehensive verification loop ensures that **all critical code paths** are:
 
-1. ✅ **Type-safe** — Trade dataclass requires both fields
-2. ✅ **Tested** — End-to-end tests verify full chain
+1. ✅ **Type-safe** — Trade dataclass requires fields, TypeScript catches frontend typos
+2. ✅ **Tested** — End-to-end tests verify full chain (backend AND frontend)
 3. ✅ **Observable** — Real-time API shows completeness
-4. ✅ **Auditable** — Pre-commit checks before deployment
-5. ✅ **Never silent** — Missing reasons trigger failures, not warnings
+4. ✅ **Auditable** — Pre-commit checks + code review before deployment
+5. ✅ **Documented** — API contract specifies exactly what each endpoint returns
+6. ✅ **Never silent** — Missing data or wrong endpoints trigger test failures
 
-**Result:** No more information loss bugs. Decisions are fully traceable.
+**Result:** No more information loss bugs. No more $0.00 display errors. Decisions are fully traceable, frontend matches backend, and errors surface immediately.
