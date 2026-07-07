@@ -53,7 +53,13 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
             hold_time = 0  # Initialize to 0 (safety fallback)
             if entry_time:
                 if isinstance(entry_time, str):
+                    # Parse ISO format and ensure timezone-aware
                     entry_time = datetime.fromisoformat(entry_time)
+                    if entry_time.tzinfo is None:
+                        entry_time = entry_time.replace(tzinfo=timezone.utc)
+                # Ensure both datetimes are comparable
+                if entry_time.tzinfo is None:
+                    entry_time = entry_time.replace(tzinfo=timezone.utc)
                 hold_time = (datetime.now(timezone.utc) - entry_time).total_seconds()
 
                 if hold_time < MIN_HOLD_TIME_SECONDS:
