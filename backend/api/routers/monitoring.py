@@ -4,8 +4,66 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from datetime import datetime, timezone
 from pathlib import Path
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/monitoring", tags=["Monitoring"])
+
+# Track if we've synced historical data
+_historical_sync_done = False
+
+
+def _sync_historical_trades_to_metrics():
+    """Sync historical trades from paper trading engine to metrics collector."""
+    global _historical_sync_done
+
+    if _historical_sync_done:
+        return  # Only sync once per API session
+
+    try:
+        from backend.core.trading_metrics import get_metrics_collector
+        from backend.exchange.paper_trading import get_paper_trading
+
+        collector = get_metrics_collector()
+        engine = get_paper_trading()
+
+        if not engine:
+            logger.warning("Paper trading engine not initialized, skipping historical sync")
+            return
+
+        # Get all trades from engine
+        all_trades = engine.get_trades(limit=500)  # Get last 500 trades
+
+        if not all_trades:
+            logger.info("No historical trades to sync")
+            _historical_sync_done = True
+            return
+
+        # Load trades into metrics collector
+        for trade in all_trades:
+            try:
+                collector.record_trade(
+                    symbol=trade.get('symbol', 'UNKNOWN'),
+                    side=trade.get('side', 'BUY'),
+                    entry_price=trade.get('entry_price'),
+                    exit_price=trade.get('exit_price'),
+                    quantity=trade.get('quantity'),
+                    realized_pnl=trade.get('realized_pnl'),
+                    realized_pnl_pct=trade.get('realized_pnl_pct'),
+                    hold_seconds=trade.get('hold_seconds'),
+                    exit_reason=trade.get('exit_reason'),
+                    slippage_pct=trade.get('slippage_pct', 0),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to sync trade: {e}")
+                continue
+
+        logger.info(f"✅ Synced {len(all_trades)} historical trades to metrics collector")
+        _historical_sync_done = True
+
+    except Exception as e:
+        logger.error(f"Error syncing historical trades: {e}")
+        _historical_sync_done = True
 
 @router.get("/metrics")
 async def get_metrics():
@@ -13,6 +71,9 @@ async def get_metrics():
     try:
         from backend.core.trading_metrics import get_metrics_collector
         from datetime import timezone
+
+        # Sync historical trades on first access
+        _sync_historical_trades_to_metrics()
 
         collector = get_metrics_collector()
         stats = collector.get_statistics()
@@ -31,6 +92,10 @@ async def get_signals(minutes: int = 60):
     """Get recent signals (entry decisions)."""
     try:
         from backend.core.trading_metrics import get_metrics_collector
+
+        # Sync historical trades on first access
+        _sync_historical_trades_to_metrics()
+
         collector = get_metrics_collector()
         
         return {
@@ -46,6 +111,10 @@ async def get_trades(minutes: int = 60):
     """Get recent trades (executions)."""
     try:
         from backend.core.trading_metrics import get_metrics_collector
+
+        # Sync historical trades on first access
+        _sync_historical_trades_to_metrics()
+
         collector = get_metrics_collector()
         
         trades = collector.get_trades_since(minutes=minutes)
@@ -68,7 +137,10 @@ async def get_dashboard_data():
     try:
         from backend.core.trading_metrics import get_metrics_collector
         import requests
-        
+
+        # Sync historical trades on first access
+        _sync_historical_trades_to_metrics()
+
         collector = get_metrics_collector()
         
         # Get health for system status
@@ -163,42 +235,86 @@ async def get_prometheus_metrics():
 
 @router.get("/dashboard-metrics")
 async def get_dashboard_metrics():
-    """Get comprehensive dashboard metrics for UI display."""
+    """Get comprehensive dashboard metrics for UI display (from paper trading engine)."""
     try:
-        from backend.core.trading_metrics import get_metrics_collector
-        import requests
+        from backend.exchange.paper_trading import get_paper_trading
+        from datetime import timezone
 
-        collector = get_metrics_collector()
-        dashboard_data = collector.get_dashboard_metrics()
+        engine = get_paper_trading()
+        if not engine:
+            raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
 
-        # Add system health and account data
-        account = {}
-        try:
-            # Get account data from paper trading engine (correct endpoint)
-            from backend.exchange.paper_trading import get_paper_trading
-            engine = get_paper_trading()
-            if engine:
-                account_state = engine.get_account_state()
-                account = {
-                    'cash': account_state.get('cash', 0),
-                    'daily_pnl': account_state.get('daily_pnl', 0),
-                    'total_pnl': account_state.get('total_pnl', 0),
-                    'active_positions': len(engine.get_positions()),
-                }
-        except:
-            pass
+        # Get all trades from engine (source of truth)
+        all_trades = engine.get_trades(limit=500)
 
-        dashboard_data['system'] = {
-            'cash': account.get('cash', 0),
-            'daily_pnl': account.get('daily_pnl', 0),
-            'total_pnl': account.get('total_pnl', 0),
-            'open_positions': account.get('active_positions', 0),
+        # Calculate metrics from actual trades
+        exits = [t for t in all_trades if t.get('side') == 'SELL' and t.get('realized_pnl') is not None]
+        entries = [t for t in all_trades if t.get('side') == 'BUY']
+
+        # Calculate P&L metrics
+        total_pnl = sum(t.get('realized_pnl', 0) for t in exits)
+        winners = [t for t in exits if (t.get('realized_pnl', 0) or 0) > 0]
+        losers = [t for t in exits if (t.get('realized_pnl', 0) or 0) <= 0]
+
+        avg_win = sum(t.get('realized_pnl', 0) for t in winners) / len(winners) if winners else 0
+        avg_loss = sum(t.get('realized_pnl', 0) for t in losers) / len(losers) if losers else 0
+
+        win_rate = (len(winners) / len(exits) * 100) if exits else 0
+        risk_reward = abs(avg_win / avg_loss) if (avg_loss and avg_loss != 0) else 0
+
+        # Consecutive losses
+        consecutive_losses = 0
+        for trade in reversed(exits):
+            if (trade.get('realized_pnl', 0) or 0) <= 0:
+                consecutive_losses += 1
+            else:
+                break
+
+        # Get last 5 trades for display
+        last_5 = exits[-5:] if exits else []
+        last_5_display = []
+        for trade in reversed(last_5):
+            pnl = trade.get('realized_pnl', 0)
+            pnl_pct = trade.get('realized_pnl_pct', 0)
+            status = "✅" if pnl > 0 else "❌"
+            last_5_display.append({
+                'status': status,
+                'symbol': trade.get('symbol', 'UNKNOWN'),
+                'pnl': round(pnl, 4),
+                'pnl_pct': round(pnl_pct, 2),
+                'hold_seconds': trade.get('hold_seconds', 0),
+                'exit_reason': trade.get('exit_reason', 'unknown')
+            })
+
+        # Get account state
+        account_state = engine.get_account_state()
+
+        return {
+            'summary': {
+                'trades_today': len(entries),
+                'exits_today': len(exits),
+                'total_pnl': account_state.get('total_pnl', 0),  # Use actual account P&L, not sum of historical trades
+                'win_rate_pct': round(win_rate, 1),
+                'wins': len(winners),
+                'losses': len(losers),
+            },
+            'performance': {
+                'avg_win': round(avg_win, 4),
+                'avg_loss': round(avg_loss, 4),
+                'risk_reward_ratio': round(risk_reward, 2),
+                'consecutive_losses': consecutive_losses,
+            },
+            'recent_trades': last_5_display,
+            'system': {
+                'cash': account_state.get('cash', 0),
+                'daily_pnl': account_state.get('daily_pnl', 0),
+                'total_pnl': account_state.get('total_pnl', 0),
+                'open_positions': len(engine.get_positions()),
+            },
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
-
-        dashboard_data['timestamp'] = datetime.now(timezone.utc).isoformat()
-
-        return dashboard_data
     except Exception as e:
+        logger.error(f"Error getting dashboard metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/dashboard")
