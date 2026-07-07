@@ -198,7 +198,7 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             side="BUY",
             strength=signal_strength,
             reason=f"{reason} (strength: {signal_strength:.0f})",
-            timestamp=datetime.now(),
+            timestamp=None,  # Let TradeSignal use current time
         )
 
     except Exception as e:
