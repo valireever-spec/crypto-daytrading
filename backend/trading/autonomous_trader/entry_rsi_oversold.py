@@ -49,10 +49,10 @@ class TechnicalIndicators:
 class RSIOversoldStrategy:
     """RSI Oversold mean reversion - simple & proven"""
 
-    # Entry thresholds (adapted for overbought market)
+    # Entry thresholds (very strong uptrend market: RSI 60-65)
     RSI_OVERSOLD_1H = 70      # No 1h filter (trade any market)
-    RSI_RECOVERY_5M = 30      # 5m RSI between 30-50 = pullback zone in uptrend
-    RSI_MAX_5M = 50           # Allow pullbacks up to 50 (still in uptrend)
+    RSI_RECOVERY_5M = 30      # 5m RSI above 30 = recovery zone
+    RSI_MAX_5M = 65           # Allow entries up to RSI 65 (catch strong uptrend rallies)
 
     # Exit thresholds
     RSI_OVERBOUGHT_1H = 70    # Sell when 5m RSI > 40 (recovered)
