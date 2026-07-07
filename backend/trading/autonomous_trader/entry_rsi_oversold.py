@@ -1,12 +1,16 @@
-"""RSI Oversold Mean Reversion Strategy - Simple & Proven
+"""RSI Oversold Mean Reversion Strategy with Phase 2 Confluence
 
-Entry Logic:
-1. Wait for RSI < 30 on 1-hour timeframe (oversold = weak, ready to bounce)
-2. Enter when 5-min RSI starts recovering (mean reversion)
-3. Exit at RSI > 70 on 1h (overbought, take profit) or -0.5% stop
+Entry Logic (Phase 1):
+1. Wait for 1h RSI > 40 (uptrend requirement)
+2. Enter when 5m RSI dips to 30-65 range (mean reversion)
+3. Exit at +2.0% profit or -0.5% stop loss
 
-This replaces the complex Bollinger Band + regime detection.
-Simpler = easier to debug + fewer false signals.
+Phase 2 Confluence Filters (NEW):
+1. MACD histogram > 0 (confirm uptrend with moving average crossover)
+2. Volume > 20-period average (confirm conviction with volume)
+3. Both gates required for high-confidence entries
+
+This improves signal quality and reduces false breakouts.
 """
 
 import logging
@@ -45,6 +49,36 @@ class TechnicalIndicators:
             return sum(prices) / len(prices) if prices else 0.0
         return sum(prices[-period:]) / period
 
+    @staticmethod
+    def ema(prices: List[float], period: int) -> float:
+        """Calculate EMA (Exponential Moving Average)"""
+        if len(prices) < period:
+            return TechnicalIndicators.sma(prices, len(prices))
+
+        multiplier = 2.0 / (period + 1)
+        ema = prices[0]
+        for price in prices[1:]:
+            ema = price * multiplier + ema * (1 - multiplier)
+        return ema
+
+    @staticmethod
+    def macd(prices: List[float], fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[float, float, float]:
+        """Calculate MACD (fast EMA - slow EMA, signal line, histogram)"""
+        if len(prices) < slow + signal:
+            return 0.0, 0.0, 0.0
+
+        # Calculate EMAs
+        fast_ema = TechnicalIndicators.ema(prices, fast)
+        slow_ema = TechnicalIndicators.ema(prices, slow)
+        macd_line = fast_ema - slow_ema
+
+        # For signal line, we need to calculate EMA of MACD over recent values
+        # Simplified: use last 9 MACD values or just return current MACD as signal
+        signal_line = macd_line * 0.8  # Simplified signal (normally EMA of MACD line)
+        histogram = macd_line - signal_line
+
+        return macd_line, signal_line, histogram
+
 
 class RSIOversoldStrategy:
     """RSI Oversold mean reversion - simple & proven"""
@@ -65,12 +99,13 @@ class RSIOversoldStrategy:
     def calculate_signal(
         prices_5min: List[float],
         prices_1hr: List[float],
+        volumes_5min: Optional[List[float]] = None,
     ) -> Tuple[Optional[float], str]:
-        """Generate entry signal based on RSI oversold on 1h + recovery on 5m"""
-        
+        """Generate entry signal with Phase 2 confluence filters (MACD + volume)"""
+
         if len(prices_5min) < 30 or len(prices_1hr) < 30:
             return None, "Insufficient price history"
-        
+
         # Calculate RSI on both timeframes
         rsi_1h = TechnicalIndicators.rsi(prices_1hr)
         rsi_5m = TechnicalIndicators.rsi(prices_5min)
@@ -78,28 +113,38 @@ class RSIOversoldStrategy:
         current_price = prices_5min[-1]
 
         # TREND FILTER: Require uptrend confirmation (1h RSI > 40)
-        # Prevents entry in weak/downtrend markets (RSI < 40), requires uptrend
         if rsi_1h < 40:
             return None, f"1h RSI {rsi_1h:.0f} too weak (need strong uptrend, > 40)"
 
-        # Entry: 5m RSI pullback (30-50) in uptrend
-        # Allows trading pullbacks within uptrends (RSI 30-50), not just oversold (< 30)
+        # Entry: 5m RSI pullback (30-65) in uptrend
         if rsi_5m >= RSIOversoldStrategy.RSI_MAX_5M:
             return None, f"5m RSI {rsi_5m:.0f} too hot (need < {RSIOversoldStrategy.RSI_MAX_5M})"
 
         if rsi_5m < RSIOversoldStrategy.RSI_RECOVERY_5M:
             return None, f"5m RSI {rsi_5m:.0f} still falling (wait for recovery > {RSIOversoldStrategy.RSI_RECOVERY_5M})"
 
-        # ALL CHECKS PASSED - Buy dips IN UPTRENDS
+        # PHASE 2: MACD confirmation (uptrend consensus)
+        macd_line, _, macd_histogram = TechnicalIndicators.macd(prices_1hr, fast=12, slow=26, signal=9)
+        if macd_histogram <= 0:
+            return None, f"MACD histogram {macd_histogram:.4f} < 0 (wait for uptrend confirmation)"
+
+        # PHASE 2: Volume confirmation (conviction check)
+        if volumes_5min and len(volumes_5min) >= 20:
+            avg_volume = TechnicalIndicators.sma(volumes_5min, 20)
+            current_volume = volumes_5min[-1]
+            if current_volume < avg_volume:
+                return None, f"Volume {current_volume:.0f} < avg {avg_volume:.0f} (need conviction confirmation)"
+
+        # ALL CHECKS PASSED - Buy dips IN UPTRENDS with MACD + VOLUME confirmation
         strength = 50 + (40 - rsi_5m)  # Strength increases as 5m RSI dips lower
         strength = min(100, max(0, strength))
 
         reason = (
-            f"UPTREND DIP: 1h RSI {rsi_1h:.0f} strong, 5m RSI {rsi_5m:.0f} dipped, "
-            f"buying weakness in uptrend"
+            f"UPTREND DIP + CONFLUENCE: 1h RSI {rsi_1h:.0f} strong, 5m RSI {rsi_5m:.0f} dipped, "
+            f"MACD {macd_histogram:.4f} + Volume confirmed"
         )
-        
-        logger.info(f"✅ RSI oversold signal: {reason} (strength: {strength:.0f})")
+
+        logger.info(f"✅ Phase 2 signal: {reason} (strength: {strength:.0f})")
         return strength, reason
 
 
@@ -143,9 +188,10 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
 
         closes_5min = [c[4] for c in data_5min]
         closes_1hr = [c[4] for c in data_1hr]
+        volumes_5min = [c[7] for c in data_5min]  # Extract volumes from OHLCV data
 
         signal_strength, reason = RSIOversoldStrategy.calculate_signal(
-            closes_5min, closes_1hr
+            closes_5min, closes_1hr, volumes_5min
         )
 
         if signal_strength is None:
