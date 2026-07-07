@@ -74,23 +74,29 @@ class RSIOversoldStrategy:
         # Calculate RSI on both timeframes
         rsi_1h = TechnicalIndicators.rsi(prices_1hr)
         rsi_5m = TechnicalIndicators.rsi(prices_5min)
-        
+
         current_price = prices_5min[-1]
-        
+
+        # TREND FILTER: Only trade in uptrends (1h RSI > 50)
+        # This prevents buying dips in downtrends and sideways markets
+        if rsi_1h < 50:
+            return None, f"1h RSI {rsi_1h:.0f} too weak (need > 50 for uptrend)"
+
         # Entry: 5m RSI dipped (< 40) and starting to recover (> 20)
+        # Only triggered when market is already in uptrend (1h RSI > 50)
         if rsi_5m >= RSIOversoldStrategy.RSI_MAX_5M:
             return None, f"5m RSI {rsi_5m:.0f} too hot (need < {RSIOversoldStrategy.RSI_MAX_5M})"
 
         if rsi_5m < RSIOversoldStrategy.RSI_RECOVERY_5M:
             return None, f"5m RSI {rsi_5m:.0f} still falling (wait for recovery > {RSIOversoldStrategy.RSI_RECOVERY_5M})"
-        
-        # ALL CHECKS PASSED - Mean reversion opportunity
+
+        # ALL CHECKS PASSED - Buy dips IN UPTRENDS
         strength = 50 + (40 - rsi_5m)  # Strength increases as 5m RSI dips lower
         strength = min(100, max(0, strength))
 
         reason = (
-            f"RSI DIP: 5m RSI {rsi_5m:.0f} dipped (20-40 zone), "
-            f"mean reversion opportunity"
+            f"UPTREND DIP: 1h RSI {rsi_1h:.0f} strong, 5m RSI {rsi_5m:.0f} dipped, "
+            f"buying weakness in uptrend"
         )
         
         logger.info(f"✅ RSI oversold signal: {reason} (strength: {strength:.0f})")
