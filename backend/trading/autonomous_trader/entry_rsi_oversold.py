@@ -181,3 +181,77 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
     except Exception as e:
         logger.error(f"Error checking {symbol}: {e}")
         return None
+
+
+async def _execute_entry_impl(trader_self, signal) -> bool:
+    """Execute a buy order for RSI dip signal."""
+    try:
+        from backend.exchange.paper_trading import get_paper_trading
+        from backend.exchange.binance_stream import get_stream_client
+        from backend.exchange.order_response import validate_order_response
+        from backend.core.alerting import get_alert_manager
+
+        engine = get_paper_trading()
+        if not engine:
+            logger.error("Paper trading engine not initialized")
+            return False
+
+        account = engine.get_account_state()
+        cash = account.get("cash", 0.0)
+
+        stream_client = get_stream_client()
+        current_price = None
+
+        if stream_client and signal.symbol in stream_client.price_cache:
+            current_price = stream_client.price_cache[signal.symbol]
+
+        if not current_price:
+            logger.warning(f"{signal.symbol}: No current price, cannot execute entry")
+            return False
+
+        position_size_pct = trader_self.config.position_size_pct / 100.0
+        order_value = cash * position_size_pct
+        quantity = order_value / current_price
+
+        result = await engine.place_order(
+            symbol=signal.symbol,
+            side="BUY",
+            quantity=round(quantity, 4),
+            current_price=current_price,
+        )
+
+        try:
+            validated = validate_order_response(result)
+
+            if validated.status == "FILLED":
+                logger.info(
+                    f"✅ BUY {signal.symbol}: {quantity:.4f} @ ${current_price:.2f} - {signal.reason}"
+                )
+
+                # Record trade execution for monitoring
+                metrics = get_metrics_collector()
+                metrics.record_trade(
+                    symbol=signal.symbol,
+                    side='BUY',
+                    entry_price=current_price,
+                    quantity=quantity,
+                )
+
+                alert_mgr = get_alert_manager()
+                new_account = engine.get_account_state()
+                new_cash = new_account.get("cash", 0.0)
+
+                await alert_mgr.alert_trade_entry(
+                    signal.symbol, quantity, current_price, new_cash, signal.reason
+                )
+                return True
+            else:
+                logger.warning(f"❌ Buy order failed for {signal.symbol}: {validated.status}")
+                return False
+        except Exception as e:
+            logger.error(f"Invalid order response for {signal.symbol}: {e}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error executing entry for {signal.symbol}: {e}", exc_info=True)
+        return False
