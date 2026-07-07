@@ -66,6 +66,7 @@ from backend.api.routers.config import router as config_router
 from backend.api.routers.metrics import router as metrics_router
 from backend.api.routers.trade_verification import router as verification_router
 from backend.api.routers.parameter_monitoring import router as parameter_monitoring_router
+from backend.api.routers.health import router as health_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -140,6 +141,7 @@ routers = [
     metrics_router,
     verification_router,
     parameter_monitoring_router,
+    health_router,
 ]
 
 for router in routers:
