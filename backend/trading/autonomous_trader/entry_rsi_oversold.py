@@ -77,10 +77,10 @@ class RSIOversoldStrategy:
 
         current_price = prices_5min[-1]
 
-        # TREND FILTER: Only trade in uptrends (1h RSI > 50)
-        # This prevents buying dips in downtrends and sideways markets
-        if rsi_1h < 50:
-            return None, f"1h RSI {rsi_1h:.0f} too weak (need > 50 for uptrend)"
+        # TREND FILTER: Allow neutral/weak markets (1h RSI > 30)
+        # Prevents entry only in severe downtrends (RSI < 30), allows ranging/consolidation
+        if rsi_1h < 30:
+            return None, f"1h RSI {rsi_1h:.0f} too weak (severe downtrend, need > 30)"
 
         # Entry: 5m RSI dipped (< 40) and starting to recover (> 20)
         # Only triggered when market is already in uptrend (1h RSI > 50)
