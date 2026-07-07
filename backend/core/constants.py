@@ -48,7 +48,7 @@ REPLICATION_LAG_CRITICAL_THRESHOLD = float(os.getenv("REPLICATION_LAG_CRITICAL",
 # TRADING CONFIGURATION DEFAULTS
 # ============================================================================
 
-DEFAULT_ENTRY_THRESHOLD = float(os.getenv("DEFAULT_ENTRY_THRESHOLD", "60.0"))
+DEFAULT_ENTRY_THRESHOLD = float(os.getenv("DEFAULT_ENTRY_THRESHOLD", "75.0"))
 DEFAULT_EXIT_PROFIT_TARGET = float(os.getenv("DEFAULT_EXIT_PROFIT_TARGET", "3.0"))  # percent
 DEFAULT_EXIT_STOP_LOSS = float(os.getenv("DEFAULT_EXIT_STOP_LOSS", "3.0"))  # percent
 DEFAULT_POSITION_SIZE_PCT = float(os.getenv("DEFAULT_POSITION_SIZE_PCT", "2.5"))  # percent

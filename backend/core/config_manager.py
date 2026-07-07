@@ -114,7 +114,7 @@ class ConfigManager:
             "position_size_pct": float(os.getenv("POSITION_SIZE_PCT", "2.5")),
             "max_positions": int(os.getenv("MAX_POSITIONS", "5")),
             "max_daily_loss_pct": float(os.getenv("MAX_DAILY_LOSS_PCT", "5.0")),
-            "entry_threshold": float(os.getenv("ENTRY_THRESHOLD", "60.0")),
+            "entry_threshold": float(os.getenv("ENTRY_THRESHOLD", "75.0")),
             "exit_profit_target": float(os.getenv("EXIT_PROFIT_TARGET", "1.5")),
             "exit_stop_loss": float(os.getenv("EXIT_STOP_LOSS", "1.0")),
             "enabled": True,
