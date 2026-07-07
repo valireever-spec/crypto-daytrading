@@ -460,7 +460,7 @@ async def receive_heartbeat(data: dict = None) -> JSONResponse:
 async def get_heartbeat_status() -> JSONResponse:
     """Get heartbeat monitor status (BACKUP only)."""
     try:
-        machine_id = os.getenv("MACHINE_ID", "main")
+        machine_id = os.getenv("MACHINE_ID", "primary")
         from backend.core.heartbeat import get_heartbeat_monitor, get_heartbeat_sender
 
         if machine_id == "backup":
@@ -481,7 +481,7 @@ async def get_heartbeat_status() -> JSONResponse:
 async def sync_state_from_primary(state: dict = None) -> JSONResponse:
     """BACKUP: Receive state sync from PRIMARY."""
     try:
-        machine_id = os.getenv("MACHINE_ID", "main")
+        machine_id = os.getenv("MACHINE_ID", "primary")
         if machine_id != "backup":
             return JSONResponse(
                 status_code=403,
@@ -523,7 +523,7 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
                 import sqlite3
                 # BACKUP-safe sync: Skip database writes (avoid SQLite locking with PRIMARY)
                 # BACKUP only needs in-memory state synced; PRIMARY maintains persistent DB
-                machine_id = os.getenv("MACHINE_ID", "main")
+                machine_id = os.getenv("MACHINE_ID", "primary")
 
                 # Update in-memory cache (works on PRIMARY or BACKUP)
                 engine.positions.clear()
@@ -698,7 +698,7 @@ async def sync_state_from_backup(state: dict = None) -> JSONResponse:
     Merges BACKUP state with PRIMARY's recovered state.
     """
     try:
-        machine_id = os.getenv("MACHINE_ID", "main")
+        machine_id = os.getenv("MACHINE_ID", "primary")
         if machine_id != "main":
             return JSONResponse(
                 status_code=403,
