@@ -45,6 +45,8 @@ class Trade:
     order_id: str
     mode: Literal["PAPER", "LIVE"]
     status: Literal["FILLED", "CANCELLED"]
+    entry_reason: Optional[str] = None  # Why position was entered
+    exit_reason: Optional[str] = None   # Why position was closed
 
     def to_dict(self) -> Dict:
         """Convert to dictionary (JSON serializable)."""
@@ -99,6 +101,8 @@ class PaperTradingEngine:
         order_type: Literal["MARKET", "LIMIT"] = "MARKET",
         limit_price: Optional[float] = None,
         strategy_name: Optional[str] = None,
+        entry_reason: Optional[str] = None,
+        exit_reason: Optional[str] = None,
     ) -> Dict:
         """Place a simulated order at real Binance price.
 
@@ -293,6 +297,8 @@ class PaperTradingEngine:
                 order_id=order_id,
                 mode="PAPER",
                 status="FILLED",
+                entry_reason=entry_reason,
+                exit_reason=exit_reason,
             )
 
             self.trade_history.append(trade)
@@ -643,6 +649,8 @@ class PaperTradingEngine:
                         order_id=db_trade["order_id"],
                         mode="PAPER",
                         status=db_trade.get("status", "FILLED"),
+                        entry_reason=db_trade.get("entry_reason"),
+                        exit_reason=db_trade.get("exit_reason"),
                     )
                     self.trade_history.append(trade)
                     trades_restored += 1

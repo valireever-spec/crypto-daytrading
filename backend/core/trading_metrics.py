@@ -142,6 +142,70 @@ class MetricsCollector:
             'uptime_seconds': (datetime.now(timezone.utc) - self.start_time).total_seconds(),
         }
 
+    def get_dashboard_metrics(self) -> Dict:
+        """Get comprehensive metrics for dashboard display."""
+        from datetime import timezone
+
+        # Get today's trades (all trades in last 24 hours)
+        trades_24h = self.get_trades_since(minutes=1440)
+        exits_24h = [TradeMetric(**t) for t in trades_24h if t['side'] == 'SELL']
+        entries_24h = [TradeMetric(**t) for t in trades_24h if t['side'] == 'BUY']
+
+        # Calculate P&L metrics
+        total_pnl = sum(t.realized_pnl or 0 for t in exits_24h)
+        winners = [t for t in exits_24h if (t.realized_pnl or 0) > 0]
+        losers = [t for t in exits_24h if (t.realized_pnl or 0) <= 0]
+
+        avg_win = sum(t.realized_pnl or 0 for t in winners) / len(winners) if winners else 0
+        avg_loss = sum(t.realized_pnl or 0 for t in losers) / len(losers) if losers else 0
+
+        win_rate = (len(winners) / len(exits_24h) * 100) if exits_24h else 0
+
+        # Risk/reward ratio
+        risk_reward = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+
+        # Consecutive losses
+        consecutive_losses = 0
+        for trade in reversed(exits_24h):
+            if (trade.realized_pnl or 0) <= 0:
+                consecutive_losses += 1
+            else:
+                break
+
+        # Get last 5 trades
+        last_5 = exits_24h[-5:] if exits_24h else []
+        last_5_display = []
+        for trade in reversed(last_5):
+            pnl = trade.realized_pnl or 0
+            pnl_pct = trade.realized_pnl_pct or 0
+            status = "✅" if pnl > 0 else "❌"
+            last_5_display.append({
+                'status': status,
+                'symbol': trade.symbol,
+                'pnl': round(pnl, 4),
+                'pnl_pct': round(pnl_pct, 2),
+                'hold_seconds': trade.hold_seconds or 0,
+                'exit_reason': trade.exit_reason or 'unknown'
+            })
+
+        return {
+            'summary': {
+                'trades_today': len(entries_24h),
+                'exits_today': len(exits_24h),
+                'total_pnl': round(total_pnl, 2),
+                'win_rate_pct': round(win_rate, 1),
+                'wins': len(winners),
+                'losses': len(losers),
+            },
+            'performance': {
+                'avg_win': round(avg_win, 4),
+                'avg_loss': round(avg_loss, 4),
+                'risk_reward_ratio': round(risk_reward, 2),
+                'consecutive_losses': consecutive_losses,
+            },
+            'recent_trades': last_5_display,
+        }
+
 # Global instance
 _metrics = MetricsCollector()
 

@@ -168,6 +168,7 @@ async def _execute_exit_impl(
             side="SELL",
             quantity=quantity,
             current_price=current_price,
+            exit_reason=reason,
         )
 
         try:
@@ -186,6 +187,8 @@ async def _execute_exit_impl(
 
                 # Record exit trade for monitoring
                 metrics = get_metrics_collector()
+                from backend.core.parameter_monitor import get_parameter_monitor
+
                 metrics.record_trade(
                     symbol=symbol,
                     side='SELL',
@@ -195,6 +198,18 @@ async def _execute_exit_impl(
                     realized_pnl_pct=realized_pnl_pct,
                     hold_seconds=hold_time,
                     exit_reason=reason.lower().replace(" ", "_")
+                )
+
+                # Record to parameter monitor
+                param_monitor = get_parameter_monitor()
+                param_monitor.record_exit(
+                    symbol=symbol,
+                    exit_reason=reason,
+                    entry_price=position["entry_price"],
+                    exit_price=current_price,
+                    realized_pnl=realized_pnl,
+                    realized_pnl_pct=realized_pnl_pct,
+                    hold_seconds=hold_time
                 )
                 return True
             else:

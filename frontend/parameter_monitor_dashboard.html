@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Critical Parameters Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f1419 0%, #1a2633 100%);
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #2a5f7f;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            color: #4da6ff;
+        }
+
+        .timestamp {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .parameter-card {
+            background: #1a2633;
+            border: 2px solid #2a5f7f;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .parameter-card:hover {
+            border-color: #4da6ff;
+            box-shadow: 0 0 20px rgba(77, 166, 255, 0.2);
+        }
+
+        .parameter-card h2 {
+            font-size: 1em;
+            color: #4da6ff;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #2a3f52;
+        }
+
+        .status-green {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+        }
+
+        .status-yellow {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+        }
+
+        .status-red {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #2a3f52;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: #999;
+            font-size: 0.85em;
+        }
+
+        .metric-value {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #4da6ff;
+        }
+
+        .positive {
+            color: #4caf50;
+        }
+
+        .negative {
+            color: #ff6b6b;
+        }
+
+        .neutral {
+            color: #ffc107;
+        }
+
+        .progress-bar {
+            background: #2a3f52;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4da6ff 0%, #4caf50 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #0f1419;
+            font-size: 0.7em;
+            font-weight: bold;
+        }
+
+        .distribution {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .distribution-item {
+            background: #2a3f52;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.8em;
+        }
+
+        .distribution-item.active {
+            background: #4da6ff;
+            color: #0f1419;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .reason-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .reason-table th,
+        .reason-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #2a3f52;
+            font-size: 0.9em;
+        }
+
+        .reason-table th {
+            background: #2a3f52;
+            color: #4da6ff;
+        }
+
+        .reason-table tr:hover {
+            background: #2a3f52;
+        }
+
+        .alert-row {
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #ffc107;
+            background: rgba(255, 193, 7, 0.05);
+            border-radius: 4px;
+        }
+
+        .alert-row.critical {
+            border-left-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.05);
+        }
+
+        .refresh-button {
+            background: #4da6ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            float: right;
+            margin-bottom: 20px;
+        }
+
+        .refresh-button:hover {
+            background: #2196F3;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #2a5f7f;
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        .sparkline {
+            display: inline-block;
+            width: 100px;
+            height: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Critical Parameters Monitor</h1>
+            <p class="timestamp" id="timestamp">Loading...</p>
+            <button class="refresh-button" onclick="refreshData()">🔄 Refresh</button>
+        </header>
+
+        <!-- Health Check -->
+        <div class="parameter-card full-width">
+            <h2>System Health
+                <span class="status-badge" id="health-status">Loading...</span>
+            </h2>
+            <div id="health-checks" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                <div style="color: #999;">Loading...</div>
+            </div>
+        </div>
+
+        <!-- TREND FILTER -->
+        <div class="parameter-card">
+            <h2>1️⃣ TREND FILTER (1h RSI > 50)
+                <span class="status-badge" id="trend-status">🔍</span>
+            </h2>
+            <div class="metric">
+                <span class="metric-label">Signals Checked</span>
+                <span class="metric-value" id="trend-total">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Pass Rate</span>
+                <span class="metric-value" id="trend-rate">-</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="trend-bar" style="width: 0%">0%</div>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Current 1h RSI</span>
+                <span class="metric-value" id="trend-rsi">-</span>
+            </div>
+            <div style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                ✅ Higher pass rate = stronger uptrends<br/>
+                ⚠️ Low rate = choppy market (fewer entries)
+            </div>
+        </div>
+
+        <!-- SIGNALS -->
+        <div class="parameter-card">
+            <h2>📊 SIGNALS
+                <span class="status-badge" id="signals-status">🔍</span>
+            </h2>
+            <div class="metric">
+                <span class="metric-label">Generated (1h)</span>
+                <span class="metric-value" id="signal-count">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Avg Strength</span>
+                <span class="metric-value" id="signal-strength">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Rate</span>
+                <span class="metric-value" id="signal-rate">-</span>
+            </div>
+            <div style="margin-top: 15px;">
+                <div style="color: #999; font-size: 0.8em; margin-bottom: 5px;">Signal Distribution:</div>
+                <div class="distribution" id="signal-dist">
+                    <span class="distribution-item">-</span>
+                </div>
+            </div>
+            <div style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                ✅ Strength 70+: High confidence<br/>
+                ⚠️ Strength <40: Noisy, wait for better setup
+            </div>
+        </div>
+
+        <!-- STOPS -->
+        <div class="parameter-card">
+            <h2>🛑 STOP LOSS (-0.5%)
+                <span class="status-badge" id="stops-status">🔍</span>
+            </h2>
+            <div class="metric">
+                <span class="metric-label">Hits</span>
+                <span class="metric-value" id="stops-count">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Avg Loss</span>
+                <span class="metric-value negative" id="stops-avg">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Worst Loss</span>
+                <span class="metric-value negative" id="stops-worst">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Avg Hold Time</span>
+                <span class="metric-value" id="stops-hold">-</span>
+            </div>
+            <div style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                📌 Avg loss -0.4%? Stop is working!<br/>
+                ⚠️ Avg loss worse than -0.5%? May need tighter entry
+            </div>
+        </div>
+
+        <!-- TARGETS -->
+        <div class="parameter-card">
+            <h2>🎯 PROFIT TARGET (+2.0%)
+                <span class="status-badge" id="targets-status">🔍</span>
+            </h2>
+            <div class="metric">
+                <span class="metric-label">Hits</span>
+                <span class="metric-value" id="targets-count">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Avg Win</span>
+                <span class="metric-value positive" id="targets-avg">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Best Win</span>
+                <span class="metric-value positive" id="targets-best">-</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Avg Hold Time</span>
+                <span class="metric-value" id="targets-hold">-</span>
+            </div>
+            <div style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                ✅ Target hit regularly? Strategy works<br/>
+                ⚠️ Rarely hit? Target too aggressive, lower to 1%
+            </div>
+        </div>
+
+        <!-- WIN/LOSS RATIO -->
+        <div class="parameter-card">
+            <h2>⚖️ RISK/REWARD BALANCE
+                <span class="status-badge" id="balance-status">🔍</span>
+            </h2>
+            <div class="metric">
+                <span class="metric-label">Stops vs Targets</span>
+                <span class="metric-value" id="balance-ratio">-</span>
+            </div>
+            <div style="display: flex; gap: 20px; margin-top: 15px;">
+                <div>
+                    <div style="color: #999; font-size: 0.8em;">Stops Hit</div>
+                    <div class="metric-value negative" id="stops-ratio">-</div>
+                </div>
+                <div>
+                    <div style="color: #999; font-size: 0.8em;">Targets Hit</div>
+                    <div class="metric-value positive" id="targets-ratio">-</div>
+                </div>
+            </div>
+            <div style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                ✅ Targets > Stops? Winning strategy<br/>
+                ⚠️ Stops >> Targets? Need better entries
+            </div>
+        </div>
+
+        <!-- EXIT REASONS TABLE -->
+        <div class="parameter-card full-width">
+            <h2>🚪 EXIT REASONS (Last 2 hours)
+                <span class="status-badge" id="exits-status">🔍</span>
+            </h2>
+            <table class="reason-table">
+                <thead>
+                    <tr>
+                        <th>Reason</th>
+                        <th style="text-align: right;">Count</th>
+                        <th style="text-align: right;">Avg P&L</th>
+                        <th>Chart</th>
+                    </tr>
+                </thead>
+                <tbody id="exit-reasons-table">
+                    <tr><td colspan="4" style="text-align: center; color: #999;">Loading...</td></tr>
+                </tbody>
+            </table>
+            <div style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                Understand WHY you're exiting. More targets = strategy working. More stops = need better entries.
+            </div>
+        </div>
+
+        <!-- ENTRY REASONS TABLE -->
+        <div class="parameter-card full-width">
+            <h2>📍 ENTRY REASONS (Cumulative)
+                <span class="status-badge" id="entries-status">🔍</span>
+            </h2>
+            <table class="reason-table">
+                <thead>
+                    <tr>
+                        <th>Reason</th>
+                        <th style="text-align: right;">Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody id="entry-reasons-table">
+                    <tr><td colspan="3" style="text-align: center; color: #999;">Loading...</td></tr>
+                </tbody>
+            </table>
+            <div style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                Different entry reasons = diverse opportunities. Single reason = relies on one market condition.
+            </div>
+        </div>
+
+        <!-- ALERTS -->
+        <div class="parameter-card full-width">
+            <h2>🚨 Parameter Alerts</h2>
+            <div id="alerts-container">
+                <div style="color: #999;">Monitoring...</div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>🎯 Monitor: Trend Filter | Signals | Stops | Targets | Exit Reasons | Entry Reasons</p>
+        <p>Updates every 10 seconds</p>
+    </footer>
+
+    <script>
+        async function fetchParameterData() {
+            try {
+                const [summary, health] = await Promise.all([
+                    fetch('/api/parameters/summary').then(r => r.json()),
+                    fetch('/api/parameters/health-check').then(r => r.json())
+                ]);
+
+                updateDashboard(summary, health);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('timestamp').textContent = 'Error loading data';
+            }
+        }
+
+        function updateDashboard(summary, health) {
+            const ts = new Date(summary.timestamp);
+            document.getElementById('timestamp').textContent = `Last updated: ${ts.toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})} UTC`;
+
+            const p = summary.parameters;
+
+            // Health
+            document.getElementById('health-status').textContent = health.overall_status;
+            document.getElementById('health-status').className = `status-badge ${
+                health.overall_status.includes('HEALTHY') ? 'status-green' :
+                health.overall_status.includes('CAUTION') ? 'status-yellow' :
+                'status-red'
+            }`;
+
+            let healthHTML = '';
+            for (const [key, status] of Object.entries(health.parameters)) {
+                const color = status.startsWith('🟢') ? 'status-green' : status.startsWith('🟡') ? 'status-yellow' : 'status-red';
+                healthHTML += `<div style="padding: 8px; background: #2a3f52; border-radius: 4px;" class="${color}">${key.replace(/_/g, ' ')}</div>`;
+            }
+            document.getElementById('health-checks').innerHTML = healthHTML;
+
+            // Trend Filter
+            const trend = p.trend_filter;
+            document.getElementById('trend-status').className = `status-badge ${trend.pass_rate_pct >= 50 ? 'status-green' : trend.pass_rate_pct >= 20 ? 'status-yellow' : 'status-red'}`;
+            document.getElementById('trend-total').textContent = trend.total_signals;
+            document.getElementById('trend-rate').textContent = `${trend.pass_rate_pct}%`;
+            document.getElementById('trend-bar').style.width = `${trend.pass_rate_pct}%`;
+            document.getElementById('trend-bar').textContent = `${trend.pass_rate_pct}%`;
+            document.getElementById('trend-rsi').textContent = `${trend.recent_1h_rsi_range.current}`;
+
+            // Signals
+            const sig = p.signals;
+            document.getElementById('signals-status').className = `status-badge ${sig.total_signals > 0 ? 'status-green' : 'status-yellow'}`;
+            document.getElementById('signal-count').textContent = sig.total_signals;
+            document.getElementById('signal-strength').textContent = `${sig.avg_strength}`;
+            document.getElementById('signal-rate').textContent = `${sig.signals_per_minute}/min`;
+
+            let distHTML = '';
+            const dist = sig.signal_strength_distribution;
+            if (dist.weak > 0) distHTML += `<span class="distribution-item">Weak: ${dist.weak}</span>`;
+            if (dist.medium > 0) distHTML += `<span class="distribution-item active">Medium: ${dist.medium}</span>`;
+            if (dist.strong > 0) distHTML += `<span class="distribution-item active">Strong: ${dist.strong}</span>`;
+            document.getElementById('signal-dist').innerHTML = distHTML;
+
+            // Stops
+            const stops = p.stops;
+            document.getElementById('stops-status').className = `status-badge ${stops.status === 'OK' ? 'status-green' : 'status-yellow'}`;
+            document.getElementById('stops-count').textContent = stops.stop_loss_hits;
+            document.getElementById('stops-avg').textContent = `${stops.avg_loss_pct?.toFixed(3)}%`;
+            document.getElementById('stops-worst').textContent = `${stops.worst_loss_pct?.toFixed(3)}%`;
+            document.getElementById('stops-hold').textContent = `${stops.avg_hold_seconds}s`;
+            document.getElementById('stops-ratio').textContent = stops.stop_loss_hits;
+
+            // Targets
+            const targets = p.targets;
+            document.getElementById('targets-status').className = `status-badge ${targets.status === 'OK' ? 'status-green' : 'status-yellow'}`;
+            document.getElementById('targets-count').textContent = targets.profit_target_hits;
+            document.getElementById('targets-avg').textContent = `+${targets.avg_win_pct?.toFixed(3)}%`;
+            document.getElementById('targets-best').textContent = `+${targets.best_win_pct?.toFixed(3)}%`;
+            document.getElementById('targets-hold').textContent = `${targets.avg_hold_seconds}s`;
+            document.getElementById('targets-ratio').textContent = targets.profit_target_hits;
+
+            // Balance
+            const totalExits = (stops.stop_loss_hits || 0) + (targets.profit_target_hits || 0);
+            if (totalExits > 0) {
+                const ratio = `${targets.profit_target_hits} wins / ${stops.stop_loss_hits} losses`;
+                const winRate = ((targets.profit_target_hits / totalExits) * 100).toFixed(0);
+                document.getElementById('balance-ratio').textContent = `${ratio} (${winRate}% wins)`;
+                document.getElementById('balance-status').className = `status-badge ${winRate >= 50 ? 'status-green' : winRate >= 40 ? 'status-yellow' : 'status-red'}`;
+            }
+
+            // Exit Reasons
+            const exits = p.exit_reasons;
+            let exitHTML = '';
+            for (const [reason, count] of Object.entries(exits.distribution || {})) {
+                const avg = exits.avg_pnl_by_reason?.[reason] || 0;
+                const avgClass = avg > 0 ? 'positive' : avg < 0 ? 'negative' : '';
+                exitHTML += `<tr>
+                    <td>${reason}</td>
+                    <td style="text-align: right;">${count}</td>
+                    <td style="text-align: right;" class="${avgClass}">${avg >= 0 ? '+' : ''}${avg.toFixed(3)}%</td>
+                    <td><span style="color: ${avg > 0 ? '#4caf50' : '#ff6b6b'};">●</span></td>
+                </tr>`;
+            }
+            document.getElementById('exit-reasons-table').innerHTML = exitHTML || '<tr><td colspan="4" style="text-align: center; color: #999;">No exits yet</td></tr>';
+            document.getElementById('exits-status').className = `status-badge ${Object.keys(exits.distribution || {}).length > 0 ? 'status-green' : 'status-yellow'}`;
+
+            // Entry Reasons
+            const entries = p.entry_reasons;
+            let entryHTML = '';
+            const entryTotal = entries.total_entries || 1;
+            for (const [reason, count] of Object.entries(entries.distribution || {})) {
+                const pct = ((count / entryTotal) * 100).toFixed(1);
+                entryHTML += `<tr>
+                    <td>${reason.substring(0, 60)}...</td>
+                    <td style="text-align: right;">${count}</td>
+                    <td><div style="background: #2a3f52; height: 20px; border-radius: 4px; overflow: hidden; width: 200px;">
+                        <div style="background: #4da6ff; height: 100%; width: ${pct}%; display: flex; align-items: center; justify-content: center; font-size: 0.8em;">${pct}%</div>
+                    </div></td>
+                </tr>`;
+            }
+            document.getElementById('entry-reasons-table').innerHTML = entryHTML || '<tr><td colspan="3" style="text-align: center; color: #999;">No entries yet</td></tr>';
+            document.getElementById('entries-status').className = `status-badge ${entries.total_entries > 0 ? 'status-green' : 'status-yellow'}`;
+
+            // Alerts
+            generateAlerts(summary, health);
+        }
+
+        function generateAlerts(summary, health) {
+            const alerts = [];
+            const p = summary.parameters;
+
+            // Trend filter alerts
+            if (p.trend_filter.pass_rate_pct < 20) {
+                alerts.push({level: 'critical', msg: '🔴 Trend filter <20%: Market not trending, too many false signals'});
+            } else if (p.trend_filter.pass_rate_pct < 40) {
+                alerts.push({level: 'warning', msg: '⚠️ Trend filter <40%: Choppy market, fewer trading opportunities'});
+            }
+
+            // Signal quality
+            if (p.signals.avg_strength < 40) {
+                alerts.push({level: 'critical', msg: '🔴 Signal strength <40: Signals weak, wait for stronger dips'});
+            }
+
+            // Exit balance
+            const totalExits = (p.stops.stop_loss_hits || 0) + (p.targets.profit_target_hits || 0);
+            if (totalExits > 0) {
+                const winRate = (p.targets.profit_target_hits / totalExits) * 100;
+                if (winRate < 30) {
+                    alerts.push({level: 'critical', msg: `🔴 Win rate ${winRate.toFixed(0)}%: Too many stop losses, need better entries`});
+                } else if (winRate < 40) {
+                    alerts.push({level: 'warning', msg: `⚠️ Win rate ${winRate.toFixed(0)}%: Below 45% target, tighten entries`});
+                }
+            }
+
+            // Stop effectiveness
+            if (p.stops.avg_loss_pct && Math.abs(p.stops.avg_loss_pct) > 0.6) {
+                alerts.push({level: 'warning', msg: `⚠️ Avg stop loss ${p.stops.avg_loss_pct.toFixed(3)}%: Worse than target -0.5%, check early entries`});
+            }
+
+            let alertHTML = '';
+            if (alerts.length > 0) {
+                for (const alert of alerts) {
+                    alertHTML += `<div class="alert-row ${alert.level === 'critical' ? 'critical' : ''}">${alert.msg}</div>`;
+                }
+            } else {
+                alertHTML = '<div style="color: #4caf50;">✅ All parameters healthy</div>';
+            }
+            document.getElementById('alerts-container').innerHTML = alertHTML;
+        }
+
+        function refreshData() {
+            document.getElementById('timestamp').textContent = '⟳ Refreshing...';
+            fetchParameterData();
+        }
+
+        // Initial load
+        fetchParameterData();
+
+        // Auto-refresh every 10 seconds
+        setInterval(fetchParameterData, 10000);
+    </script>
+</body>
+</html>

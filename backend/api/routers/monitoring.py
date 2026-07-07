@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 router = APIRouter(prefix="/api/monitoring", tags=["Monitoring"])
@@ -161,10 +161,40 @@ async def get_prometheus_metrics():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/dashboard-metrics")
+async def get_dashboard_metrics():
+    """Get comprehensive dashboard metrics for UI display."""
+    try:
+        from backend.core.trading_metrics import get_metrics_collector
+        import requests
+
+        collector = get_metrics_collector()
+        dashboard_data = collector.get_dashboard_metrics()
+
+        # Add system health
+        try:
+            health = requests.get("http://127.0.0.1:8001/api/health", timeout=2).json()
+            account = health.get('account', {})
+        except:
+            account = {}
+
+        dashboard_data['system'] = {
+            'cash': account.get('cash', 0),
+            'daily_pnl': account.get('daily_pnl', 0),
+            'total_pnl': account.get('total_pnl', 0),
+            'open_positions': account.get('active_positions', 0),
+        }
+
+        dashboard_data['timestamp'] = datetime.now(timezone.utc).isoformat()
+
+        return dashboard_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/dashboard")
 async def get_dashboard():
     """Serve real-time monitoring dashboard."""
-    dashboard_path = Path(__file__).parent.parent.parent / "frontend" / "monitoring_dashboard.html"
+    dashboard_path = Path(__file__).parent.parent.parent.parent / "frontend" / "trading_dashboard.html"
 
     if dashboard_path.exists():
         return FileResponse(dashboard_path, media_type="text/html")
@@ -173,14 +203,14 @@ async def get_dashboard():
         <html>
             <body style="background: #0f1419; color: #e0e0e0; font-family: monospace; padding: 20px;">
                 <h1>📊 Trading Monitoring Dashboard</h1>
-                <p>Dashboard file not found. Visit: <strong>/api/monitoring/metrics</strong></p>
+                <p>Dashboard file not found. Visit: <strong>/api/monitoring/dashboard-metrics</strong></p>
                 <p>Available endpoints:</p>
                 <ul>
+                    <li>GET /api/monitoring/dashboard-metrics - Comprehensive dashboard data</li>
                     <li>GET /api/monitoring/metrics - All metrics (JSON)</li>
                     <li>GET /api/monitoring/prometheus - Prometheus-compatible metrics</li>
                     <li>GET /api/monitoring/signals - Recent signal decisions</li>
                     <li>GET /api/monitoring/trades - Recent trade executions</li>
-                    <li>GET /api/monitoring/dashboard-data - Data for dashboard visualization</li>
                 </ul>
             </body>
         </html>

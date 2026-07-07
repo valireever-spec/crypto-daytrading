@@ -156,11 +156,14 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
 
         # Record metrics
         from backend.core.trading_metrics import get_metrics_collector
+        from backend.core.parameter_monitor import get_parameter_monitor
+
         metrics = get_metrics_collector()
-        
+        param_monitor = get_parameter_monitor()
+
         rsi_1h = TechnicalIndicators.rsi(closes_1hr)
         rsi_5m = TechnicalIndicators.rsi(closes_5min)
-        
+
         metrics.record_signal(
             symbol=symbol,
             regime="oversold",
@@ -174,6 +177,20 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             signal_strength=signal_strength,
             decision='ENTER'
         )
+
+        # Record to parameter monitor
+        param_monitor.record_signal(
+            symbol=symbol,
+            regime="oversold",
+            rsi_1h=rsi_1h,
+            rsi_5m=rsi_5m,
+            trend_filter_passed=(rsi_1h > 50),
+            signal_strength=signal_strength,
+            entry_reason=reason
+        )
+
+        # Track entry reason
+        param_monitor.record_entry_reason(reason)
 
         from .core import TradeSignal
         return TradeSignal(
@@ -224,6 +241,7 @@ async def _execute_entry_impl(trader_self, signal) -> bool:
             side="BUY",
             quantity=round(quantity, 4),
             current_price=current_price,
+            entry_reason=signal.reason,
         )
 
         try:
