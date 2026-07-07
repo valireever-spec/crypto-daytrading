@@ -75,11 +75,39 @@ from backend.api.routers.trade_verification import router as verification_router
 from backend.api.routers.parameter_monitoring import router as parameter_monitoring_router
 from backend.api.routers.health import router as health_router
 
-# Create FastAPI application
+# Create FastAPI application with OpenAPI documentation
 app = FastAPI(
     title="Crypto Daytrading Platform",
-    description="Autonomous trading system with HA failover",
+    description="""
+    Autonomous crypto trading system with high-availability failover.
+
+    ## Features
+    - 24/7 automated trading on Binance
+    - Dual-machine failover architecture
+    - Real-time portfolio monitoring
+    - Multiple trading strategies
+    - Circuit breaker risk protection
+
+    ## API Categories
+    - **Health**: System status and readiness checks
+    - **Trading**: Order execution and position management
+    - **Analytics**: Performance metrics and backtesting
+    - **Monitoring**: Real-time system metrics
+    - **Admin**: Configuration and control
+    """,
     version="1.0.0",
+    contact={
+        "name": "Trading Team",
+        "email": "trading@example.com",
+        "url": "https://example.com/support",
+    },
+    license_info={
+        "name": "Apache 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    },
+    openapi_url="/api/openapi.json",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
     lifespan=lifespan,
 )
 

@@ -4,10 +4,40 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime, timezone
 from typing import Dict, Any
 
-router = APIRouter(prefix="/api/health", tags=["Health"])
+router = APIRouter(
+    prefix="/api/health",
+    tags=["Health"],
+    responses={
+        200: {"description": "System is healthy"},
+        503: {"description": "System is degraded or unhealthy"},
+    },
+)
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="System Health Check",
+    description="Get current system status including service availability",
+    responses={
+        200: {
+            "description": "System status retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "healthy",
+                        "timestamp": "2026-07-07T12:00:00+00:00",
+                        "version": "1.0.0",
+                        "services": {
+                            "database": "online",
+                            "trading_engine": "online",
+                            "api": "online"
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 async def health_check() -> Dict[str, Any]:
     """System health check endpoint.
 
@@ -62,7 +92,11 @@ async def health_check() -> Dict[str, Any]:
     }
 
 
-@router.get("/ready")
+@router.get(
+    "/ready",
+    summary="Readiness Probe",
+    description="Check if system is ready for traffic (Kubernetes/Docker readiness probe)",
+)
 async def readiness_check() -> Dict[str, Any]:
     """Readiness check for deployment orchestration.
 
@@ -78,7 +112,11 @@ async def readiness_check() -> Dict[str, Any]:
     }
 
 
-@router.get("/live")
+@router.get(
+    "/live",
+    summary="Liveness Probe",
+    description="Check if process is alive and responsive (Kubernetes/Docker liveness probe)",
+)
 async def liveness_check() -> Dict[str, Any]:
     """Liveness check - is the process alive and responsive?
 
