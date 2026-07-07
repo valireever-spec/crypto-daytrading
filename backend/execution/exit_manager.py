@@ -305,6 +305,7 @@ class ExitManager:
                     current_price=signal.exit_price,
                     order_type="MARKET",
                     strategy_name="exit_manager",
+                    exit_reason=signal.reason.value,
                 )
             )
 
