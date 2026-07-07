@@ -1,7 +1,7 @@
 {
-  "entry_threshold": 25.0,
+  "entry_threshold": 40.0,
   "exit_profit_target": 2.0,
-  "exit_stop_loss": 1.0,
+  "exit_stop_loss": 0.5,
   "max_positions": 8,
   "position_size_pct": 1.5,
   "max_daily_loss_pct": 5.0,

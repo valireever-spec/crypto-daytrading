@@ -77,10 +77,10 @@ class RSIOversoldStrategy:
 
         current_price = prices_5min[-1]
 
-        # TREND FILTER: Allow neutral/weak markets (1h RSI > 30)
-        # Prevents entry only in severe downtrends (RSI < 30), allows ranging/consolidation
-        if rsi_1h < 30:
-            return None, f"1h RSI {rsi_1h:.0f} too weak (severe downtrend, need > 30)"
+        # TREND FILTER: Require uptrend confirmation (1h RSI > 40)
+        # Prevents entry in weak/downtrend markets (RSI < 40), requires uptrend
+        if rsi_1h < 40:
+            return None, f"1h RSI {rsi_1h:.0f} too weak (need strong uptrend, > 40)"
 
         # Entry: 5m RSI pullback (30-50) in uptrend
         # Allows trading pullbacks within uptrends (RSI 30-50), not just oversold (< 30)
