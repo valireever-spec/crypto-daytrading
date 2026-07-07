@@ -12,7 +12,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import timezone, datetime
 from typing import Callable, Dict, Optional
 import websockets
 
@@ -147,7 +147,7 @@ class BinanceStreamClient:
         self.circuit_breaker = CircuitBreaker(failure_threshold=3, timeout_seconds=30)
 
         # Initialize default timestamps
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         now_timestamp = time.time()
         for symbol in self.symbols:
             self.last_update[symbol] = now
@@ -263,7 +263,7 @@ class BinanceStreamClient:
                         continue
 
                     # Update price cache and health tracking (unified)
-                    now = datetime.utcnow()
+                    now = datetime.now(timezone.utc)
                     now_timestamp = time.time()
                     if "k" in payload:  # Kline (candle)
                         price = float(payload["k"]["c"])
@@ -368,7 +368,7 @@ class BinanceStreamClient:
             logger.warning("Price freshness check: WebSocket not connected")
             return {}
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         fresh_prices = {}
         stale_symbols = []
 
@@ -403,7 +403,7 @@ class BinanceStreamClient:
         """Get age in seconds of the most recent price for a symbol."""
         if symbol not in self.last_update:
             return None
-        age = (datetime.utcnow() - self.last_update[symbol]).total_seconds()
+        age = (datetime.now(timezone.utc) - self.last_update[symbol]).total_seconds()
         return age
 
     def check_data_freshness(self, symbols: list, max_age_seconds: float = 5.0) -> dict:
@@ -424,7 +424,7 @@ class BinanceStreamClient:
         fresh = []
         stale = []
         missing = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for symbol in symbols:
             if symbol not in self.last_update:
@@ -456,7 +456,7 @@ class BinanceStreamClient:
         if not self.is_connected or not self.last_message_time:
             return False
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         time_since_message = (now - self.last_message_time).total_seconds()
 
         # Data is flowing if last message <3 seconds ago
@@ -507,7 +507,7 @@ class BinanceStreamClient:
         healthy_count = len(self.symbols) - len(stale)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "overall_healthy": len(stale) == 0,
             "healthy_streams": healthy_count,
             "total_streams": len(self.symbols),

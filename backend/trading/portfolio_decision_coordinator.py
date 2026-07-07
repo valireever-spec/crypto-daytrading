@@ -8,7 +8,7 @@ actions in the autonomous trader.
 
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import timezone, datetime
 from dataclasses import dataclass
 
 from backend.analytics.portfolio_regime_monitor import (
@@ -173,7 +173,7 @@ class PortfolioDecisionCoordinator:
             )  # Rough estimate: 2% loss/day in bear
 
             decision = PortfolioDecision(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 decision_type="CORRELATED_EXIT",
                 action="EXIT",
                 target_symbols=portfolio_state.exit_signals,
@@ -244,7 +244,7 @@ class PortfolioDecisionCoordinator:
             urgency = min(int(rotation_rec.confidence * 10), 10)
 
             decision = PortfolioDecision(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 decision_type="SECTOR_ROTATION",
                 action="ROTATE",
                 target_symbols=list(actions.keys()),
@@ -291,7 +291,7 @@ class PortfolioDecisionCoordinator:
             # Calculate time since last rebalance
             if self.last_rebalance_time:
                 days_since_rebalance = (
-                    datetime.utcnow() - self.last_rebalance_time
+                    datetime.now(timezone.utc) - self.last_rebalance_time
                 ).days
             else:
                 days_since_rebalance = 30  # Force rebalance if never done
@@ -324,7 +324,7 @@ class PortfolioDecisionCoordinator:
             urgency = plan.urgency
 
             decision = PortfolioDecision(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 decision_type="REBALANCE",
                 action="REBALANCE",
                 target_symbols=list(actions.keys()),
@@ -353,7 +353,7 @@ class PortfolioDecisionCoordinator:
             )
 
             # Update last rebalance time if plan is accepted
-            self.last_rebalance_time = datetime.utcnow()
+            self.last_rebalance_time = datetime.now(timezone.utc)
 
             return decision
 
@@ -401,7 +401,7 @@ class PortfolioDecisionCoordinator:
         # For now, return last decision if recent
         if self.decision_history:
             last_decision = self.decision_history[-1]
-            age = (datetime.utcnow() - last_decision.timestamp).total_seconds()
+            age = (datetime.now(timezone.utc) - last_decision.timestamp).total_seconds()
             if age < 300:  # If less than 5 minutes old
                 return [last_decision]
 

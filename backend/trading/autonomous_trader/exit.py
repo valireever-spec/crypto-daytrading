@@ -1,7 +1,7 @@
 """Exit signal generation (stop loss, profit target)."""
 
 import logging
-from datetime import datetime
+from datetime import timezone, datetime
 from typing import TYPE_CHECKING, Dict
 
 from backend.exchange.paper_trading import get_paper_trading
@@ -54,7 +54,7 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
             if entry_time:
                 if isinstance(entry_time, str):
                     entry_time = datetime.fromisoformat(entry_time)
-                hold_time = (datetime.utcnow() - entry_time).total_seconds()
+                hold_time = (datetime.now(timezone.utc) - entry_time).total_seconds()
 
                 if hold_time < MIN_HOLD_TIME_SECONDS:
                     logger.info(
@@ -177,7 +177,7 @@ async def _execute_exit_impl(
             if validated.status == "FILLED":
                 realized_pnl = validated.realized_pnl or 0.0
                 realized_pnl_pct = (realized_pnl / (position["entry_price"] * quantity) * 100) if position["entry_price"] > 0 else 0
-                hold_time = int((datetime.utcnow() - datetime.fromisoformat(position.get("entry_time", ""))).total_seconds()) if position.get("entry_time") else 0
+                hold_time = int((datetime.now(timezone.utc) - datetime.fromisoformat(position.get("entry_time", ""))).total_seconds()) if position.get("entry_time") else 0
 
                 logger.info(
                     f"✅ SOLD {symbol}: {quantity:.4f} @ ${current_price:.2f} - {reason} - "

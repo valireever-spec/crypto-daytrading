@@ -16,7 +16,7 @@ Why mean-reversion works (where momentum failed):
 import asyncio
 import logging
 from typing import Optional, Tuple, List
-from datetime import datetime, timedelta
+from datetime import timezone, datetime, timedelta
 import ccxt.async_support as ccxt
 
 from backend.exchange.paper_trading import get_paper_trading
@@ -204,7 +204,7 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             side="BUY",
             strength=signal_strength,
             reason=f"{reason} (strength: {signal_strength:.0f})",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
     except Exception as e:

@@ -70,7 +70,7 @@ class MetricsCollector:
 
     def record_signal(self, **kwargs) -> None:
         """Record signal generation."""
-        kwargs['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat() + 'Z'
         self.signals.append(SignalMetric(**kwargs))
         # Keep only last 1000 signals (rolling window)
         if len(self.signals) > 1000:
@@ -78,7 +78,7 @@ class MetricsCollector:
 
     def record_trade(self, **kwargs) -> None:
         """Record trade execution."""
-        kwargs['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat() + 'Z'
         self.trades.append(TradeMetric(**kwargs))
         # Keep only last 500 trades
         if len(self.trades) > 500:
@@ -86,7 +86,7 @@ class MetricsCollector:
 
     def record_system(self, **kwargs) -> None:
         """Record system health."""
-        kwargs['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat() + 'Z'
         self.system.append(SystemMetric(**kwargs))
         # Keep only last 1440 (24 hours of minute-by-minute samples)
         if len(self.system) > 1440:
