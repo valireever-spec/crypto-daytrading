@@ -77,6 +77,10 @@ class DatabasePersistence:
         Returns:
             True if written, False if failed
         """
+        if not self.conn:
+            logger.error("❌ Database connection not initialized")
+            return False
+
         try:
             cursor = self.conn.cursor()
 
@@ -96,7 +100,8 @@ class DatabasePersistence:
             return True
 
         except Exception as e:
-            self.conn.rollback()
+            if self.conn:
+                self.conn.rollback()
             logger.error(f"❌ Trade persistence failed: {e}")
             return False
 
