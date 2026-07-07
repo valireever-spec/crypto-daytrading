@@ -93,7 +93,8 @@ class MetricsCollector:
 
     def get_signals_since(self, minutes: int = 60) -> List[Dict]:
         """Get signals from last N minutes."""
-        cutoff = datetime.utcnow() - timedelta(minutes=minutes)
+        from datetime import timezone
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         result = []
         for sig in self.signals:
             sig_time = datetime.fromisoformat(sig.timestamp.replace('Z', '+00:00'))
@@ -103,7 +104,8 @@ class MetricsCollector:
 
     def get_trades_since(self, minutes: int = 60) -> List[Dict]:
         """Get trades from last N minutes."""
-        cutoff = datetime.utcnow() - timedelta(minutes=minutes)
+        from datetime import timezone
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         result = []
         for trade in self.trades:
             trade_time = datetime.fromisoformat(trade.timestamp.replace('Z', '+00:00'))
@@ -125,9 +127,10 @@ class MetricsCollector:
 
     def get_statistics(self) -> Dict:
         """Get current statistics."""
+        from datetime import timezone
         recent_trades = self.get_trades_since(minutes=120)
         all_trades = [t for t in recent_trades if t.side == 'SELL']
-        
+
         return {
             'total_signals': len(self.signals),
             'total_trades': len(self.trades),
@@ -135,7 +138,7 @@ class MetricsCollector:
             'recent_exits_2h': len(all_trades),
             'win_rate_2h': self.get_win_rate([TradeMetric(**t) for t in all_trades]) if all_trades else 0,
             'recent_signals_2h': len(self.get_signals_since(minutes=120)),
-            'uptime_seconds': (datetime.utcnow() - self.start_time).total_seconds(),
+            'uptime_seconds': (datetime.now(timezone.utc) - self.start_time.replace(tzinfo=timezone.utc)).total_seconds() if self.start_time.tzinfo else (datetime.utcnow() - self.start_time).total_seconds(),
         }
 
 # Global instance
