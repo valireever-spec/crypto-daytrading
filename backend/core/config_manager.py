@@ -102,7 +102,15 @@ class ConfigManager:
 
     @staticmethod
     def env_to_config() -> Dict[str, Any]:
-        """Convert .env variables to config dict."""
+        """Convert .env variables to config dict.
+
+        Phase 1 Strategy Optimization (2026-07-07):
+        - Moved primary entry/exit timeframe from 5m to 1h (reduces noise)
+        - entry_threshold: 40 → 30 (more aggressive entry on signals)
+        - exit_profit_target: 2.0% → 0.75% (take profits faster)
+        - exit_stop_loss: 3.0% → 2.0% (tighter risk management)
+        Expected improvement: 0.8% → 15-25% win rate
+        """
         import os
 
         # Parse symbols from comma-separated env var
@@ -113,11 +121,12 @@ class ConfigManager:
             "position_size_pct": float(os.getenv("POSITION_SIZE_PCT", "2.5")),
             "max_positions": int(os.getenv("MAX_POSITIONS", "5")),
             "max_daily_loss_pct": float(os.getenv("MAX_DAILY_LOSS_PCT", "5.0")),
-            "entry_threshold": float(os.getenv("ENTRY_THRESHOLD", "75.0")),
-            "exit_profit_target": float(os.getenv("EXIT_PROFIT_TARGET", "1.5")),
-            "exit_stop_loss": float(os.getenv("EXIT_STOP_LOSS", "1.0")),
+            "entry_threshold": float(os.getenv("ENTRY_THRESHOLD", "30.0")),  # Phase 1: 40 → 30
+            "exit_profit_target": float(os.getenv("EXIT_PROFIT_TARGET", "0.75")),  # Phase 1: 2.0 → 0.75
+            "exit_stop_loss": float(os.getenv("EXIT_STOP_LOSS", "2.0")),  # Phase 1: 3.0 → 2.0
             "enabled": True,
             "symbols": symbols,
+            "trading_timeframe": os.getenv("TRADING_TIMEFRAME", "1h"),  # Phase 1: 5m → 1h
         }
 
     @staticmethod

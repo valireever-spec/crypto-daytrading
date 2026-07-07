@@ -69,7 +69,7 @@ class SignalCalculator:
     RSI_PERIOD = 14
     RSI_OVERSOLD = 30  # Buy signal (price too low)
     RSI_OVERBOUGHT = 70  # Sell signal (price too high)
-    ENTRY_THRESHOLD = 50  # Signal strength threshold (0-100)
+    ENTRY_THRESHOLD = 30  # Phase 1: Signal strength threshold (was 50, now 30 for more aggressive entry)
 
     @staticmethod
     def calculate_signal(
@@ -172,21 +172,20 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             return None
 
         # Fetch multi-timeframe data
-        data_5min = await _fetch_ohlcv(symbol, "5m", limit=100)
+        # Phase 1: Primary timeframe changed from 5m to 1h for better signal quality
         data_1hr = await _fetch_ohlcv(symbol, "1h", limit=100)
         data_4hr = await _fetch_ohlcv(symbol, "4h", limit=100)
 
-        if not data_5min or not data_1hr or not data_4hr:
+        if not data_1hr or not data_4hr:
             logger.debug(f"{symbol}: Missing OHLCV data")
             return None
 
-        closes_5min, volumes_5min = _extract_candle_data(data_5min)
-        closes_1hr, _ = _extract_candle_data(data_1hr)
+        closes_1hr, volumes_1hr = _extract_candle_data(data_1hr)
         closes_4hr, _ = _extract_candle_data(data_4hr)
 
-        # Calculate signal
+        # Calculate signal (using 1h as primary timeframe instead of 5m)
         signal_strength, reason = SignalCalculator.calculate_signal(
-            closes_5min, closes_1hr, closes_4hr, volumes_5min
+            closes_1hr, closes_4hr, closes_4hr, volumes_1hr  # 1h replaces 5m as primary
         )
 
         if signal_strength is None:
