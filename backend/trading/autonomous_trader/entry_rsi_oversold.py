@@ -110,7 +110,7 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
 
     try:
         from backend.exchange.paper_trading import get_paper_trading
-        
+
         engine = get_paper_trading()
         if not engine:
             return None
@@ -127,14 +127,18 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
         # Fetch OHLCV data
         import time
         import ccxt.async_support as ccxt
-        
-        exchange = ccxt.binance()
-        data_5min = await exchange.fetch_ohlcv(symbol, "5m", limit=100)
-        data_1hr = await exchange.fetch_ohlcv(symbol, "1h", limit=100)
-        await exchange.close()
-        
+
+        try:
+            exchange = ccxt.binance()
+            data_5min = await exchange.fetch_ohlcv(symbol, "5m", limit=100)
+            data_1hr = await exchange.fetch_ohlcv(symbol, "1h", limit=100)
+            await exchange.close()
+        except Exception as e:
+            logger.info(f"⚠️  {symbol}: Failed to fetch OHLCV: {str(e)[:80]}")
+            return None
+
         if not data_5min or not data_1hr:
-            logger.debug(f"{symbol}: Missing OHLCV data")
+            logger.info(f"⚠️  {symbol}: Missing OHLCV data (5m: {len(data_5min) if data_5min else 0}, 1h: {len(data_1hr) if data_1hr else 0})")
             return None
 
         closes_5min = [c[4] for c in data_5min]
@@ -145,7 +149,7 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
         )
 
         if signal_strength is None:
-            logger.debug(f"{symbol}: {reason}")
+            logger.info(f"⚠️  {symbol}: {reason}")
             return None
 
         logger.info(f"✅ Signal generated for {symbol}: {reason} (strength: {signal_strength:.0f})")
