@@ -139,7 +139,7 @@ class MetricsCollector:
             'recent_exits_2h': len(all_trades),
             'win_rate_2h': self.get_win_rate([TradeMetric(**t) for t in all_trades]) if all_trades else 0,
             'recent_signals_2h': len(self.get_signals_since(minutes=120)),
-            'uptime_seconds': (datetime.now(timezone.utc) - self.start_time.replace(tzinfo=timezone.utc)).total_seconds() if self.start_time.tzinfo else (datetime.utcnow() - self.start_time).total_seconds(),
+            'uptime_seconds': (datetime.now(timezone.utc) - self.start_time).total_seconds(),
         }
 
 # Global instance
