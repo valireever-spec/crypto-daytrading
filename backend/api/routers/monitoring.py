@@ -1,7 +1,7 @@
 """Real-time monitoring endpoints for strategy visibility."""
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from datetime import datetime
 from pathlib import Path
 
@@ -157,7 +157,7 @@ async def get_prometheus_metrics():
         metrics.append(f"# TYPE crypto_trading_circuit_breaker gauge")
         metrics.append(f"crypto_trading_circuit_breaker {cb_value}")
 
-        return "\n".join(metrics)
+        return Response(content="\n".join(metrics), media_type="text/plain")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
