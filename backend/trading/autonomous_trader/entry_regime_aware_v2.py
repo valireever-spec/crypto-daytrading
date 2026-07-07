@@ -30,8 +30,10 @@ from backend.exchange.order_response import validate_order_response
 from backend.core.data_quality import get_data_quality_measurer
 from backend.execution.smart_executor import get_smart_executor
 from backend.exchange.binance_stream import get_stream_client
+from backend.core.trading_metrics import get_metrics_collector
 
 logger = logging.getLogger(__name__)
+metrics = get_metrics_collector()
 
 MIN_HOLD_TIME_SECONDS = 300
 OHLCV_FETCH_THROTTLE_SECONDS = 2  # Prevent too-frequent data fetches that can cause WebSocket staleness
@@ -416,6 +418,29 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             closes_5min, closes_1hr, closes_4hr, volumes_5min
         )
 
+        # Record signal decision for monitoring
+        regime = TechnicalIndicators.detect_regime(closes_5min, closes_1hr)
+        rsi_5m = TechnicalIndicators.rsi(closes_5min)
+        rsi_1h = TechnicalIndicators.rsi(closes_1hr)
+        bb_width = TechnicalIndicators.bollinger_band_width_pct(closes_5min)
+        _, _, macd_hist = TechnicalIndicators.macd(closes_5min)
+        avg_vol = sum(volumes_5min[-20:]) / 20 if len(volumes_5min) >= 20 else 1
+        vol_ratio = volumes_5min[-1] / avg_vol if avg_vol > 0 else 1
+
+        metrics.record_signal(
+            symbol=symbol,
+            regime=regime,
+            entry_reason=reason,
+            filters_passed={'signal_generated': signal_strength is not None},
+            rsi_5m=rsi_5m,
+            rsi_1h=rsi_1h,
+            bb_width_pct=bb_width,
+            macd_histogram=macd_hist,
+            volume_ratio=vol_ratio,
+            signal_strength=signal_strength or 0,
+            decision='ENTER' if signal_strength else 'REJECTED'
+        )
+
         if signal_strength is None:
             logger.debug(f"{symbol}: {reason}")
             return None
@@ -495,6 +520,15 @@ async def _execute_entry_impl(trader_self, signal) -> bool:
                 logger.info(
                     f"✅ BUY {signal.symbol}: {quantity:.4f} @ ${current_price:.2f} - {signal.reason}"
                 )
+
+                # Record trade execution for monitoring
+                metrics.record_trade(
+                    symbol=signal.symbol,
+                    side='BUY',
+                    entry_price=current_price,
+                    quantity=quantity,
+                )
+
                 from backend.core.alerting import get_alert_manager
                 alert_mgr = get_alert_manager()
                 new_account = engine.get_account_state()

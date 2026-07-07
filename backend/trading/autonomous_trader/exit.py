@@ -8,6 +8,7 @@ from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.order_response import validate_order_response
 from backend.execution.smart_executor import get_smart_executor
 from backend.core.fragility_circuit_breaker import get_fragility_breaker
+from backend.core.trading_metrics import get_metrics_collector
 
 if TYPE_CHECKING:
     from .core import AutonomousTrader
@@ -175,9 +176,25 @@ async def _execute_exit_impl(
 
             if validated.status == "FILLED":
                 realized_pnl = validated.realized_pnl or 0.0
+                realized_pnl_pct = (realized_pnl / (position["entry_price"] * quantity) * 100) if position["entry_price"] > 0 else 0
+                hold_time = int((datetime.utcnow() - datetime.fromisoformat(position.get("entry_time", ""))).total_seconds()) if position.get("entry_time") else 0
+
                 logger.info(
                     f"✅ SOLD {symbol}: {quantity:.4f} @ ${current_price:.2f} - {reason} - "
                     f"P&L: ${realized_pnl:.2f}"
+                )
+
+                # Record exit trade for monitoring
+                metrics = get_metrics_collector()
+                metrics.record_trade(
+                    symbol=symbol,
+                    side='SELL',
+                    exit_price=current_price,
+                    quantity=quantity,
+                    realized_pnl=realized_pnl,
+                    realized_pnl_pct=realized_pnl_pct,
+                    hold_seconds=hold_time,
+                    exit_reason=reason.lower().replace(" ", "_")
                 )
                 return True
             else:
