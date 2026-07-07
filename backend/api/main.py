@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 # Import lifecycle management
 from backend.api.lifecycle import lifespan
 from backend.api.middleware import LogAndMetricsMiddleware
+from backend.api.middleware_enhanced import EnhancedLoggingMiddleware
 
 # Import all routers
 from backend.api.routers.tax import router as tax_router
@@ -112,7 +113,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add middleware
+# Add middleware (order matters - registered in reverse order)
+app.add_middleware(EnhancedLoggingMiddleware)
 app.add_middleware(LogAndMetricsMiddleware)
 
 app.add_middleware(
