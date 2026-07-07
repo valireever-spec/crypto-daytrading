@@ -171,12 +171,22 @@ async def get_dashboard_metrics():
         collector = get_metrics_collector()
         dashboard_data = collector.get_dashboard_metrics()
 
-        # Add system health
+        # Add system health and account data
+        account = {}
         try:
-            health = requests.get("http://127.0.0.1:8001/api/health", timeout=2).json()
-            account = health.get('account', {})
+            # Get account data from paper trading engine (correct endpoint)
+            from backend.exchange.paper_trading import get_paper_trading
+            engine = get_paper_trading()
+            if engine:
+                account_state = engine.get_account_state()
+                account = {
+                    'cash': account_state.get('cash', 0),
+                    'daily_pnl': account_state.get('daily_pnl', 0),
+                    'total_pnl': account_state.get('total_pnl', 0),
+                    'active_positions': len(engine.get_positions()),
+                }
         except:
-            account = {}
+            pass
 
         dashboard_data['system'] = {
             'cash': account.get('cash', 0),
