@@ -105,6 +105,60 @@ async def get_dashboard_data():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/metrics")
+async def get_prometheus_metrics():
+    """Prometheus-compatible metrics endpoint for external monitoring."""
+    try:
+        from backend.core.trading_metrics import get_metrics_collector
+        import requests
+
+        collector = get_metrics_collector()
+        stats = collector.get_statistics()
+
+        try:
+            health = requests.get("http://127.0.0.1:8001/api/health", timeout=2).json()
+        except:
+            health = {}
+
+        metrics = []
+
+        # Trading metrics
+        metrics.append(f"# HELP crypto_trading_signals_total Total signals generated")
+        metrics.append(f"# TYPE crypto_trading_signals_total counter")
+        metrics.append(f"crypto_trading_signals_total {stats.get('total_signals', 0)}")
+
+        metrics.append(f"# HELP crypto_trading_trades_total Total trades executed")
+        metrics.append(f"# TYPE crypto_trading_trades_total counter")
+        metrics.append(f"crypto_trading_trades_total {stats.get('total_trades', 0)}")
+
+        metrics.append(f"# HELP crypto_trading_win_rate_2h Win rate last 2 hours")
+        metrics.append(f"# TYPE crypto_trading_win_rate_2h gauge")
+        metrics.append(f"crypto_trading_win_rate_2h {stats.get('win_rate_2h', 0)}")
+
+        # System metrics
+        account = health.get('account', {})
+        metrics.append(f"# HELP crypto_trading_cash_available Available cash")
+        metrics.append(f"# TYPE crypto_trading_cash_available gauge")
+        metrics.append(f"crypto_trading_cash_available {account.get('cash', 0)}")
+
+        metrics.append(f"# HELP crypto_trading_daily_pnl Daily profit/loss")
+        metrics.append(f"# TYPE crypto_trading_daily_pnl gauge")
+        metrics.append(f"crypto_trading_daily_pnl {account.get('daily_pnl', 0)}")
+
+        metrics.append(f"# HELP crypto_trading_positions_open Open positions")
+        metrics.append(f"# TYPE crypto_trading_positions_open gauge")
+        metrics.append(f"crypto_trading_positions_open {account.get('active_positions', 0)}")
+
+        cb_state = health.get('circuit_breaker', {}).get('state', 'UNKNOWN')
+        cb_value = 1 if cb_state == 'CLOSED' else 0
+        metrics.append(f"# HELP crypto_trading_circuit_breaker Circuit breaker state (1=CLOSED, 0=OPEN)")
+        metrics.append(f"# TYPE crypto_trading_circuit_breaker gauge")
+        metrics.append(f"crypto_trading_circuit_breaker {cb_value}")
+
+        return "\n".join(metrics)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/dashboard")
 async def get_dashboard():
     """Serve real-time monitoring dashboard."""
@@ -124,6 +178,7 @@ async def get_dashboard():
                     <li>GET /api/monitoring/signals - Recent signal decisions</li>
                     <li>GET /api/monitoring/trades - Recent trade executions</li>
                     <li>GET /api/monitoring/dashboard-data - Data for dashboard visualization</li>
+                    <li>GET /api/monitoring/metrics - Prometheus-compatible metrics</li>
                 </ul>
             </body>
         </html>
