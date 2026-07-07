@@ -1,9 +1,20 @@
 """Integration tests for Phase 336: Multi-Asset Support."""
 
+import os
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.main import app
+
+
+@pytest.fixture(autouse=True)
+def setup_auth_env(monkeypatch):
+    """Set up authentication environment variables for all tests."""
+    # Set required auth tokens from environment
+    monkeypatch.setenv("AUTH_ADMIN_TOKEN", "admin-token-123")
+    monkeypatch.setenv("AUTH_ANALYST_TOKEN", "analyst-token-456")
+    monkeypatch.setenv("AUTH_TRADER_TOKEN", "trader-token-789")
+    monkeypatch.setenv("AUTH_VIEWER_TOKEN", "viewer-token-000")
 from backend.analytics.asset_classes import (
     AssetRegistry,
     AssetClass,

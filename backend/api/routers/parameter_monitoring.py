@@ -10,8 +10,10 @@ Exposes critical trading parameters:
 """
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse
 from datetime import datetime, timezone
 from typing import Optional
+from pathlib import Path
 
 router = APIRouter(prefix="/api/parameters", tags=["Parameter Monitoring"])
 
@@ -258,3 +260,32 @@ async def parameter_health_check():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dashboard")
+async def get_parameter_dashboard():
+    """Serve parameter monitoring dashboard HTML."""
+    dashboard_path = Path(__file__).parent.parent.parent / "frontend" / "parameter_monitor_dashboard.html"
+
+    if dashboard_path.exists():
+        return FileResponse(dashboard_path, media_type="text/html")
+    else:
+        return HTMLResponse("""
+        <html>
+            <body style="background: #0f1419; color: #e0e0e0; font-family: monospace; padding: 20px;">
+                <h1>Parameter Monitor Dashboard</h1>
+                <p>Dashboard file not found at: {}</p>
+                <p>Available endpoints:</p>
+                <ul>
+                    <li>GET /api/parameters/summary - All parameters</li>
+                    <li>GET /api/parameters/health-check - System health</li>
+                    <li>GET /api/parameters/trend-filter - Trend filter metrics</li>
+                    <li>GET /api/parameters/signals - Signal quality</li>
+                    <li>GET /api/parameters/stops - Stop loss effectiveness</li>
+                    <li>GET /api/parameters/targets - Profit target effectiveness</li>
+                    <li>GET /api/parameters/exit-reasons - Exit reason breakdown</li>
+                    <li>GET /api/parameters/entry-reasons - Entry reason breakdown</li>
+                </ul>
+            </body>
+        </html>
+        """.format(str(dashboard_path)))

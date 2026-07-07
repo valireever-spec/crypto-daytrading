@@ -76,11 +76,28 @@ class AuthManager:
         """Initialize auth manager with demo users from environment."""
         import os
 
-        # Load demo users from environment (replace with real auth in production)
-        admin_token = os.getenv("AUTH_ADMIN_TOKEN", "admin-token-123")
-        analyst_token = os.getenv("AUTH_ANALYST_TOKEN", "analyst-token-456")
-        trader_token = os.getenv("AUTH_TRADER_TOKEN", "trader-token-789")
-        viewer_token = os.getenv("AUTH_VIEWER_TOKEN", "viewer-token-000")
+        # Load demo users from environment (REQUIRED - no defaults)
+        admin_token = os.getenv("AUTH_ADMIN_TOKEN")
+        analyst_token = os.getenv("AUTH_ANALYST_TOKEN")
+        trader_token = os.getenv("AUTH_TRADER_TOKEN")
+        viewer_token = os.getenv("AUTH_VIEWER_TOKEN")
+
+        # Validate all tokens are provided
+        missing_tokens = []
+        if not admin_token:
+            missing_tokens.append("AUTH_ADMIN_TOKEN")
+        if not analyst_token:
+            missing_tokens.append("AUTH_ANALYST_TOKEN")
+        if not trader_token:
+            missing_tokens.append("AUTH_TRADER_TOKEN")
+        if not viewer_token:
+            missing_tokens.append("AUTH_VIEWER_TOKEN")
+
+        if missing_tokens:
+            raise ValueError(
+                f"Missing required authentication tokens in environment: {', '.join(missing_tokens)}. "
+                f"See .env.example for required variables."
+            )
 
         self.users: Dict[str, User] = {
             admin_token: User(
