@@ -239,8 +239,10 @@ class Phase2MetricsCollector:
 
             # Calculate max age of price data
             if client.last_update:
+                from datetime import timezone
+                now = datetime.now(timezone.utc)
                 ages = [
-                    (datetime.utcnow() - update_time).total_seconds()
+                    (now - update_time).total_seconds()
                     for update_time in client.last_update.values()
                 ]
                 snapshot.ws_max_age_seconds = max(ages) if ages else 0
@@ -249,7 +251,7 @@ class Phase2MetricsCollector:
                 snapshot.ws_stale_symbols = [
                     symbol
                     for symbol, update_time in client.last_update.items()
-                    if (datetime.utcnow() - update_time).total_seconds() > 30
+                    if (now - update_time).total_seconds() > 30
                 ]
             else:
                 snapshot.ws_max_age_seconds = 0

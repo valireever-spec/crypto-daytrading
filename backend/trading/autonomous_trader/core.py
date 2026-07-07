@@ -358,8 +358,9 @@ class AutonomousTrader:
                         and stream_client.last_update
                     ):
                         most_recent = max(stream_client.last_update.values())
+                        from datetime import timezone
                         last_update_age = (
-                            datetime.utcnow() - most_recent
+                            datetime.now(timezone.utc) - most_recent
                         ).total_seconds()
                     else:
                         last_update_age = 999
