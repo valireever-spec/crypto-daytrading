@@ -146,7 +146,8 @@ async def get_dashboard_data():
         # Get health for system status
         try:
             health = requests.get("http://127.0.0.1:8001/api/health", timeout=2).json()
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to fetch health status: {e}")
             health = {}
         
         stats = collector.get_statistics()
@@ -191,7 +192,8 @@ async def get_prometheus_metrics():
 
         try:
             health = requests.get("http://127.0.0.1:8001/api/health", timeout=2).json()
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to fetch health status for prometheus metrics: {e}")
             health = {}
 
         metrics = []

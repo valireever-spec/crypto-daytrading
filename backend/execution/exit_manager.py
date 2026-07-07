@@ -206,6 +206,11 @@ class ExitManager:
         now = datetime.now()
         holding_time = (now - position.entry_time).total_seconds() / 3600
 
+        # Validate entry_price to prevent division by zero
+        if position.entry_price <= 0:
+            logger.warning(f"Invalid entry_price={position.entry_price} for {position.symbol}, skipping exit checks")
+            return None
+
         # Check 1: Profit target hit
         gain_pct = ((current_price - position.entry_price) / position.entry_price) * 100
         if gain_pct >= rule.take_profit_pct:
@@ -239,26 +244,30 @@ class ExitManager:
         # Check 3: Trailing stop
         if rule.trailing_stop_pct > 0:
             position.high_water_mark = max(position.high_water_mark, current_price)
-            drawdown_pct = (
-                (position.high_water_mark - current_price)
-                / position.high_water_mark
-                * 100
-            )
-            if (
-                drawdown_pct >= rule.trailing_stop_pct
-                and current_price < position.entry_price
-            ):
-                pnl_usd = position.quantity * (current_price - position.entry_price)
-                return ExitSignal(
-                    symbol=position.symbol,
-                    quantity=position.quantity,
-                    reason=ExitReason.TRAILING_STOP,
-                    exit_price=current_price,
-                    pnl_usd=pnl_usd,
-                    pnl_pct=loss_pct,
-                    holding_time_hours=holding_time,
-                    regime=position.regime,
+            # Validate high_water_mark to prevent division by zero
+            if position.high_water_mark <= 0:
+                logger.warning(f"Invalid high_water_mark={position.high_water_mark} for {position.symbol}, skipping trailing stop")
+            else:
+                drawdown_pct = (
+                    (position.high_water_mark - current_price)
+                    / position.high_water_mark
+                    * 100
                 )
+                if (
+                    drawdown_pct >= rule.trailing_stop_pct
+                    and current_price < position.entry_price
+                ):
+                    pnl_usd = position.quantity * (current_price - position.entry_price)
+                    return ExitSignal(
+                        symbol=position.symbol,
+                        quantity=position.quantity,
+                        reason=ExitReason.TRAILING_STOP,
+                        exit_price=current_price,
+                        pnl_usd=pnl_usd,
+                        pnl_pct=loss_pct,
+                        holding_time_hours=holding_time,
+                        regime=position.regime,
+                    )
 
         # Check 4: Time stop
         if holding_time >= rule.max_holding_hours:

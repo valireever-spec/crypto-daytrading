@@ -34,7 +34,8 @@ async def fetch_primary_trades() -> list:
             response = await client.get(f"{primary_url}/api/paper/trades?limit=1000")
             data = response.json()
             return data.get("trades", [])
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to fetch trades from PRIMARY ({primary_url}): {e}", exc_info=True)
         return []
 
 

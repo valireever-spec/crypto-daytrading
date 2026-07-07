@@ -251,6 +251,7 @@ class TradingDatabase:
         Returns:
             True if hash matches (trade is intact), False if corrupted
         """
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
@@ -258,7 +259,6 @@ class TradingDatabase:
 
             cursor.execute("SELECT * FROM trades WHERE id = ?", (trade_id,))
             row = cursor.fetchone()
-            conn.close()
 
             if not row:
                 logger.warning(f"Trade {trade_id} not found")
@@ -288,6 +288,9 @@ class TradingDatabase:
         except Exception as e:
             logger.error(f"Error verifying trade integrity: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
 
     def verify_all_trades_integrity(self) -> bool:
         """Verify integrity of recent trades in database (Pillar #10).
@@ -390,22 +393,28 @@ class TradingDatabase:
         Args:
             position_id: Position ID to close
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
 
-        cursor.execute(
-            """
-            UPDATE open_positions
-            SET status = 'CLOSED', updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (position_id,),
-        )
+            cursor.execute(
+                """
+                UPDATE open_positions
+                SET status = 'CLOSED', updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (position_id,),
+            )
 
-        conn.commit()
-        conn.close()
-
-        logger.info(f"Position closed in DB: id={position_id}")
+            conn.commit()
+            logger.info(f"Position closed in DB: id={position_id}")
+        except Exception as e:
+            logger.error(f"Error closing position {position_id}: {e}", exc_info=True)
+            raise
+        finally:
+            if conn:
+                conn.close()
 
     def get_open_positions(self) -> List[Dict]:
         """Get all open positions from database (with error handling).
