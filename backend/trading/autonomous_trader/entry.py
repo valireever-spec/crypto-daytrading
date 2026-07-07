@@ -13,16 +13,13 @@ Why mean-reversion works (where momentum failed):
 - Expected win rate: 55%+ vs 0% from momentum
 """
 
-import asyncio
 import logging
 from typing import Optional, Tuple, List
-from datetime import timezone, datetime, timedelta
+from datetime import timezone, datetime
 import ccxt.async_support as ccxt
 
 from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.order_response import validate_order_response
-from backend.core.data_quality import get_data_quality_measurer
-from backend.execution.smart_executor import get_smart_executor
 from backend.exchange.binance_stream import get_stream_client
 
 logger = logging.getLogger(__name__)

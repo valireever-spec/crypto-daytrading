@@ -12,7 +12,6 @@ Exposes critical trading parameters:
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from datetime import datetime, timezone
-from typing import Optional
 from pathlib import Path
 
 router = APIRouter(prefix="/api/parameters", tags=["Parameter Monitoring"])

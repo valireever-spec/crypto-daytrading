@@ -6,9 +6,8 @@ Enables sync even when PRIMARY and BACKUP are on different networks.
 
 import logging
 import json
-import subprocess
 import asyncio
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 

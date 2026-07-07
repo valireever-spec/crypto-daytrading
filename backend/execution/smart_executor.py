@@ -268,8 +268,8 @@ class SmartExecutor:
                     symbol=context.symbol,
                     quantity=context.quantity,
                     price=context.current_price,
-                    regime=regime_name,  # From regime detector
-                    confidence=regime_confidence,  # From regime detector
+                    regime=order_result.get("regime", "unknown"),
+                    confidence=order_result.get("confidence", 0.0),
                     order_id=order_id,
                     reason="Order filled",
                 )

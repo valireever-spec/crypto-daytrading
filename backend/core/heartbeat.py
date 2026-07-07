@@ -203,7 +203,7 @@ class HeartbeatSender:
 
         except asyncio.TimeoutError:
             self.failed_count += 1
-            logger.warning(f"⏱️  Heartbeat timeout (network issue or BACKUP unreachable)")
+            logger.warning("⏱️  Heartbeat timeout (network issue or BACKUP unreachable)")
             return False
         except Exception as e:
             self.failed_count += 1

@@ -3,7 +3,6 @@
 Hard kill switch that stops all trading immediately and cleans up gracefully.
 """
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional

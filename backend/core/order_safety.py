@@ -9,10 +9,9 @@ Prevents:
 
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional
 from dataclasses import dataclass, field
-import json
 
 logger = logging.getLogger(__name__)
 

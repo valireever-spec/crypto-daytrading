@@ -115,7 +115,6 @@ async def lifespan(app: FastAPI):
     try:
         from backend.core.database_authority import DatabaseAuthority
         from backend.core.database_sync import DatabaseSyncer
-        from backend.core import constants as db_constants
 
         authority = DatabaseAuthority(divergence_threshold_seconds=60)
 
@@ -174,7 +173,6 @@ async def lifespan(app: FastAPI):
     from backend.exchange.binance_stream import init_stream_client
     from backend.exchange.websocket_staleness_monitor import WebSocketStalenessMonitor
     from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
-    from backend.trading.autonomous_trader import TradingConfig
     from backend.execution.smart_executor import init_smart_executor
     from backend.core.circuit_breaker_v2 import init_circuit_breaker
 
@@ -343,16 +341,16 @@ async def lifespan(app: FastAPI):
                     async with httpx.AsyncClient(timeout=constants.HEALTH_CHECK_TIMEOUT) as client:
                         health_resp = await client.get(f"{constants.BACKUP_API_URL}/api/health")
                         backup_healthy = health_resp.status_code == 200
-                except Exception as health_err:
+                except Exception:
                     backup_healthy = False
 
                 # Log health status change at INFO level for visibility
                 if backup_healthy != backup_last_healthy:
                     if backup_healthy:
-                        logger.info(f"✅ BACKUP health restored - sync resuming")
+                        logger.info("✅ BACKUP health restored - sync resuming")
                         consecutive_failures = 0
                     else:
-                        logger.warning(f"⚠️  BACKUP unhealthy (connection failed)")
+                        logger.warning("⚠️  BACKUP unhealthy (connection failed)")
                     backup_last_healthy = backup_healthy
 
                 if not backup_healthy:
@@ -448,7 +446,7 @@ async def lifespan(app: FastAPI):
     async def failover_monitor():
         """BACKUP: Monitor PRIMARY health via bidirectional heartbeat (Skill #3), enable trading on failure."""
         import httpx
-        from backend.trading.autonomous_trader import init_autonomous_trader, get_autonomous_trader
+        from backend.trading.autonomous_trader import init_autonomous_trader
         from backend.failover.ha_bidirectional_heartbeat import (
             get_bidirectional_heartbeat_monitor,
         )
@@ -459,8 +457,8 @@ async def lifespan(app: FastAPI):
         # Receives heartbeats from PRIMARY at scenario-determined endpoint
         monitor = get_bidirectional_heartbeat_monitor()
         logger.info(
-            f"💓 BACKUP bidirectional heartbeat monitor initialized "
-            f"(3 misses = 6s failover, scenario-aware)"
+            "💓 BACKUP bidirectional heartbeat monitor initialized "
+            "(3 misses = 6s failover, scenario-aware)"
         )
 
         while True:

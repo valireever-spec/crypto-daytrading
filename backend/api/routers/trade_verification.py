@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime, timezone
 from pathlib import Path
 import json
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 router = APIRouter(prefix="/api/verification", tags=["Verification"])
 
@@ -217,13 +217,13 @@ async def verify_trade_chain():
 
     if missing_entry > 0:
         checks.append({
-            "name": f"No missing entry_reasons",
+            "name": "No missing entry_reasons",
             "status": f"❌ {missing_entry} BUY trades missing entry_reason",
         })
 
     if missing_exit > 0:
         checks.append({
-            "name": f"No missing exit_reasons",
+            "name": "No missing exit_reasons",
             "status": f"❌ {missing_exit} SELL trades missing exit_reason",
         })
 

@@ -5,7 +5,7 @@ Determines which database is authoritative based on chronological timestamps.
 
 import sqlite3
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Dict, Any
 from pathlib import Path
 

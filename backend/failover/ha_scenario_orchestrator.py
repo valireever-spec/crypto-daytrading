@@ -17,8 +17,8 @@ import asyncio
 import logging
 import time
 import socket
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Tuple
+from datetime import datetime
+from typing import Optional, Dict, Any
 from enum import Enum
 from dataclasses import dataclass
 
@@ -213,7 +213,7 @@ class HAScenarioOrchestrator:
                 resp = await client.get(self.config.binance_api_endpoint)
 
                 if resp.status_code == 200:
-                    logger.debug(f"✅ Internet check OK: Binance API reachable")
+                    logger.debug("✅ Internet check OK: Binance API reachable")
                     return True
                 else:
                     logger.debug(f"Internet check failed: Binance returned {resp.status_code}")

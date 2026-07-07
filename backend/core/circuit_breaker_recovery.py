@@ -10,9 +10,9 @@ Benefits:
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,9 @@ class CircuitBreakerRecovery:
         self.last_recovery_time = datetime.utcnow()
 
         # Persist to disk
-        recovery_ts = self.last_recovery_time.isoformat() if self.last_recovery_time is not None else None
+        recovery_ts: Optional[str] = None
+        if self.last_recovery_time is not None:
+            recovery_ts = self.last_recovery_time.isoformat()
         state_data = {
             "state": self.current_state,
             "reason": None,
@@ -106,9 +108,11 @@ class CircuitBreakerRecovery:
 
         # Append to history
         try:
-            recovery_ts = self.last_recovery_time.isoformat() if self.last_recovery_time is not None else None
+            recovery_ts_hist: Optional[str] = None
+            if self.last_recovery_time is not None:
+                recovery_ts_hist = self.last_recovery_time.isoformat()
             history_entry = {
-                "timestamp": recovery_ts,
+                "timestamp": recovery_ts_hist,
                 "state": "CLOSED",
                 "reason": "Automatic recovery",
                 "recovery_duration_seconds": recovery_duration,
@@ -205,8 +209,12 @@ class CircuitBreakerRecovery:
 
     def get_stats(self) -> Dict:
         """Get current CB statistics and history."""
-        trip_ts = self.trip_timestamp.isoformat() if self.trip_timestamp is not None else None
-        recovery_ts = self.last_recovery_time.isoformat() if self.last_recovery_time is not None else None
+        trip_ts: Optional[str] = None
+        if self.trip_timestamp is not None:
+            trip_ts = self.trip_timestamp.isoformat()
+        recovery_ts: Optional[str] = None
+        if self.last_recovery_time is not None:
+            recovery_ts = self.last_recovery_time.isoformat()
         stats = {
             "current_state": self.current_state,
             "trip_count": self.trip_count,

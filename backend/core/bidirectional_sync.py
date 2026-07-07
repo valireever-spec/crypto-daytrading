@@ -5,7 +5,6 @@ Implements conflict resolution strategy: PRIMARY is always source of truth.
 """
 
 import logging
-import asyncio
 import httpx
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -44,7 +43,7 @@ class BiDirectionalSync:
             True if sync succeeded, False otherwise
         """
         try:
-            logger.info(f"📤 BACKUP syncing state to PRIMARY recovery endpoint...")
+            logger.info("📤 BACKUP syncing state to PRIMARY recovery endpoint...")
 
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.post(
@@ -102,7 +101,9 @@ class BiDirectionalSync:
 
     def get_status(self) -> Dict[str, Any]:
         """Get bi-directional sync status."""
-        last_sync_ts = self.last_sync_at.isoformat() if self.last_sync_at is not None else None
+        last_sync_ts: Optional[str] = None
+        if self.last_sync_at is not None:
+            last_sync_ts = self.last_sync_at.isoformat()
         return {
             "machine_id": self.machine_id,
             "last_sync_at": last_sync_ts,

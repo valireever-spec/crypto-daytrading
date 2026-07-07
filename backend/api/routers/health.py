@@ -1,6 +1,6 @@
 """Health check endpoint for system monitoring and deployment readiness."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -63,7 +63,7 @@ async def health_check() -> Dict[str, Any]:
         from backend.core.database import get_database
         db = get_database()
         db_status = "online"
-    except Exception as e:
+    except Exception:
         db_status = "offline"
 
     # Check trading engine

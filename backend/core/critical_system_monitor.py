@@ -1,10 +1,8 @@
 """Monitor critical system dependencies that would cause cascade failures."""
 
 import logging
-import asyncio
 import time
-from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 

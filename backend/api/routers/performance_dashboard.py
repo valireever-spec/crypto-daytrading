@@ -1,9 +1,8 @@
 """Real-time performance monitoring dashboard and metrics API."""
 
 from fastapi import APIRouter, HTTPException
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List
-import json
+from datetime import datetime, timezone
+from typing import Dict, Any
 
 router = APIRouter(
     prefix="/api/performance",

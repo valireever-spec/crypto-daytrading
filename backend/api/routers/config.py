@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from backend.core.runtime_config import get_config_manager, TradingConfig
+from backend.core.runtime_config import get_config_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/config", tags=["configuration"])

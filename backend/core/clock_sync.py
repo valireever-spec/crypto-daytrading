@@ -3,7 +3,6 @@
 import logging
 import time
 from typing import Dict, Optional
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

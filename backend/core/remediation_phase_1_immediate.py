@@ -15,8 +15,7 @@ These fixes address the cascading failures detected in baseline:
 
 import asyncio
 import logging
-import time
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 

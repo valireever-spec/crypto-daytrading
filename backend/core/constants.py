@@ -6,7 +6,6 @@ easier to configure for different environments.
 """
 
 import os
-from typing import Optional
 
 # ============================================================================
 # MACHINE & HA CONFIGURATION

@@ -7,22 +7,11 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Any
-from datetime import datetime, timedelta
+from typing import Optional, Dict, List
+from datetime import datetime
 
 from backend.exchange.paper_trading import get_paper_trading
-from backend.analytics.regime_detector import get_regime_detector
-from backend.execution.smart_executor import get_smart_executor
-from backend.strategies.garp_value_strategy import apply_garp_value_strategy
-from backend.analytics.signal_explainer import get_signal_explainer
-from backend.analytics.volatility_manager import get_volatility_manager
-from backend.trading.portfolio_decision_coordinator import (
-    get_portfolio_decision_coordinator,
-)
-from backend.core.data_quality import get_data_quality_measurer
-from backend.core.data_validator import get_price_validator
 from backend.core.circuit_breaker import get_circuit_breaker
-from backend.exchange.binance_stream import get_stream_client
 from backend.core.alerting import get_alert_manager
 
 # Hardening modules (Phase 1 Safety)
@@ -36,7 +25,7 @@ from backend.core.rate_limiter import RateLimiter
 from backend.core.ha_deduplication import HADeduplicator
 from backend.core.database_persistence import get_database_persistence
 from backend.core.clock_sync import ClockSyncMonitor
-from backend.core.fragility_circuit_breaker import should_halt_trading, get_fragility_breaker
+from backend.core.fragility_circuit_breaker import should_halt_trading
 
 logger = logging.getLogger(__name__)
 
@@ -407,7 +396,7 @@ class AutonomousTrader:
                     # If >50% of streams stale, alert and record circuit breaker event
                     stale_pct = len(ws_health["stale_streams"]) / ws_health["total_streams"]
                     if stale_pct > 0.5:
-                        logger.critical(f"🔴 >50% of streams stale, circuit breaker should activate")
+                        logger.critical("🔴 >50% of streams stale, circuit breaker should activate")
                         alert_mgr = get_alert_manager()
                         await alert_mgr.alert_primary_unhealthy(f"WebSocket stale >50%: {stale_str}")
 

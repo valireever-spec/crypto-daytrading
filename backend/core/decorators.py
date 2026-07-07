@@ -7,7 +7,7 @@ and ensure consistent error handling across the codebase.
 import asyncio
 import functools
 import logging
-from typing import Any, Callable, Optional, Type, Tuple
+from typing import Any, Callable, Type, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

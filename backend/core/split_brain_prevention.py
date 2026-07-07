@@ -7,9 +7,8 @@ Prevents both PRIMARY and BACKUP from trading simultaneously by:
 """
 
 import logging
-import asyncio
-from datetime import datetime, timedelta
-from typing import Literal
+from datetime import datetime
+from typing import Optional
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -162,9 +161,18 @@ class SplitBrainPrevention:
 
     def get_status(self) -> dict:
         """Get current failover status."""
-        primary_check_ts = self.last_primary_check.isoformat() if self.last_primary_check is not None else None
-        backup_check_ts = self.last_backup_check.isoformat() if self.last_backup_check is not None else None
-        state_updated_ts = self.state_updated_at.isoformat() if self.state_updated_at is not None else None
+        primary_check_ts: Optional[str] = None
+        if self.last_primary_check is not None:
+            primary_check_ts = self.last_primary_check.isoformat()
+
+        backup_check_ts: Optional[str] = None
+        if self.last_backup_check is not None:
+            backup_check_ts = self.last_backup_check.isoformat()
+
+        state_updated_ts: Optional[str] = None
+        if self.state_updated_at is not None:
+            state_updated_ts = self.state_updated_at.isoformat()
+
         return {
             "machine_id": self.machine_id,
             "current_state": self.current_state.value,

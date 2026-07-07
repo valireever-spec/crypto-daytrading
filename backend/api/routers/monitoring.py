@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 import logging
 
@@ -199,36 +199,36 @@ async def get_prometheus_metrics():
         metrics = []
 
         # Trading metrics
-        metrics.append(f"# HELP crypto_trading_signals_total Total signals generated")
-        metrics.append(f"# TYPE crypto_trading_signals_total counter")
+        metrics.append("# HELP crypto_trading_signals_total Total signals generated")
+        metrics.append("# TYPE crypto_trading_signals_total counter")
         metrics.append(f"crypto_trading_signals_total {stats.get('total_signals', 0)}")
 
-        metrics.append(f"# HELP crypto_trading_trades_total Total trades executed")
-        metrics.append(f"# TYPE crypto_trading_trades_total counter")
+        metrics.append("# HELP crypto_trading_trades_total Total trades executed")
+        metrics.append("# TYPE crypto_trading_trades_total counter")
         metrics.append(f"crypto_trading_trades_total {stats.get('total_trades', 0)}")
 
-        metrics.append(f"# HELP crypto_trading_win_rate_2h Win rate last 2 hours")
-        metrics.append(f"# TYPE crypto_trading_win_rate_2h gauge")
+        metrics.append("# HELP crypto_trading_win_rate_2h Win rate last 2 hours")
+        metrics.append("# TYPE crypto_trading_win_rate_2h gauge")
         metrics.append(f"crypto_trading_win_rate_2h {stats.get('win_rate_2h', 0)}")
 
         # System metrics
         account = health.get('account', {})
-        metrics.append(f"# HELP crypto_trading_cash_available Available cash")
-        metrics.append(f"# TYPE crypto_trading_cash_available gauge")
+        metrics.append("# HELP crypto_trading_cash_available Available cash")
+        metrics.append("# TYPE crypto_trading_cash_available gauge")
         metrics.append(f"crypto_trading_cash_available {account.get('cash', 0)}")
 
-        metrics.append(f"# HELP crypto_trading_daily_pnl Daily profit/loss")
-        metrics.append(f"# TYPE crypto_trading_daily_pnl gauge")
+        metrics.append("# HELP crypto_trading_daily_pnl Daily profit/loss")
+        metrics.append("# TYPE crypto_trading_daily_pnl gauge")
         metrics.append(f"crypto_trading_daily_pnl {account.get('daily_pnl', 0)}")
 
-        metrics.append(f"# HELP crypto_trading_positions_open Open positions")
-        metrics.append(f"# TYPE crypto_trading_positions_open gauge")
+        metrics.append("# HELP crypto_trading_positions_open Open positions")
+        metrics.append("# TYPE crypto_trading_positions_open gauge")
         metrics.append(f"crypto_trading_positions_open {account.get('active_positions', 0)}")
 
         cb_state = health.get('circuit_breaker', {}).get('state', 'UNKNOWN')
         cb_value = 1 if cb_state == 'CLOSED' else 0
-        metrics.append(f"# HELP crypto_trading_circuit_breaker Circuit breaker state (1=CLOSED, 0=OPEN)")
-        metrics.append(f"# TYPE crypto_trading_circuit_breaker gauge")
+        metrics.append("# HELP crypto_trading_circuit_breaker Circuit breaker state (1=CLOSED, 0=OPEN)")
+        metrics.append("# TYPE crypto_trading_circuit_breaker gauge")
         metrics.append(f"crypto_trading_circuit_breaker {cb_value}")
 
         return Response(content="\n".join(metrics), media_type="text/plain")
@@ -364,7 +364,7 @@ async def verify_pnl_reconciliation():
                 'discrepancy': round(discrepancy, 2),
                 'status': 'OK' if discrepancy < 1.0 else 'FAIL - DATA INTEGRITY ERROR',
                 'message': (
-                    f"✅ P&L calculation is correct" if discrepancy < 1.0
+                    "✅ P&L calculation is correct" if discrepancy < 1.0
                     else f"🚨 CRITICAL: P&L mismatch of €{discrepancy:.2f} detected. "
                          f"This indicates entry fees are not being tracked correctly."
                 )

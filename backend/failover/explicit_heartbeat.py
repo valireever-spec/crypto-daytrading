@@ -11,9 +11,8 @@ This prevents:
 
 import asyncio
 import logging
-import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 import httpx

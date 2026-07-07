@@ -57,6 +57,10 @@ class MetricsSnapshot:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert snapshot to dictionary."""
+        last_sync_ts: Optional[str] = None
+        if self.ha_last_sync_time is not None:
+            last_sync_ts = self.ha_last_sync_time.isoformat()
+
         return {
             "timestamp": self.timestamp.isoformat(),
             "memory": {
@@ -73,7 +77,7 @@ class MetricsSnapshot:
             "ha_sync": {
                 "success_rate": self.ha_sync_success_rate,
                 "latency_ms": self.ha_sync_latency_ms,
-                "last_sync_time": self.ha_last_sync_time.isoformat() if self.ha_last_sync_time is not None else None,
+                "last_sync_time": last_sync_ts,
                 "state_divergence": self.ha_state_divergence,
             },
             "exceptions": {
@@ -415,51 +419,51 @@ class Phase2MetricsCollector:
         metrics = []
 
         # Memory metrics
-        metrics.append(f"# HELP phase2_memory_mb Current process memory in MB")
-        metrics.append(f"# TYPE phase2_memory_mb gauge")
+        metrics.append("# HELP phase2_memory_mb Current process memory in MB")
+        metrics.append("# TYPE phase2_memory_mb gauge")
         metrics.append(f"phase2_memory_mb {snap.memory_mb:.2f}")
 
-        metrics.append(f"# HELP phase2_memory_percent Current memory usage percentage")
-        metrics.append(f"# TYPE phase2_memory_percent gauge")
+        metrics.append("# HELP phase2_memory_percent Current memory usage percentage")
+        metrics.append("# TYPE phase2_memory_percent gauge")
         metrics.append(f"phase2_memory_percent {snap.memory_percent:.2f}")
 
         # WebSocket metrics
         metrics.append(
-            f"# HELP phase2_websocket_max_age_seconds Max age of WebSocket data"
+            "# HELP phase2_websocket_max_age_seconds Max age of WebSocket data"
         )
-        metrics.append(f"# TYPE phase2_websocket_max_age_seconds gauge")
+        metrics.append("# TYPE phase2_websocket_max_age_seconds gauge")
         metrics.append(f"phase2_websocket_max_age_seconds {snap.ws_max_age_seconds:.2f}")
 
         metrics.append(
-            f"# HELP phase2_websocket_reconnect_failures Count of reconnection failures"
+            "# HELP phase2_websocket_reconnect_failures Count of reconnection failures"
         )
-        metrics.append(f"# TYPE phase2_websocket_reconnect_failures counter")
+        metrics.append("# TYPE phase2_websocket_reconnect_failures counter")
         metrics.append(f"phase2_websocket_reconnect_failures {snap.ws_reconnect_failures}")
 
         # HA sync metrics
         metrics.append(
-            f"# HELP phase2_ha_sync_success_rate HA sync success rate percentage"
+            "# HELP phase2_ha_sync_success_rate HA sync success rate percentage"
         )
-        metrics.append(f"# TYPE phase2_ha_sync_success_rate gauge")
+        metrics.append("# TYPE phase2_ha_sync_success_rate gauge")
         metrics.append(f"phase2_ha_sync_success_rate {snap.ha_sync_success_rate:.2f}")
 
         metrics.append(
-            f"# HELP phase2_ha_sync_latency_ms HA sync latency in milliseconds"
+            "# HELP phase2_ha_sync_latency_ms HA sync latency in milliseconds"
         )
-        metrics.append(f"# TYPE phase2_ha_sync_latency_ms gauge")
+        metrics.append("# TYPE phase2_ha_sync_latency_ms gauge")
         metrics.append(f"phase2_ha_sync_latency_ms {snap.ha_sync_latency_ms:.2f}")
 
         # Exception metrics
         metrics.append(
-            f"# HELP phase2_exception_count Total exception count since startup"
+            "# HELP phase2_exception_count Total exception count since startup"
         )
-        metrics.append(f"# TYPE phase2_exception_count counter")
+        metrics.append("# TYPE phase2_exception_count counter")
         metrics.append(f"phase2_exception_count {snap.exception_count}")
 
         metrics.append(
-            f"# HELP phase2_exception_rate_percent Exception rate per hour"
+            "# HELP phase2_exception_rate_percent Exception rate per hour"
         )
-        metrics.append(f"# TYPE phase2_exception_rate_percent gauge")
+        metrics.append("# TYPE phase2_exception_rate_percent gauge")
         metrics.append(f"phase2_exception_rate_percent {snap.exception_rate_percent:.2f}")
 
         return "\n".join(metrics)

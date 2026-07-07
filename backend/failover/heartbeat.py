@@ -6,7 +6,7 @@ Detects PRIMARY failure and initiates BACKUP takeover.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Dict, Any
 import requests
 
 logger = logging.getLogger(__name__)
@@ -161,7 +161,9 @@ class HeartbeatMonitor:
 
     def get_status(self) -> Dict[str, Any]:
         """Get heartbeat status."""
-        last_check_ts = self.last_check.isoformat() if self.last_check is not None else None
+        last_check_ts: Optional[str] = None
+        if self.last_check is not None:
+            last_check_ts = self.last_check.isoformat()
         return {
             "primary_healthy": self.is_primary_healthy,
             "consecutive_failures": self.consecutive_failures,

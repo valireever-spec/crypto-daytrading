@@ -9,7 +9,7 @@ Prevents:
 
 import logging
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional, List
 from dataclasses import dataclass, field
 

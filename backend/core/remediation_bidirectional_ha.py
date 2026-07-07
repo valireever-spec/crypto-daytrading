@@ -17,11 +17,9 @@ This prevents:
 
 import asyncio
 import logging
-import json
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
-from collections import defaultdict
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +260,7 @@ class BidirectionalSync:
             state = await self._http_get(
                 "http://PRIMARY:8001/api/ha/state"
             )
-            logger.info(f"✅ Backward sync (pull) succeeded")
+            logger.info("✅ Backward sync (pull) succeeded")
             return state
 
         except Exception as e:
@@ -271,7 +269,7 @@ class BidirectionalSync:
             # Fallback: Try SSH reverse tunnel
             try:
                 state = await self._ssh_backward_sync()
-                logger.info(f"✅ Backward sync via SSH succeeded")
+                logger.info("✅ Backward sync via SSH succeeded")
                 return state
 
             except Exception as ssh_error:

@@ -22,16 +22,15 @@ Usage:
     test_result = skills.test_dashboard_health()
 """
 
-from pathlib import Path
-import sys
-from typing import Dict, List, Any, Optional
-from datetime import datetime
+import importlib.util
 import logging
+from pathlib import Path
+from typing import Dict, List, Any
+from datetime import datetime
 
 # Add skill-library to path and import skills
 # Path: crypto-daytrading/backend/skills_integration.py -> ../../skill-library
 SKILL_LIBRARY_PATH = Path(__file__).resolve().parent.parent.parent / "skill-library"
-import importlib.util
 
 SKILLS_AVAILABLE = True
 IMPORT_ERROR = None
@@ -189,7 +188,7 @@ class CryptoSkillsManager:
                 reproduction_steps=[
                     f"1. Get price for {symbol}",
                     f"2. Generate {side} signal at {quantity}",
-                    f"3. Call Binance API place_order()",
+                    "3. Call Binance API place_order()",
                     "4. Observe error in logs",
                 ]
             )

@@ -22,7 +22,6 @@ from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 
-from backend.core.config import settings
 from backend.api.error_handlers import (
     APIError,
     api_error_handler,
@@ -597,7 +596,7 @@ async def sync_state_from_primary(state: dict = None) -> JSONResponse:
                         f"enabled={config_updates.get('enabled')}"
                     )
                 else:
-                    logger.warning(f"⚠️  Failed to apply config from PRIMARY (validation error)")
+                    logger.warning("⚠️  Failed to apply config from PRIMARY (validation error)")
 
             # Sync deduplication state from PRIMARY (critical blocker #4)
             if "deduplicator_state" in state:
@@ -718,11 +717,17 @@ async def sync_state_from_backup(state: dict = None) -> JSONResponse:
         from backend.core.database import get_database
 
         engine = get_paper_trading()
+        if engine is None:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Paper trading engine not initialized"}
+            )
+
         db = get_database()
 
         # Strategy: If PRIMARY recovered with stale state, use BACKUP's state
         # (BACKUP was actively trading while PRIMARY was down)
-        logger.info(f"📥 PRIMARY receiving state sync from BACKUP recovery...")
+        logger.info("📥 PRIMARY receiving state sync from BACKUP recovery...")
 
         # Merge strategy: BACKUP state overrides PRIMARY's stale state
         if "cash" in state:

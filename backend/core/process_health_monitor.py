@@ -193,6 +193,9 @@ class ProcessHealthMonitor:
 
     def get_stats(self) -> Dict:
         """Get current health statistics."""
+        last_check_ts: Optional[str] = None
+        if self.last_health_check is not None:
+            last_check_ts = self.last_health_check.isoformat()
         return {
             "timestamp": datetime.utcnow().isoformat(),
             "sockets": {
@@ -218,7 +221,7 @@ class ProcessHealthMonitor:
                 "warning_threshold": self.cpu_warning_threshold,
             },
             "restarts_last_hour": len(self.restart_count_last_hour),
-            "last_check": self.last_health_check.isoformat() if self.last_health_check is not None else None,
+            "last_check": last_check_ts,
         }
 
     def is_stuck(self) -> bool:

@@ -1,7 +1,7 @@
 """HA Deduplication: Prevent duplicate orders on failover"""
 
 import logging
-from typing import Dict, Optional, Set
+from typing import Dict, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)

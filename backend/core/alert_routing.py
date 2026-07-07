@@ -12,9 +12,7 @@ Alert handlers are non-blocking and use asyncio to prevent performance impact.
 import asyncio
 import logging
 import os
-from datetime import datetime
-from typing import Callable, Optional, Coroutine
-from functools import wraps
+from typing import Callable, Optional
 
 from backend.core.phase_2_alerts import Alert, AlertSeverity
 

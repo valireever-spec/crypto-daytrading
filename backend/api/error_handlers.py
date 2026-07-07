@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from datetime import datetime, timezone
 import logging
-import traceback
 
 logger = logging.getLogger(__name__)
 

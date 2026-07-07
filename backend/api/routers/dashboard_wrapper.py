@@ -4,7 +4,7 @@ Maps legacy dashboard endpoints to the correct underlying API endpoints.
 """
 
 import logging
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.binance_stream import get_stream_client
 

@@ -8,7 +8,7 @@ import logging
 import time
 from typing import Optional
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class FragilityCircuitBreaker:
         """Record successful BACKUP sync and auto-recover if halted."""
         self.last_sync_success = time.time()
         if self.halted and "BACKUP sync offline" in (self.halt_reason or ""):
-            logger.info(f"✅ HA SYNC RECOVERED: Resuming trading")
+            logger.info("✅ HA SYNC RECOVERED: Resuming trading")
             self.halted = False
             self.halt_reason = None
 
@@ -119,7 +119,7 @@ class FragilityCircuitBreaker:
             backup_url = os.getenv("BACKUP_API_URL", "http://192.168.3.25:8002")
             resp = httpx.get(f"{backup_url}/api/health", timeout=1.0)
             if resp.status_code == 200:
-                logger.info(f"✅ BACKUP recovered: health check passed")
+                logger.info("✅ BACKUP recovered: health check passed")
                 self.last_sync_success = time.time()
                 return True
         except Exception as e:

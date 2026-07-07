@@ -1,0 +1,560 @@
+openapi: 3.0.0
+info:
+  title: Crypto-Daytrading Trading API
+  description: Real-time cryptocurrency trading platform with paper trading engine
+  version: 1.0.0
+  contact:
+    name: Trading Team
+    email: trading@example.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8001
+    description: Local development server
+  - url: http://localhost:8002
+    description: Backup/HA secondary server (port 8002)
+
+tags:
+  - name: Health
+    description: System health and status endpoints
+  - name: Trading
+    description: Order execution and position management
+  - name: Signals
+    description: Trading signal generation and analysis
+  - name: Monitoring
+    description: Dashboard and metrics endpoints
+  - name: HA
+    description: High-availability and failover endpoints
+
+paths:
+  /api/health:
+    get:
+      tags:
+        - Health
+      summary: System health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  services:
+                    type: object
+                    properties:
+                      api:
+                        type: string
+                        enum: [running, stopped]
+                      exchange:
+                        type: string
+                        enum: [connected, disconnected]
+                      database:
+                        type: string
+                        enum: [connected, disconnected]
+                  timestamp:
+                    type: string
+                    format: date-time
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/trades:
+    post:
+      tags:
+        - Trading
+      summary: Place a new trade order
+      operationId: placeTrade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TradeRequest'
+      responses:
+        '201':
+          description: Trade order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trade'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (too many requests)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                description: Seconds until rate limit resets
+
+    get:
+      tags:
+        - Trading
+      summary: List all trades
+      operationId: listTrades
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of trades to return
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          description: Number of trades to skip
+          schema:
+            type: integer
+            default: 0
+        - name: status
+          in: query
+          description: Filter by trade status
+          schema:
+            type: string
+            enum: [pending, filled, cancelled]
+      responses:
+        '200':
+          description: List of trades
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trades:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Trade'
+                  total:
+                    type: integer
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /api/trades/{tradeId}:
+    get:
+      tags:
+        - Trading
+      summary: Get trade details
+      operationId: getTrade
+      parameters:
+        - name: tradeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trade details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trade'
+        '404':
+          description: Trade not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /api/signals:
+    get:
+      tags:
+        - Signals
+      summary: Get latest trading signals
+      operationId: getSignals
+      parameters:
+        - name: symbol
+          in: query
+          description: Trading pair (e.g., BTCUSDT)
+          schema:
+            type: string
+        - name: timeframe
+          in: query
+          description: Candle timeframe
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 4h, 1d]
+      responses:
+        '200':
+          description: Trading signals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Signal'
+                  timestamp:
+                    type: string
+                    format: date-time
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /api/monitoring/dashboard-metrics:
+    get:
+      tags:
+        - Monitoring
+      summary: Get dashboard metrics
+      operationId: getDashboardMetrics
+      responses:
+        '200':
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardMetrics'
+        '500':
+          description: Dashboard data unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /api/monitoring/metrics:
+    get:
+      tags:
+        - Monitoring
+      summary: Get raw metrics data
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statistics:
+                    type: object
+                  recent_trades_2h:
+                    type: array
+                  recent_signals_2h:
+                    type: array
+        '500':
+          description: Metrics unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /api/ha/status:
+    get:
+      tags:
+        - HA
+      summary: Get HA failover status
+      operationId: getHAStatus
+      responses:
+        '200':
+          description: HA status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  role:
+                    type: string
+                    enum: [primary, secondary, standalone]
+                  primary_health:
+                    type: string
+                    enum: [healthy, degraded, dead]
+                  last_heartbeat:
+                    type: string
+                    format: date-time
+                  database_lock_held:
+                    type: boolean
+
+  /api/ha/sync-from-primary:
+    post:
+      tags:
+        - HA
+      summary: Sync state from primary machine (for failover)
+      operationId: syncFromPrimary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                positions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Position'
+                metrics:
+                  type: object
+                timestamp:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Sync successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success, partial, failed]
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+components:
+  schemas:
+    Trade:
+      type: object
+      required:
+        - id
+        - symbol
+        - side
+        - quantity
+        - price
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique trade identifier
+        symbol:
+          type: string
+          description: Trading pair (e.g., BTCUSDT)
+        side:
+          type: string
+          enum: [BUY, SELL]
+        quantity:
+          type: number
+          description: Order quantity
+        price:
+          type: number
+          description: Execution price
+        realized_pnl:
+          type: number
+          description: Realized profit/loss
+        status:
+          type: string
+          enum: [pending, filled, cancelled]
+        exit_reason:
+          type: string
+          enum: [profit_target, stop_loss, timeout, manual]
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        filled_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TradeRequest:
+      type: object
+      required:
+        - symbol
+        - side
+        - quantity
+      properties:
+        symbol:
+          type: string
+          description: Trading pair
+        side:
+          type: string
+          enum: [BUY, SELL]
+        quantity:
+          type: number
+          minimum: 0.0001
+        order_type:
+          type: string
+          enum: [market, limit]
+          default: market
+        price:
+          type: number
+          description: Required for limit orders
+          nullable: true
+
+    Signal:
+      type: object
+      properties:
+        symbol:
+          type: string
+        timeframe:
+          type: string
+        signal_score:
+          type: integer
+          minimum: -100
+          maximum: 100
+          description: -100 (strong sell) to +100 (strong buy)
+        indicators:
+          type: object
+          properties:
+            rsi:
+              type: number
+            macd:
+              type: number
+            bollinger_bands:
+              type: object
+        generated_at:
+          type: string
+          format: date-time
+
+    Position:
+      type: object
+      properties:
+        symbol:
+          type: string
+        quantity:
+          type: number
+        entry_price:
+          type: number
+        current_price:
+          type: number
+        unrealized_pnl:
+          type: number
+
+    DashboardMetrics:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            trades_today:
+              type: integer
+            exits_today:
+              type: integer
+            total_pnl:
+              type: number
+            win_rate_pct:
+              type: number
+        performance:
+          type: object
+          properties:
+            daily_pnl:
+              type: number
+            weekly_pnl:
+              type: number
+        system:
+          type: object
+          properties:
+            cash:
+              type: number
+            total_equity:
+              type: number
+            deployed_pct:
+              type: number
+        recent_trades:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trade'
+        timestamp:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        timestamp:
+          type: string
+          format: date-time
+
+    RateLimitError:
+      type: object
+      required:
+        - error
+        - message
+        - limit
+        - remaining
+        - reset_at
+      properties:
+        error:
+          type: string
+          enum: [rate_limit_exceeded]
+        message:
+          type: string
+        limit:
+          type: integer
+          description: Request limit per period
+        remaining:
+          type: integer
+          description: Requests remaining
+        reset_at:
+          type: string
+          format: date-time
+          description: When rate limit resets
+
+  responses:
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RateLimitError'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            description: Seconds to wait before retrying
+
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - ApiKey: []
+

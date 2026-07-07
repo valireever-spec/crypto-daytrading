@@ -7,10 +7,9 @@ Tracks:
 - Performance (win rate, hold time, slippage)
 """
 
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 
 @dataclass
 class SignalMetric:
@@ -143,7 +142,6 @@ class MetricsCollector:
 
     def get_dashboard_metrics(self) -> Dict:
         """Get comprehensive metrics for dashboard display."""
-        from datetime import timezone
 
         # Get today's trades (all trades in last 24 hours)
         trades_24h = self.get_trades_since(minutes=1440)

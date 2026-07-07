@@ -7,10 +7,9 @@ primary and backup machines.
 import json
 import logging
 import os
-import shlex
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

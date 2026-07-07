@@ -17,7 +17,7 @@ import psutil
 import os
 from typing import Optional, Dict, Any
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +270,7 @@ class ChaosTestFramework:
             await asyncio.sleep(1)
 
         self.failures_active.pop("websocket_down", None)
-        logger.info(f"✅ CHAOS: WebSocket DOWN test complete")
+        logger.info("✅ CHAOS: WebSocket DOWN test complete")
 
     async def simulate_ssh_blocked(self, duration_seconds: int = 30):
         """Simulate SSH tunnel being blocked."""
@@ -283,7 +283,7 @@ class ChaosTestFramework:
             await asyncio.sleep(1)
 
         self.failures_active.pop("ssh_blocked", None)
-        logger.info(f"✅ CHAOS: SSH BLOCKED test complete")
+        logger.info("✅ CHAOS: SSH BLOCKED test complete")
 
     async def simulate_memory_pressure(self, target_percent: float = 85, duration_seconds: int = 30):
         """Simulate high memory pressure."""
@@ -307,7 +307,7 @@ class ChaosTestFramework:
         finally:
             allocated.clear()
             self.failures_active.pop("memory_pressure", None)
-            logger.info(f"✅ CHAOS: Memory pressure test complete")
+            logger.info("✅ CHAOS: Memory pressure test complete")
 
     async def simulate_network_latency(self, latency_ms: int = 500, duration_seconds: int = 30):
         """Simulate network latency."""
@@ -320,7 +320,7 @@ class ChaosTestFramework:
             self.failures_active["network_latency"] = True
 
         self.failures_active.pop("network_latency", None)
-        logger.info(f"✅ CHAOS: Network latency test complete")
+        logger.info("✅ CHAOS: Network latency test complete")
 
     def get_active_failures(self) -> Dict[str, Any]:
         """Get currently active failure simulations."""

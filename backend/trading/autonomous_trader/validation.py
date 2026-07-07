@@ -1,14 +1,10 @@
 """Validation and health checks."""
 
-import asyncio
 import logging
-from typing import Dict, Optional
-from datetime import datetime, timedelta
+from typing import Dict
 
 from backend.exchange.paper_trading import get_paper_trading
 from backend.core.data_quality import get_data_quality_measurer
-from backend.analytics.historical_data import get_historical_service
-from backend.analytics.regime_detector import get_regime_detector
 from backend.exchange.binance_stream import get_stream_client
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,6 @@
 
 import time
 import logging
-import json
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from datetime import datetime, timezone
