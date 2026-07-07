@@ -1308,20 +1308,19 @@ function validateResponse(response, requiredFields = []) {
                 const dashEl = document.getElementById('dashboard-content');
                 if (dashEl) dashEl.style.opacity = '0.6';
 
-                // Fetch health (includes account) + positions + trades
+                // Fetch account data + positions + trades
                 const results = await Promise.allSettled([
-                    fetchWithRetry(`${API}/health`),
+                    fetchWithRetry(`${API}/paper/account`),
                     fetchWithRetry(`${API}/paper/positions`),
                     fetchWithRetry(`${API}/paper/trades?limit=10`)
                 ]);
 
                 // Extract results with fallbacks
-                const health = results[0].status === 'fulfilled' ? results[0].value : { account: {} };
+                const account = results[0].status === 'fulfilled' ? results[0].value : {};
                 const positions = results[1].status === 'fulfilled' ? results[1].value : [];
                 const trades = results[2].status === 'fulfilled' ? results[2].value : [];
 
                 updateBotStatus(true);
-                const account = health.account || {};
 
                 // Update account metrics
                 document.getElementById('cash').textContent = fmt(account.cash || 0);
