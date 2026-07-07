@@ -554,17 +554,19 @@ class AutonomousTrader:
 
                     for symbol in self.config.symbols:
                         signal = await entry._check_symbol_impl(self, symbol)
-                        if signal and signal.strength >= self.config.entry_threshold:
-                            logger.info(
-                                f"✅ Signal generated for {symbol}: {signal.reason}"
-                            )
-                            success = await entry._execute_entry_impl(self, signal)
-                            if success:
-                                logger.info(f"✅ Entry executed for {symbol}")
+                        if signal:
+                            logger.info(f"🔍 {symbol}: Signal strength={signal.strength:.0f}, threshold={self.config.entry_threshold}")
+                            if signal.strength >= self.config.entry_threshold:
+                                logger.info(f"✅ Signal passes threshold: {signal.reason}")
+                                success = await entry._execute_entry_impl(self, signal)
+                                if success:
+                                    logger.info(f"✅ Entry executed for {symbol}")
+                                else:
+                                    logger.warning(f"⚠️  Entry execution failed for {symbol}")
                             else:
-                                logger.warning(f"⚠️  Entry execution failed for {symbol}")
-                        elif signal:
-                            logger.debug(f"{symbol}: Signal weak {signal.strength:.0f} < {self.config.entry_threshold}")
+                                logger.info(f"⊘ {symbol}: Signal weak {signal.strength:.0f} < {self.config.entry_threshold}")
+                        else:
+                            logger.debug(f"{symbol}: No signal")
                 else:
                     logger.debug(
                         "Skipping entry signals due to data quality gate (<90%)"
