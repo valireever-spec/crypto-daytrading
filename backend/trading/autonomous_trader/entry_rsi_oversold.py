@@ -188,7 +188,12 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
 
         closes_5min = [c[4] for c in data_5min]
         closes_1hr = [c[4] for c in data_1hr]
-        volumes_5min = [c[7] for c in data_5min]  # Extract volumes from OHLCV data
+        # Extract volumes: Binance OHLCV format [timestamp, open, high, low, close, volume, quote_asset_volume, ...]
+        # Use quote_asset_volume (index 7) if available, fall back to volume (index 5)
+        try:
+            volumes_5min = [c[7] for c in data_5min] if (data_5min and len(data_5min[0]) > 7) else [c[5] for c in data_5min]
+        except (IndexError, TypeError):
+            volumes_5min = [c[5] for c in data_5min] if data_5min else []
 
         signal_strength, reason = RSIOversoldStrategy.calculate_signal(
             closes_5min, closes_1hr, volumes_5min
