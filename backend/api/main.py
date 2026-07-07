@@ -20,8 +20,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
 
 from backend.core.config import settings
+from backend.api.error_handlers import (
+    APIError,
+    api_error_handler,
+    validation_error_handler,
+    general_exception_handler,
+)
 from backend.core.structured_logging import setup_structured_logging
 from backend.core.metrics import get_metrics
 
@@ -106,6 +113,15 @@ async def add_security_headers(request: Request, call_next):
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return Response(content=b"", status_code=204, media_type="image/x-icon")
+
+# ============================================================================
+# ERROR HANDLING
+# ============================================================================
+
+# Register structured error handlers
+app.add_exception_handler(APIError, api_error_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 # Register all routers
 routers = [
