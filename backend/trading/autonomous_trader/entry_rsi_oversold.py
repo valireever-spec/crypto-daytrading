@@ -11,7 +11,7 @@ Simpler = easier to debug + fewer false signals.
 
 import logging
 from typing import Optional, Tuple, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +198,7 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             side="BUY",
             strength=signal_strength,
             reason=f"{reason} (strength: {signal_strength:.0f})",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(),
         )
 
     except Exception as e:

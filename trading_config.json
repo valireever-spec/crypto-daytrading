@@ -1,5 +1,5 @@
 {
-  "entry_threshold": 65.0,
+  "entry_threshold": 30.0,
   "exit_profit_target": 2.0,
   "exit_stop_loss": 1.0,
   "max_positions": 8,
