@@ -54,8 +54,8 @@ class GARPValueStrategy:
         if self.params:
             params.update(self.params)
 
-        threshold = params["garp_threshold"]
-        window = int(params["momentum_window"])
+        _threshold = params["garp_threshold"]
+        _window = int(params["momentum_window"])
         stop_loss = params["exit_stop_loss"]
         profit_target = params["exit_profit_target"]
 
@@ -93,7 +93,7 @@ class GARPValueStrategy:
         )
 
         # GARP quality score (0-100) based on criteria
-        garp_scores = (
+        _garp_scores = (
             above_ma.astype(float) * 35
             + not_overbought.astype(float) * 25  # 35 pts for above MA
             + vol_reasonable.astype(float) * 25  # 25 pts for good entry zone

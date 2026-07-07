@@ -71,7 +71,7 @@ async def _fetch_all_regimes_impl(symbols: List[str]) -> Dict[str, Any]:
     try:
         hist_service = get_historical_service()
         regime_detector = get_regime_detector()
-        regimes = {}
+        regimes: Dict[str, str] = {}
 
         if not hist_service:
             return regimes

@@ -186,7 +186,7 @@ class ParameterMonitor:
                 "avg_loss": 0,
             }
 
-        avg_loss = sum(e.realized_pnl for e in recent_exits) / len(recent_exits)
+        _avg_loss = sum(e.realized_pnl for e in recent_exits) / len(recent_exits)
         avg_loss_pct = sum(e.realized_pnl_pct for e in recent_exits) / len(recent_exits)
 
         return {
@@ -215,7 +215,7 @@ class ParameterMonitor:
                 "avg_win": 0,
             }
 
-        avg_win = sum(e.realized_pnl for e in recent_exits) / len(recent_exits)
+        _avg_win = sum(e.realized_pnl for e in recent_exits) / len(recent_exits)
         avg_win_pct = sum(e.realized_pnl_pct for e in recent_exits) / len(recent_exits)
 
         return {

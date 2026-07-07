@@ -98,7 +98,7 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
                 continue
 
             entry_price = position["entry_price"]
-            quantity = position["quantity"]
+            _quantity = position["quantity"]
             pnl_pct = (current_price - entry_price) / entry_price * 100
 
             if pnl_pct >= trader_self.config.exit_profit_target:

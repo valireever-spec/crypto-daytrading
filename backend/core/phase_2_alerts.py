@@ -14,7 +14,7 @@ emergency response (reduce load, prepare for failover, etc).
 
 import logging
 import json
-from typing import Dict, List, Optional, Any
+from typing import Callable, Dict, List, Optional, Any
 from datetime import datetime
 from enum import Enum
 
@@ -102,11 +102,11 @@ class Phase2AlertManager:
         self.max_recent_alerts = 100
 
         # Alert routing callbacks
-        self.alert_callbacks: List[callable] = []
+        self.alert_callbacks: List[Callable] = []
 
         logger.info("Phase 2 Alert Manager initialized")
 
-    def register_alert_callback(self, callback: callable) -> None:
+    def register_alert_callback(self, callback: Callable) -> None:
         """Register a callback to receive alerts.
 
         Args:
@@ -388,7 +388,7 @@ class Phase2AlertManager:
         Returns:
             Dictionary with alert statistics
         """
-        by_severity = {
+        by_severity: Dict[str, List[Dict[str, Any]]] = {
             "info": [],
             "warning": [],
             "critical": [],

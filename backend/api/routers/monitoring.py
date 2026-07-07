@@ -157,7 +157,7 @@ async def get_dashboard_data():
 
         # Calculate metrics
         exits = [t for t in recent_trades if t.side == 'SELL']
-        win_rate = collector.get_win_rate([None]) if exits else 0
+        _win_rate = collector.get_win_rate([None]) if exits else 0
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
@@ -254,7 +254,7 @@ async def get_dashboard_metrics():
         entries = [t for t in all_trades if t.get('side') == 'BUY']
 
         # Calculate P&L metrics
-        total_pnl = sum(t.get('realized_pnl', 0) for t in exits)
+        _total_pnl = sum(t.get('realized_pnl', 0) for t in exits)
         winners = [t for t in exits if (t.get('realized_pnl', 0) or 0) > 0]
         losers = [t for t in exits if (t.get('realized_pnl', 0) or 0) <= 0]
 

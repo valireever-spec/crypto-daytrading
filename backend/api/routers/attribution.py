@@ -293,7 +293,7 @@ async def get_attribution_summary(
             raise HTTPException(status_code=400, detail="No positions")
 
         # Mock attribution data
-        position_dict = {p["symbol"]: p.get("value_eur", 0) for p in positions}
+        _position_dict = {p["symbol"]: p.get("value_eur", 0) for p in positions}
         returns_dict = {p["symbol"]: np.random.normal(2, 5) for p in positions}
 
         return {

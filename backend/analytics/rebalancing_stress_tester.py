@@ -269,7 +269,7 @@ class RebalancingStressTester:
         all_results = {}
 
         for i, alloc in enumerate(candidate_allocations):
-            alloc_name = f"Allocation_{i+1}"
+            _alloc_name = f"Allocation_{i+1}"
             worst_drawdowns = []
 
             for scenario in scenarios:

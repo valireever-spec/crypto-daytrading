@@ -215,7 +215,7 @@ class PortfolioBacktestEngine:
         self.trades = []
         portfolio_value = initial_capital
         positions: Dict[str, Dict] = {}
-        current_allocation: Dict[str, float] = {}
+        _current_allocation: Dict[str, float] = {}
 
         # Get all dates
         all_dates = set()

@@ -77,7 +77,7 @@ async def initialize_tax_tracking(jurisdiction: str = "DE") -> Dict:
             # Try to find by name (e.g., "GERMANY")
             juris = Jurisdiction[juris_upper]
 
-        calc = init_tax_calculator(juris)
+        _calc = init_tax_calculator(juris)
         return {
             "status": "initialized",
             "jurisdiction": juris.value,

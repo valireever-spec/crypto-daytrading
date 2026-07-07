@@ -207,7 +207,7 @@ class CostModelCalibrator:
 
         for trade in planned_trades:
             symbol = trade["symbol"]
-            volume = trade["volume_pct"]
+            _volume = trade["volume_pct"]
 
             profile = self.get_symbol_profile(symbol)
 

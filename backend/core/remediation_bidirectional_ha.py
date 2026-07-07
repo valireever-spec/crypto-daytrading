@@ -223,7 +223,7 @@ class BidirectionalSync:
 
         # Try HTTP first
         try:
-            response = await self._http_post(
+            _response = await self._http_post(
                 "http://BACKUP:8002/api/ha/sync-forward",
                 payload
             )
@@ -791,7 +791,7 @@ async def example_bidirectional_ha():
     sync = BidirectionalSync("PRIMARY")
     heartbeat = BidirectionalHeartbeat("PRIMARY")
     ssh = BidirectionalSSHTunnel("PRIMARY")
-    promotion = BidirectionalPromotionLogic("PRIMARY")
+    _promotion = BidirectionalPromotionLogic("PRIMARY")
 
     logger.info("=" * 70)
     logger.info("BIDIRECTIONAL HA: Complete Setup")
@@ -826,7 +826,7 @@ async def example_bidirectional_ha():
     # Step 5: Simulate PRIMARY failure
     logger.info("\n[STEP 5] Simulate PRIMARY failure (BACKUP perspective)")
     sync_backup = BidirectionalSync("BACKUP")
-    heartbeat_backup = BidirectionalHeartbeat("BACKUP")
+    _heartbeat_backup = BidirectionalHeartbeat("BACKUP")
     promotion_backup = BidirectionalPromotionLogic("BACKUP")
 
     # BACKUP detects: PRIMARY heartbeat missed

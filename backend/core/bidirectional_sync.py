@@ -7,7 +7,7 @@ Implements conflict resolution strategy: PRIMARY is always source of truth.
 import logging
 import httpx
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class BiDirectionalSync:
         self.primary_url = primary_url
         self.backup_url = backup_url
         self.last_sync_at = None
-        self.sync_history = []  # Track sync operations for debugging
+        self.sync_history: List[dict] = []  # Track sync operations for debugging
 
     async def sync_backup_to_primary(self, state: Dict[str, Any]) -> bool:
         """Sync BACKUP state to PRIMARY after PRIMARY recovery.

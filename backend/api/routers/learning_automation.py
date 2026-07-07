@@ -501,7 +501,7 @@ async def get_learning_pipeline_health() -> Dict[str, Any]:
         from datetime import timedelta
 
         tracker = get_recommendation_tracker()
-        learner = get_scenario_probability_learner()
+        _learner = get_scenario_probability_learner()
         calibrator = get_cost_model_calibrator()
         daemon = get_recommendation_tracking_daemon()
         scheduler = get_scenario_auto_reweighting_scheduler()

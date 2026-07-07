@@ -170,7 +170,7 @@ class StopLossManager:
             tax = gain * 0.3
             tax_status = "Estimated 30% tax"
 
-        net_proceeds = gain - tax
+        _net_proceeds = gain - tax
 
         scenarios = {
             "symbol": symbol,

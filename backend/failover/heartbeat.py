@@ -67,7 +67,7 @@ class HeartbeatMonitor:
 
             if response.status_code == 200:
                 self.consecutive_failures = 0
-                was_recovering = self.recovery_attempts > 0
+                _was_recovering = self.recovery_attempts > 0
 
                 if not self.is_primary_healthy:
                     # PRIMARY has recovered from failure

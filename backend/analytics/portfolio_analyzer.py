@@ -90,7 +90,7 @@ class PortfolioAnalyzer:
             return {}
 
         total_equity = self.account_state.get("total_equity", 0)
-        positions_value = self.account_state.get("positions_value", 0)
+        _positions_value = self.account_state.get("positions_value", 0)
 
         # Current allocation
         current = {}

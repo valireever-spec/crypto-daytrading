@@ -389,8 +389,6 @@ async def demonstrate_remediation_phase_2():
 
 
 if __name__ == "__main__":
-    # Test imports
-    import asyncio
     logger.info("✅ Remediation Phase 2 (This Week) module loaded")
 
     # Uncomment to test

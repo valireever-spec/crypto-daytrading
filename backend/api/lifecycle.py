@@ -213,7 +213,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize new circuit breaker v2 (intelligent, not just halt)
     try:
-        circuit_breaker = init_circuit_breaker(
+        _circuit_breaker = init_circuit_breaker(
             failure_threshold=5,      # More tolerant than before
             recover_timeout=20,       # Faster recovery
         )
@@ -307,14 +307,14 @@ async def lifespan(app: FastAPI):
             internet_check_timeout_ms=2000,
             ddns_retry_interval_seconds=45,
         )
-        orchestrator = init_ha_orchestrator(ha_config)
+        _orchestrator = init_ha_orchestrator(ha_config)
         logger.info(
             "🎯 HA Scenario Orchestrator initialized "
             "(A:local IP, B:DDNS, C:offline with 45s retry)"
         )
     except Exception as e:
         logger.error(f"Failed to initialize HA orchestrator: {e}")
-        orchestrator = None
+        _orchestrator = None
     # ========== End HA THREE-SCENARIO ORCHESTRATOR ==========
 
     # Add sync task for PRIMARY or failover monitor for BACKUP
@@ -570,7 +570,7 @@ async def lifespan(app: FastAPI):
     # Initialize circuit breaker recovery (Skill #5 hardening)
     try:
         from backend.core.circuit_breaker_recovery import init_circuit_breaker_recovery
-        cb_recovery = init_circuit_breaker_recovery()
+        _cb_recovery = init_circuit_breaker_recovery()
         logger.info("🔄 Circuit breaker recovery initialized (Skill #5 - manual reset capability)")
     except Exception as e:
         logger.warning(f"Failed to initialize CB recovery: {e}")

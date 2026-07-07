@@ -107,7 +107,7 @@ class BacktestValidator:
 
             actual = actual_regimes[symbol]
             detected = detected_regimes[symbol]
-            prices = symbol_price_history[symbol]
+            _prices = symbol_price_history[symbol]
 
             # Compare detected vs actual regimes at each point
             for det_date, det_regime in detected:

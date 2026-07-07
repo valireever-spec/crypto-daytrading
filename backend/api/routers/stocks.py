@@ -66,7 +66,7 @@ async def initialize_stock_trading(jurisdiction: str = "DE") -> Dict:
         Initialization status
     """
     try:
-        optimizer = init_stock_optimizer(jurisdiction)
+        _optimizer = init_stock_optimizer(jurisdiction)
         return {
             "status": "initialized",
             "jurisdiction": jurisdiction,

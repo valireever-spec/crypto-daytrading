@@ -144,7 +144,7 @@ class AutonomousTrader:
     Coordinates entry signals, exit management, portfolio decisions, and risk validation.
     """
 
-    def __init__(self, config: TradingConfig = None):
+    def __init__(self, config: Optional[TradingConfig] = None):
         """Initialize autonomous trader with all safety hardening."""
         # Load config from RuntimeConfigManager if not provided
         if config is None:

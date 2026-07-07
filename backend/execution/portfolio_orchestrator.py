@@ -85,7 +85,7 @@ class PortfolioOrchestrator:
 
             account = engine.get_account_state()
             total_capital = account.get("total_equity", 100000)
-            available_cash = account.get("cash", 0)
+            _available_cash = account.get("cash", 0)
             positions = engine.get_positions()
 
             # Calculate position metrics

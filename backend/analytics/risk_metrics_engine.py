@@ -82,7 +82,7 @@ class RiskMetricsEngine:
         --------
         RiskMetrics object with all risk measures
         """
-        conf = confidence_level or self.confidence_level
+        _conf = confidence_level or self.confidence_level
 
         # VaR calculations (historical method)
         var_95 = np.percentile(returns.dropna(), (1 - 0.95) * 100)
@@ -277,7 +277,7 @@ class RiskMetricsEngine:
         --------
         {symbol: marginal_var_contribution}
         """
-        conf = confidence_level or self.confidence_level
+        _conf = confidence_level or self.confidence_level
         total_value = sum(position_values.values())
 
         if total_value <= 0:

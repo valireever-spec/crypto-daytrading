@@ -1,7 +1,7 @@
 """Prometheus metrics for observability (request count, latency, error rate)."""
 
 from enum import Enum
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class MetricType(str, Enum):
@@ -22,10 +22,10 @@ class MetricsCollector:
         """Initialize metrics store."""
         self.counters: Dict[str, int] = {}
         self.gauges: Dict[str, float] = {}
-        self.histogram_buckets: Dict[str, Dict[str, int]] = {}
+        self.histogram_buckets: Dict[str, Dict[str, Any]] = {}
         self.request_count = 0
         self.error_count = 0
-        self.latency_samples = []
+        self.latency_samples: List[float] = []
 
     def increment_counter(self, name: str, value: int = 1) -> None:
         """Increment a counter metric.
@@ -83,7 +83,7 @@ class MetricsCollector:
             self.histogram_buckets[name]["p95"] = sorted_samples[int(n * 0.95)]
             self.histogram_buckets[name]["p99"] = sorted_samples[int(n * 0.99)]
 
-    def get_metrics(self) -> Dict[str, any]:
+    def get_metrics(self) -> Dict[str, Any]:
         """Get all current metrics.
 
         Returns:
@@ -97,7 +97,7 @@ class MetricsCollector:
             "error_count": self.error_count,
         }
 
-    def get_summary(self) -> Dict[str, any]:
+    def get_summary(self) -> Dict[str, Any]:
         """Get summary metrics for dashboard.
 
         Returns:

@@ -25,7 +25,7 @@ Usage:
 import importlib.util
 import logging
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 # Add skill-library to path and import skills
@@ -111,48 +111,48 @@ class CryptoSkillsManager:
             raise
 
         # Initialize placeholder skills that may not be available
-        self.logger_skill = self._get_logger_skill()
-        self.profiler = self._get_profiler()
-        self.test_framework = self._get_test_framework()
-        self.chaos_tester = self._get_chaos_tester()
-        self.architect = self._get_architect()
+        self.logger_skill: Any = self._get_logger_skill()
+        self.profiler: Any = self._get_profiler()
+        self.test_framework: Any = self._get_test_framework()
+        self.chaos_tester: Any = self._get_chaos_tester()
+        self.architect: Any = self._get_architect()
 
         logger.info("CryptoSkillsManager initialized successfully")
 
     # ========== INTERNAL HELPER METHODS ==========
 
-    def _get_logger_skill(self):
+    def _get_logger_skill(self) -> Dict[str, Any]:
         """Get or create logger skill (fallback to dict if not available)."""
         try:
-            return self.web_gen  # Use existing skill as fallback
+            return self.web_gen
         except Exception:
             return {"log": lambda x: logger.info(str(x)), "get_logs": lambda **kw: []}
 
-    def _get_profiler(self):
+    def _get_profiler(self) -> Dict[str, Any]:
         """Get or create profiler (fallback to dict if not available)."""
         try:
-            return self.brainstormer  # Use existing skill as fallback
+            return self.brainstormer
         except Exception:
             return {"profile": lambda **kw: {}, "get_profiles": lambda: {}}
 
-    def _get_test_framework(self):
+    def _get_test_framework(self) -> Dict[str, Any]:
         """Get or create test framework (fallback to dict if not available)."""
         try:
-            return self.ui_tester  # Use existing skill as fallback
+            return self.ui_tester
         except Exception:
             return {"run_quality_suite": lambda **kw: {}, "run_integration_test": lambda **kw: {}}
 
-    def _get_chaos_tester(self):
+    def _get_chaos_tester(self) -> Dict[str, Any]:
         """Get or create chaos tester (fallback to dict if not available)."""
         try:
-            return self.security  # Use existing skill as fallback
+            return self.security
         except Exception:
             return {"run_chaos_test": lambda **kw: {}}
 
-    def _get_architect(self):
+    def _get_architect(self) -> Dict[str, Any]:
         """Get or create architect (fallback to dict if not available)."""
         try:
-            return self.organizer  # Use existing skill as fallback
+            return self.organizer
         except Exception:
             return {"audit_codebase": lambda **kw: {}}
 
@@ -311,7 +311,7 @@ class CryptoSkillsManager:
 
     # ========== PERFORMANCE MONITORING ==========
 
-    def profile_order_execution(self, symbol: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def profile_order_execution(self, symbol: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Profile order execution latency (critical for NFR-002: <2s).
 
@@ -683,7 +683,7 @@ class CryptoSkillsManager:
             **signal_data
         })
 
-    def get_audit_trail(self, start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
+    def get_audit_trail(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get audit trail entries (for compliance/debugging).
 

@@ -65,7 +65,7 @@ class WebSocketRecoveryWithTimeout:
 
                 # FIX: Add timeout to reconnect() call (was missing!)
                 try:
-                    result = await asyncio.wait_for(
+                    _result = await asyncio.wait_for(
                         ws_manager.reconnect(symbol),
                         timeout=self.RECONNECT_TIMEOUT
                     )
@@ -322,17 +322,17 @@ async def example_fixes():
     """
 
     # Fix 1: WebSocket recovery with timeout
-    ws_recovery = WebSocketRecoveryWithTimeout()
+    _ws_recovery = WebSocketRecoveryWithTimeout()
     # result = await ws_recovery.attempt_reconnect_with_timeout("BTCUSDT", ws_manager)
 
     # Fix 2: Exception logging
-    result = ExceptionLoggingWrapper.safe_call(
+    _result = ExceptionLoggingWrapper.safe_call(
         "sample_function",
         lambda: 1/0  # This will be logged before failing
     )
 
     # Fix 3: HA sync with fallback
-    sync_fallback = HASyncFallbackWithCircuitBreaker()
+    _sync_fallback = HASyncFallbackWithCircuitBreaker()
     # result = await sync_fallback.sync_with_fallback(
     #     state,
     #     http_sync_fn,
@@ -341,7 +341,7 @@ async def example_fixes():
 
     # Fix 4: Memory health check
     memory_guard = MemoryThresholdGuard()
-    is_healthy = memory_guard.check_health(
+    _is_healthy = memory_guard.check_health(
         memory_percent=0.854,
         correlated_metrics={
             'latency_increase': False,

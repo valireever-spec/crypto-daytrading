@@ -130,7 +130,7 @@ class HistoryCleanupManager:
         --------
         CleanupResult with statistics
         """
-        total_before = len(recommendations) + len(outcomes)
+        _total_before = len(recommendations) + len(outcomes)
         cutoff_days = self.retention_count  # Keep last N days
 
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=cutoff_days)

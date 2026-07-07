@@ -6,7 +6,7 @@ immediately rather than cascade to unlimited losses.
 
 import logging
 import time
-from typing import Optional
+from typing import List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -32,10 +32,10 @@ class FragilityCircuitBreaker:
         self.halt_time = None
 
         # Exit check tracking
-        self.exit_failures = []  # [(timestamp, error)]
+        self.exit_failures: List[Tuple[float, str]] = []
 
         # HA sync tracking
-        self.sync_failures = []  # [(timestamp, error)]
+        self.sync_failures: List[Tuple[float, str]] = []
         self.last_sync_success = time.time()  # Track when BACKUP was last successfully synced
 
         # WebSocket staleness tracking

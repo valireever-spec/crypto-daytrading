@@ -61,7 +61,7 @@ async def health_check() -> Dict[str, Any]:
     try:
         # Check database connectivity
         from backend.core.database import get_database
-        db = get_database()
+        _db = get_database()
         db_status = "online"
     except Exception:
         db_status = "offline"

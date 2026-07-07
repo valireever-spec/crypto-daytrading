@@ -16,11 +16,13 @@ if env_file.exists():
                 if key and key not in os.environ:
                     os.environ[key] = value.strip('"').strip("'")
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.exceptions import RequestValidationError
+from typing import Optional  # noqa: E402
+
+from fastapi import FastAPI, HTTPException, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse, FileResponse, Response  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.exceptions import RequestValidationError  # noqa: E402
 
 from backend.api.error_handlers import (
     APIError,
@@ -696,7 +698,7 @@ async def get_ha_status() -> JSONResponse:
 
 
 @app.post("/api/ha/sync-from-backup")
-async def sync_state_from_backup(state: dict = None) -> JSONResponse:
+async def sync_state_from_backup(state: Optional[dict] = None) -> JSONResponse:
     """PRIMARY: Receive state sync from BACKUP after PRIMARY recovery (Phase 2 Component 3).
 
     Used when PRIMARY comes back online to get latest state from BACKUP.

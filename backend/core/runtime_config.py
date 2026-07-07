@@ -132,7 +132,7 @@ class RuntimeConfigManager:
         """
         try:
             # Validate all updates first
-            test_config = TradingConfig.from_dict({
+            _test_config = TradingConfig.from_dict({
                 **self.config.to_dict(),
                 **updates
             })

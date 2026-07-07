@@ -263,9 +263,9 @@ async def get_production_readiness() -> Dict[str, Any]:
     }
     """
     try:
-        cleanup_status = get_cleanup_manager().get_cleanup_schedule()
-        cost_model = get_cost_model()
-        feedback_engine = get_feedback_loop_engine()
+        _cleanup_status = get_cleanup_manager().get_cleanup_schedule()
+        _cost_model = get_cost_model()
+        _feedback_engine = get_feedback_loop_engine()
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
