@@ -49,10 +49,10 @@ class TechnicalIndicators:
 class RSIOversoldStrategy:
     """RSI Oversold mean reversion - simple & proven"""
 
-    # Entry thresholds (aggressive: any 5m dip)
+    # Entry thresholds (adapted for overbought market)
     RSI_OVERSOLD_1H = 70      # No 1h filter (trade any market)
-    RSI_RECOVERY_5M = 20      # 5m RSI between 20-40 = dip zone
-    RSI_MAX_5M = 40           # Don't enter if 5m already hot
+    RSI_RECOVERY_5M = 30      # 5m RSI between 30-50 = pullback zone in uptrend
+    RSI_MAX_5M = 50           # Allow pullbacks up to 50 (still in uptrend)
 
     # Exit thresholds
     RSI_OVERBOUGHT_1H = 70    # Sell when 5m RSI > 40 (recovered)
@@ -82,8 +82,8 @@ class RSIOversoldStrategy:
         if rsi_1h < 30:
             return None, f"1h RSI {rsi_1h:.0f} too weak (severe downtrend, need > 30)"
 
-        # Entry: 5m RSI dipped (< 40) and starting to recover (> 20)
-        # Only triggered when market is already in uptrend (1h RSI > 50)
+        # Entry: 5m RSI pullback (30-50) in uptrend
+        # Allows trading pullbacks within uptrends (RSI 30-50), not just oversold (< 30)
         if rsi_5m >= RSIOversoldStrategy.RSI_MAX_5M:
             return None, f"5m RSI {rsi_5m:.0f} too hot (need < {RSIOversoldStrategy.RSI_MAX_5M})"
 
