@@ -202,6 +202,12 @@ async def lifespan(app: FastAPI):
         # Map common abbreviations to enum names
         jurisdiction_map = {"US": "USA", "DE": "GERMANY", "GB": "UK", "NL": "NETHERLANDS", "FR": "FRANCE"}
         jurisdiction_enum_name = jurisdiction_map.get(jurisdiction_str, jurisdiction_str)
+
+        # Validate jurisdiction before using it
+        if jurisdiction_enum_name not in Jurisdiction.__members__:
+            logger.warning(f"Invalid jurisdiction '{jurisdiction_enum_name}', using default 'USA'")
+            jurisdiction_enum_name = "USA"
+
         init_tax_calculator(jurisdiction=Jurisdiction[jurisdiction_enum_name])
         logger.info(f"Tax calculator initialized (jurisdiction: {jurisdiction_enum_name})")
     except Exception as e:
@@ -477,28 +483,32 @@ async def lifespan(app: FastAPI):
                 should_failover = primary_failed or not primary_healthy
 
                 # Trigger failover if PRIMARY failed
-                if should_failover and not (trader and trader.running):
-                    failover_reason = []
-                    if primary_failed:
-                        stats = monitor.get_stats()
-                        failover_reason.append(
-                            f"Bidirectional heartbeat: {stats['consecutive_misses']} misses "
-                            f"(scenario: {stats['last_received_scenario']})"
-                        )
-                    if not primary_healthy:
-                        failover_reason.append("HTTP health check failed")
+                if should_failover:
+                    # Double-check trader state to prevent race condition
+                    if trader is None or not trader.running:
+                        failover_reason = []
+                        if primary_failed:
+                            stats = monitor.get_stats()
+                            failover_reason.append(
+                                f"Bidirectional heartbeat: {stats['consecutive_misses']} misses "
+                                f"(scenario: {stats['last_received_scenario']})"
+                            )
+                        if not primary_healthy:
+                            failover_reason.append("HTTP health check failed")
 
-                    logger.critical(
-                        f"🚨 PRIMARY FAILURE DETECTED (Skill #3) - {', '.join(failover_reason)} - "
-                        "Enabling BACKUP trading"
-                    )
-                    try:
-                        trader = init_autonomous_trader()
-                        global autonomous_trader_task
-                        autonomous_trader_task = asyncio.create_task(trader.start())
-                        logger.info("✅ BACKUP autonomous trader ACTIVATED (PRIMARY promoted to BACKUP)")
-                    except Exception as e:
-                        logger.error(f"Failed to activate BACKUP trader: {e}")
+                        logger.critical(
+                            f"🚨 PRIMARY FAILURE DETECTED (Skill #3) - {', '.join(failover_reason)} - "
+                            "Enabling BACKUP trading"
+                        )
+                        try:
+                            # Only create if still not running
+                            if trader is None or not trader.running:
+                                trader = init_autonomous_trader()
+                                global autonomous_trader_task
+                                autonomous_trader_task = asyncio.create_task(trader.start())
+                                logger.info("✅ BACKUP autonomous trader ACTIVATED (PRIMARY promoted to BACKUP)")
+                        except Exception as e:
+                            logger.error(f"Failed to activate BACKUP trader: {e}")
 
                 # Disable trading if PRIMARY recovered (all checks healthy)
                 elif not should_failover and (trader and trader.running):
@@ -608,37 +618,46 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down crypto daytrading platform...")
 
     # Stop tasks
+    # Collect all tasks to cancel
+    tasks_to_cancel = []
+    if autonomous_trader_task:
+        tasks_to_cancel.append(autonomous_trader_task)
+    if stream_task:
+        tasks_to_cancel.append(stream_task)
+    if websocket_task:
+        tasks_to_cancel.append(websocket_task)
+    if staleness_monitor_task:
+        tasks_to_cancel.append(staleness_monitor_task)
+    if simulator_task:
+        tasks_to_cancel.append(simulator_task)
+    if sync_task:
+        tasks_to_cancel.append(sync_task)
+    if failover_task:
+        tasks_to_cancel.append(failover_task)
+    if heartbeat_task:
+        tasks_to_cancel.append(heartbeat_task)
+    if systemd_watchdog_task:
+        tasks_to_cancel.append(systemd_watchdog_task)
+
+    # Cancel and await all tasks gracefully
+    for task in tasks_to_cancel:
+        task.cancel()
+
+    # Wait for all cancellations to complete
+    if tasks_to_cancel:
+        try:
+            await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+        except Exception as e:
+            logger.debug(f"Error during task shutdown: {e}")
+
+    # Special handling for autonomous trader stop
     if autonomous_trader_task:
         try:
             trader = get_autonomous_trader()
-            await trader.stop()
-            await autonomous_trader_task
+            if trader:
+                await trader.stop()
         except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
             pass  # Shutdown cleanup, best-effort
-
-    if stream_task:
-        stream_task.cancel()
-
-    if websocket_task:
-        websocket_task.cancel()
-
-    if staleness_monitor_task:
-        staleness_monitor_task.cancel()
-
-    if simulator_task:
-        simulator_task.cancel()
-
-    if sync_task:
-        sync_task.cancel()
-
-    if failover_task:
-        failover_task.cancel()
-
-    if heartbeat_task:
-        heartbeat_task.cancel()
-
-    if systemd_watchdog_task:
-        systemd_watchdog_task.cancel()
 
     if monitoring_logger:
         await monitoring_logger.stop()

@@ -790,14 +790,16 @@ async def get_ha_status():
         try:
             sender = get_bidirectional_heartbeat_sender()
             sender_stats = sender.get_stats() if sender else None
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch heartbeat sender stats: {e}")
+            sender_stats = {"status": "unavailable", "error": str(e)}
 
         try:
             monitor = get_bidirectional_heartbeat_monitor()
             monitor_stats = monitor.get_stats() if monitor else None
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch heartbeat monitor stats: {e}")
+            monitor_stats = {"status": "unavailable", "error": str(e)}
 
         return JSONResponse({
             "scenario": info["current_scenario"],

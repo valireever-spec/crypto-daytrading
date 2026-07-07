@@ -7,8 +7,11 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime
 import httpx
 import os
+import logging
 
 from backend.analytics.portfolio_analyzer import get_portfolio_analyzer
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/backup", tags=["backup-analytics"])
 
@@ -36,7 +39,7 @@ async def fetch_primary_trades() -> list:
             return data.get("trades", [])
     except Exception as e:
         logger.error(f"Failed to fetch trades from PRIMARY ({primary_url}): {e}", exc_info=True)
-        return []
+        raise HTTPException(status_code=503, detail=f"Cannot reach primary: {str(e)}")
 
 
 @router.get("/daily-report")

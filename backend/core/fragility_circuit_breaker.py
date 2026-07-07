@@ -122,8 +122,8 @@ class FragilityCircuitBreaker:
                 logger.info(f"✅ BACKUP recovered: health check passed")
                 self.last_sync_success = time.time()
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Circuit breaker recovery check failed: {e}", exc_info=True)
         return False
 
     def check_sync_divergence(self) -> bool:

@@ -282,7 +282,14 @@ class HAFailover:
 
             # In real implementation:
             # 1. Get state from state_manager
-            state = await self.state_manager.get_state_for_failover() if self.state_manager else {}
+            if not self.state_manager:
+                logger.error("State manager not available - cannot resume trading safely")
+                return False
+
+            state = await self.state_manager.get_state_for_failover()
+
+            if not state:
+                logger.warning("No state available for failover - trading engine will initialize empty")
 
             # 2. Initialize trading systems with state
             logger.debug("Initializing portfolio...")
@@ -290,7 +297,7 @@ class HAFailover:
             logger.debug("Initializing order execution...")
 
             # 3. Check for incomplete orders
-            if "_fill_tracker" in state:
+            if state and "_fill_tracker" in state:
                 logger.info("Checking for incomplete orders...")
                 # Handle incomplete orders from synced state
 

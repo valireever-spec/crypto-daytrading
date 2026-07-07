@@ -92,7 +92,8 @@ class BiDirectionalSync:
             async with httpx.AsyncClient(timeout=2) as client:
                 resp = await client.get(f"{self.primary_url}/api/health")
                 return resp.status_code == 200
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Primary recovery check failed: {e}")
             return False
 
     def get_sync_history(self, limit: int = 10) -> list:

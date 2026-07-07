@@ -103,6 +103,22 @@ DATABASE_BACKUP_PATH = os.getenv("DATABASE_BACKUP_PATH", "data/trading.backup.db
 DATABASE_WAL_ENABLED = os.getenv("DATABASE_WAL_ENABLED", "true").lower() == "true"
 
 # ============================================================================
+# TRADING RISK & VALIDATION CONSTANTS
+# ============================================================================
+
+# Exit logic constraints
+MIN_ENTRY_PRICE = 0.0  # Entry price must be positive
+MIN_HIGH_WATER_MARK = 0.0  # High water mark must be positive
+
+# Data validation thresholds
+MAX_PRICE_SPIKE_PCT = 50.0  # Alert if price moves >50% in 1 minute
+MAX_SLIPPAGE_PCT = 1.0  # Max allowed slippage for limit orders
+PRICE_VALIDATION_TIMEOUT = 2.0  # seconds for health checks
+
+# P&L calculations
+MIN_REQUESTED_PRICE = 0.0  # Requested price must be positive for slippage calc
+
+# ============================================================================
 # SSH CONFIGURATION (for SSH tunneling)
 # ============================================================================
 
