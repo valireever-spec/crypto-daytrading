@@ -12,12 +12,13 @@ async def get_metrics():
     """Get current trading metrics (signals, trades, system health)."""
     try:
         from backend.core.trading_metrics import get_metrics_collector
-        
+        from datetime import timezone
+
         collector = get_metrics_collector()
         stats = collector.get_statistics()
-        
+
         return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "statistics": stats,
             "recent_signals_2h": collector.get_signals_since(minutes=120),
             "recent_trades_2h": collector.get_trades_since(minutes=120),
@@ -79,13 +80,14 @@ async def get_dashboard_data():
         stats = collector.get_statistics()
         recent_trades = collector.get_trades_since(minutes=120)
         recent_signals = collector.get_signals_since(minutes=120)
-        
+        from datetime import timezone
+
         # Calculate metrics
         exits = [t for t in recent_trades if t.side == 'SELL']
         win_rate = collector.get_win_rate([None]) if exits else 0
-        
+
         return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "system": {
                 "status": health.get("status", "unknown"),
                 "cb_state": health.get("circuit_breaker", {}).get("state", "unknown"),
@@ -105,7 +107,7 @@ async def get_dashboard_data():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/metrics")
+@router.get("/prometheus")
 async def get_prometheus_metrics():
     """Prometheus-compatible metrics endpoint for external monitoring."""
     try:
@@ -174,11 +176,11 @@ async def get_dashboard():
                 <p>Dashboard file not found. Visit: <strong>/api/monitoring/metrics</strong></p>
                 <p>Available endpoints:</p>
                 <ul>
-                    <li>GET /api/monitoring/metrics - All metrics and statistics</li>
+                    <li>GET /api/monitoring/metrics - All metrics (JSON)</li>
+                    <li>GET /api/monitoring/prometheus - Prometheus-compatible metrics</li>
                     <li>GET /api/monitoring/signals - Recent signal decisions</li>
                     <li>GET /api/monitoring/trades - Recent trade executions</li>
                     <li>GET /api/monitoring/dashboard-data - Data for dashboard visualization</li>
-                    <li>GET /api/monitoring/metrics - Prometheus-compatible metrics</li>
                 </ul>
             </body>
         </html>
