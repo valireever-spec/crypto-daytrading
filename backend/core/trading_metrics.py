@@ -62,10 +62,11 @@ class MetricsCollector:
     """Collects trading metrics for monitoring."""
 
     def __init__(self):
+        from datetime import timezone
         self.signals: List[SignalMetric] = []
         self.trades: List[TradeMetric] = []
         self.system: List[SystemMetric] = []
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
 
     def record_signal(self, **kwargs) -> None:
         """Record signal generation."""
