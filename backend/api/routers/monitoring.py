@@ -317,6 +317,67 @@ async def get_dashboard_metrics():
         logger.error(f"Error getting dashboard metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/pnl-reconciliation")
+async def verify_pnl_reconciliation():
+    """Verify P&L calculation integrity: sum(realized_pnl) should match account equity change.
+
+    CRITICAL: This detects the entry_fee bug where realized_pnl was missing entry fees.
+    After fix, this endpoint should return match within ±€1.00
+    """
+    try:
+        from backend.exchange.paper_trading import get_paper_trading
+        from backend.core.database import get_database
+        import sqlite3
+
+        engine = get_paper_trading()
+        if not engine:
+            raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+
+        # Method 1: Sum realized_pnl from database
+        try:
+            db = get_database()
+            conn = sqlite3.connect(db.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT SUM(realized_pnl) FROM trades WHERE side='SELL'")
+            result = cursor.fetchone()
+            db_sum_pnl = result[0] if result[0] is not None else 0.0
+            conn.close()
+        except Exception as e:
+            db_sum_pnl = 0.0
+            logger.warning(f"Failed to query database: {e}")
+
+        # Method 2: Calculate from account state
+        account_state = engine.get_account_state()
+        current_equity = account_state.get('cash', 0.0)
+        starting_capital = engine.starting_capital
+        account_equity_change = current_equity - starting_capital
+
+        # Verify match
+        discrepancy = abs(db_sum_pnl - account_equity_change)
+
+        return {
+            'reconciliation': {
+                'db_sum_realized_pnl': round(db_sum_pnl, 2),
+                'account_equity_change': round(account_equity_change, 2),
+                'discrepancy': round(discrepancy, 2),
+                'status': 'OK' if discrepancy < 1.0 else 'FAIL - DATA INTEGRITY ERROR',
+                'message': (
+                    f"✅ P&L calculation is correct" if discrepancy < 1.0
+                    else f"🚨 CRITICAL: P&L mismatch of €{discrepancy:.2f} detected. "
+                         f"This indicates entry fees are not being tracked correctly."
+                )
+            },
+            'account': {
+                'starting_capital': starting_capital,
+                'current_cash': round(current_equity, 2),
+                'total_pnl': round(account_state.get('total_pnl', 0), 2),
+                'daily_pnl': round(account_state.get('daily_pnl', 0), 2),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error verifying P&L reconciliation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/dashboard")
 async def get_dashboard():
     """Serve real-time monitoring dashboard."""
@@ -337,6 +398,7 @@ async def get_dashboard():
                     <li>GET /api/monitoring/prometheus - Prometheus-compatible metrics</li>
                     <li>GET /api/monitoring/signals - Recent signal decisions</li>
                     <li>GET /api/monitoring/trades - Recent trade executions</li>
+                    <li>GET /api/monitoring/pnl-reconciliation - CRITICAL: Verify P&L integrity</li>
                 </ul>
             </body>
         </html>

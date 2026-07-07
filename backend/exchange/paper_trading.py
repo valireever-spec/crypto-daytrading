@@ -29,6 +29,7 @@ class Position:
     current_price: float
     unrealized_pnl: float = 0.0
     db_id: Optional[int] = None  # Database ID for persistence
+    entry_fee: float = 0.0  # CRITICAL FIX: Track entry fee for P&L reconciliation
 
 
 @dataclass
@@ -256,6 +257,7 @@ class PaperTradingEngine:
                     entry_time=now,
                     current_price=fill_price,
                     db_id=db_id,
+                    entry_fee=fee,  # CRITICAL FIX: Store entry fee for SELL P&L calculation
                 )
                 self.positions[symbol] = position
                 realized_pnl = 0.0
@@ -269,7 +271,8 @@ class PaperTradingEngine:
 
                 position = self.positions[symbol]
                 entry_price_for_analytics = position.entry_price
-                realized_pnl = (fill_price - position.entry_price) * quantity - fee
+                # CRITICAL FIX: Include BOTH entry and exit fees in P&L calculation
+                realized_pnl = (fill_price - position.entry_price) * quantity - position.entry_fee - fee
                 self.total_pnl += realized_pnl
                 self.daily_pnl += realized_pnl
                 self.cash += gross_amount - fee
