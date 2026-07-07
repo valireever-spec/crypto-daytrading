@@ -74,6 +74,7 @@ from backend.api.routers.metrics import router as metrics_router
 from backend.api.routers.trade_verification import router as verification_router
 from backend.api.routers.parameter_monitoring import router as parameter_monitoring_router
 from backend.api.routers.health import router as health_router
+from backend.api.routers.performance_dashboard import router as performance_router
 
 # Create FastAPI application with OpenAPI documentation
 app = FastAPI(
@@ -186,6 +187,7 @@ routers = [
     verification_router,
     parameter_monitoring_router,
     health_router,
+    performance_router,
 ]
 
 for router in routers:
