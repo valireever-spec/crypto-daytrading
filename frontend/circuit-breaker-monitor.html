@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circuit Breaker Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0f1419;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #4fc3f7;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: #1a1f26;
+            border: 1px solid #2d3436;
+            border-radius: 6px;
+            padding: 20px;
+        }
+
+        .card.critical {
+            border-color: #ff4444;
+            background: #1a0f0f;
+        }
+
+        .card.healthy {
+            border-color: #00d084;
+            background: #0f1a0f;
+        }
+
+        .card h2 {
+            color: #4fc3f7;
+            font-size: 14px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .status-value {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .status-value.halted {
+            color: #ff4444;
+        }
+
+        .status-value.healthy {
+            color: #00d084;
+        }
+
+        .status-reason {
+            color: #888;
+            font-size: 12px;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #2d3436;
+            font-size: 12px;
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: #888;
+        }
+
+        .metric-value {
+            color: #4fc3f7;
+            font-weight: bold;
+        }
+
+        .halt-history {
+            margin-top: 30px;
+        }
+
+        .halt-event {
+            background: #1a1f26;
+            border-left: 3px solid #ff4444;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .halt-event .timestamp {
+            color: #888;
+        }
+
+        .halt-event .reason {
+            color: #e0e0e0;
+            margin-top: 5px;
+        }
+
+        .refresh-time {
+            text-align: center;
+            color: #666;
+            font-size: 11px;
+            margin-top: 20px;
+        }
+
+        .error {
+            background: #1a0f0f;
+            border: 1px solid #ff4444;
+            padding: 20px;
+            border-radius: 6px;
+            color: #ff4444;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 Circuit Breaker Monitor</h1>
+
+        <div class="status-grid">
+            <!-- Halt Status -->
+            <div id="haltCard" class="card healthy">
+                <h2>Halt Status</h2>
+                <div id="haltStatus" class="status-value healthy">TRADING</div>
+                <div id="haltReason" class="status-reason"></div>
+            </div>
+
+            <!-- Halt Duration -->
+            <div class="card">
+                <h2>Current Halt Duration</h2>
+                <div class="metric-row">
+                    <span class="metric-label">Duration</span>
+                    <span id="haltDuration" class="metric-value">—</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Total Halts</span>
+                    <span id="totalHalts" class="metric-value">—</span>
+                </div>
+            </div>
+
+            <!-- Failure Tracking -->
+            <div class="card">
+                <h2>Failure Counts</h2>
+                <div class="metric-row">
+                    <span class="metric-label">Exit Failures</span>
+                    <span id="exitFailures" class="metric-value">0</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Sync Failures</span>
+                    <span id="syncFailures" class="metric-value">0</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">WebSocket Stale</span>
+                    <span id="wsStale" class="metric-value">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Halt Events -->
+        <div id="haltHistoryContainer" class="halt-history" style="display: none;">
+            <h2 style="color: #4fc3f7; margin-bottom: 15px;">Recent Halt Events</h2>
+            <div id="haltHistory"></div>
+        </div>
+
+        <div id="errorContainer" class="error" style="display: none;"></div>
+
+        <div class="refresh-time">
+            Last updated: <span id="lastUpdate">—</span> | Auto-refresh every 5s
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        async function fetchCircuitBreakerStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/monitoring/circuit-breaker-status`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                updateUI(data.circuit_breaker);
+                document.getElementById('errorContainer').style.display = 'none';
+            } catch (error) {
+                console.error('Error fetching circuit breaker status:', error);
+                const errorDiv = document.getElementById('errorContainer');
+                errorDiv.textContent = `❌ Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+            }
+
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+
+        function updateUI(cbStatus) {
+            // Halt Status
+            const haltCard = document.getElementById('haltCard');
+            const haltStatus = document.getElementById('haltStatus');
+            const haltReason = document.getElementById('haltReason');
+
+            if (cbStatus.is_halted) {
+                haltCard.classList.remove('healthy');
+                haltCard.classList.add('critical');
+                haltStatus.textContent = '🛑 HALTED';
+                haltStatus.classList.remove('healthy');
+                haltStatus.classList.add('halted');
+                haltReason.textContent = cbStatus.halt_reason || 'Unknown reason';
+            } else {
+                haltCard.classList.add('healthy');
+                haltCard.classList.remove('critical');
+                haltStatus.textContent = '✅ TRADING';
+                haltStatus.classList.add('healthy');
+                haltStatus.classList.remove('halted');
+                haltReason.textContent = '';
+            }
+
+            // Metrics
+            document.getElementById('haltDuration').textContent = `${cbStatus.current_halt_duration_seconds}s`;
+            document.getElementById('totalHalts').textContent = cbStatus.total_halt_count || 0;
+            document.getElementById('exitFailures').textContent = cbStatus.exit_failure_count || 0;
+            document.getElementById('syncFailures').textContent = cbStatus.sync_failure_count || 0;
+            document.getElementById('wsStale').textContent = cbStatus.websocket_staleness_triggered || 0;
+
+            // Halt History
+            const historyDiv = document.getElementById('haltHistory');
+            const historyContainer = document.getElementById('haltHistoryContainer');
+
+            if (cbStatus.recent_halt_events && cbStatus.recent_halt_events.length > 0) {
+                historyContainer.style.display = 'block';
+                historyDiv.innerHTML = cbStatus.recent_halt_events.map(event => `
+                    <div class="halt-event">
+                        <div class="timestamp">#${event.halt_number} — ${new Date(event.timestamp).toLocaleString()}</div>
+                        <div class="reason">${event.reason}</div>
+                    </div>
+                `).join('');
+            } else {
+                historyContainer.style.display = 'none';
+            }
+        }
+
+        // Initial load
+        fetchCircuitBreakerStatus();
+
+        // Auto-refresh every 5 seconds
+        setInterval(fetchCircuitBreakerStatus, 5000);
+    </script>
+</body>
+</html>

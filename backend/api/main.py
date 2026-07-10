@@ -906,6 +906,14 @@ async def learning_dashboard():
         return FileResponse(path=dashboard_file, media_type="text/html")
     return JSONResponse(status_code=404, content={"error": "Dashboard not found"})
 
+@app.get("/circuit-breaker-monitor", include_in_schema=False)
+async def circuit_breaker_monitor():
+    """Serve circuit breaker status monitor."""
+    dashboard_file = frontend_path / "circuit-breaker-monitor.html"
+    if dashboard_file.exists():
+        return FileResponse(path=dashboard_file, media_type="text/html")
+    return JSONResponse(status_code=404, content={"error": "Circuit breaker monitor not found"})
+
 # Mount static files if they exist
 static_path = Path(__file__).parent.parent.parent / "frontend"
 if static_path.exists():

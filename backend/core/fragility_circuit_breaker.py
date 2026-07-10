@@ -41,6 +41,16 @@ class FragilityCircuitBreaker:
         # WebSocket staleness tracking
         self.websocket_stale_since = None
 
+        # Metrics (for observability)
+        self.metrics = {
+            'halt_count': 0,  # Total times halted
+            'halt_history': [],  # List of halt events with timestamps and reasons
+            'current_halt_duration_seconds': 0,
+            'exit_failure_count': 0,
+            'sync_failure_count': 0,
+            'websocket_staleness_triggered': 0,
+        }
+
     def check_exit_failure(self, error: str) -> bool:
         """Record exit check failure, halt if threshold exceeded.
 
@@ -48,6 +58,7 @@ class FragilityCircuitBreaker:
         """
         now = time.time()
         self.exit_failures.append((now, error))
+        self.metrics['exit_failure_count'] += 1
 
         # Clean old failures (>60 seconds)
         cutoff = now - 60
@@ -70,6 +81,7 @@ class FragilityCircuitBreaker:
         """
         now = time.time()
         self.sync_failures.append((now, error))
+        self.metrics['sync_failure_count'] += 1
 
         # Clean old failures (>60 seconds)
         cutoff = now - 60
@@ -91,6 +103,7 @@ class FragilityCircuitBreaker:
         Returns: True if trading should be halted
         """
         if stale_duration_seconds > self.thresholds.websocket_stale_threshold:
+            self.metrics['websocket_staleness_triggered'] += 1
             self._halt(f"WebSocket stale for {stale_duration_seconds}s (threshold: {self.thresholds.websocket_stale_threshold}s)")
             return True
 
@@ -159,8 +172,21 @@ class FragilityCircuitBreaker:
         """Get reason for halt if active."""
         if self.halted:
             elapsed = (datetime.now() - self.halt_time).total_seconds()
+            self.metrics['current_halt_duration_seconds'] = int(elapsed)
             return f"{self.halt_reason} [halted {int(elapsed)}s ago]"
         return None
+
+    def get_metrics(self) -> dict:
+        """Get observable metrics for dashboards/monitoring."""
+        metrics = self.metrics.copy()
+        if self.halted:
+            metrics['current_halt_duration_seconds'] = int(
+                (datetime.now() - self.halt_time).total_seconds()
+            )
+        metrics['is_halted'] = self.halted
+        metrics['halt_reason'] = self.halt_reason
+        metrics['recent_halts'] = self.metrics['halt_history'][-5:] if self.metrics['halt_history'] else []
+        return metrics
 
     def _halt(self, reason: str):
         """Halt trading immediately with reason."""
@@ -168,6 +194,19 @@ class FragilityCircuitBreaker:
             self.halted = True
             self.halt_reason = reason
             self.halt_time = datetime.now()
+
+            # Record halt event for metrics
+            self.metrics['halt_count'] += 1
+            self.metrics['halt_history'].append({
+                'timestamp': self.halt_time.isoformat(),
+                'reason': reason,
+                'halt_number': self.metrics['halt_count'],
+            })
+
+            # Keep only last 100 halt events
+            if len(self.metrics['halt_history']) > 100:
+                self.metrics['halt_history'] = self.metrics['halt_history'][-100:]
+
             logger.critical(f"🛑 FRAGILITY CIRCUIT BREAKER TRIGGERED: {reason}")
 
     def reset(self):

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
@@ -178,6 +178,32 @@ async def get_dashboard_data():
             "recent_trades": recent_trades[-10:] if recent_trades else [],    # Last 10
         }
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/circuit-breaker-status")
+async def get_circuit_breaker_status():
+    """Get fragility circuit breaker status (for dashboards/alerting)."""
+    try:
+        from backend.core.fragility_circuit_breaker import get_fragility_breaker
+
+        breaker = get_fragility_breaker()
+        metrics = breaker.get_metrics()
+
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "circuit_breaker": {
+                "is_halted": metrics['is_halted'],
+                "halt_reason": metrics['halt_reason'],
+                "current_halt_duration_seconds": metrics['current_halt_duration_seconds'],
+                "total_halt_count": metrics['halt_count'],
+                "exit_failure_count": metrics['exit_failure_count'],
+                "sync_failure_count": metrics['sync_failure_count'],
+                "websocket_staleness_triggered": metrics['websocket_staleness_triggered'],
+                "recent_halt_events": metrics['recent_halts'],
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting circuit breaker status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/prometheus")
