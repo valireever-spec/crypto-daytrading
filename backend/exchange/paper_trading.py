@@ -463,6 +463,24 @@ class PaperTradingEngine:
         """Get trade history."""
         return [t.to_dict() for t in self.trade_history[-limit:]]
 
+    def close_position(self, symbol: str) -> None:
+        """Close/remove position from tracking after successful exit."""
+        try:
+            if symbol in self.positions:
+                del self.positions[symbol]
+                logger.info(f"Position {symbol} removed from in-memory tracking")
+
+            # Also remove from database
+            db = get_database()
+            conn = sqlite3.connect(db.db_path)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM open_positions WHERE symbol = ?", (symbol,))
+            conn.commit()
+            conn.close()
+            logger.info(f"Position {symbol} removed from database")
+        except Exception as e:
+            logger.error(f"Error closing position {symbol}: {e}")
+
     def reset(self) -> None:
         """Reset account to starting state."""
         self.cash = self.starting_capital

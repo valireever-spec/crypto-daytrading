@@ -74,6 +74,7 @@ failover_task = None
 heartbeat_task = None
 systemd_watchdog_task = None
 staleness_monitor_task = None
+state_reconciliation_task = None
 staleness_monitor = None
 monitoring_logger = None
 ws = None
@@ -102,7 +103,7 @@ async def systemd_watchdog_heartbeat():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
-    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task, heartbeat_task, systemd_watchdog_task, staleness_monitor_task, staleness_monitor, monitoring_logger, ws
+    global websocket_task, stream_task, simulator_task, autonomous_trader_task, sync_task, heartbeat_task, systemd_watchdog_task, staleness_monitor_task, state_reconciliation_task, staleness_monitor, monitoring_logger, ws
 
     logger.info("Starting crypto daytrading platform...")
 
@@ -241,6 +242,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize staleness monitor: {e}")
             staleness_monitor = None
+
+    # BUG FIX #2: Initialize state reconciliation (keeps BACKUP positions in sync)
+    try:
+        from backend.core.state_reconciliation import get_reconciliation_manager
+        state_reconciliation_task = asyncio.create_task(
+            get_reconciliation_manager().start()
+        )
+        logger.info("✅ State reconciliation initialized (syncs positions every 5 min)")
+    except Exception as e:
+        logger.error(f"Failed to initialize state reconciliation: {e}")
+        state_reconciliation_task = None
 
     # Initialize Binance stream (legacy, kept for backward compatibility)
     try:
@@ -626,6 +638,8 @@ async def lifespan(app: FastAPI):
         tasks_to_cancel.append(websocket_task)
     if staleness_monitor_task:
         tasks_to_cancel.append(staleness_monitor_task)
+    if state_reconciliation_task:
+        tasks_to_cancel.append(state_reconciliation_task)
     if simulator_task:
         tasks_to_cancel.append(simulator_task)
     if sync_task:

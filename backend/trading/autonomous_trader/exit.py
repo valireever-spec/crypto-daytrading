@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Dict
 
 from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.order_response import validate_order_response
-from backend.execution.smart_executor import get_smart_executor
 from backend.core.fragility_circuit_breaker import get_fragility_breaker
 from backend.core.trading_metrics import get_metrics_collector
 
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 MIN_HOLD_TIME_SECONDS = 300  # Minimum time position must be held before allowing exit (5 minutes)
 
 
-async def _check_exits_impl(trader_self: "AutonomousTrader"):
+async def _check_exits_impl(trader_self: "AutonomousTrader") -> None:
     """Check existing positions for exits (stop loss, profit target)."""
     try:
         engine = get_paper_trading()
@@ -193,11 +192,6 @@ async def _execute_exit_impl(
 
         quantity = total_quantity  # Use TOTAL quantity, not just this position
 
-        smart_executor = get_smart_executor()
-        if not smart_executor:
-            logger.error("Smart executor not initialized")
-            return False
-
         result = await engine.place_order(
             symbol=symbol,
             side="SELL",
@@ -212,7 +206,8 @@ async def _execute_exit_impl(
 
             if validated.status == "FILLED":
                 realized_pnl = validated.realized_pnl or 0.0
-                realized_pnl_pct = (realized_pnl / (position["entry_price"] * quantity) * 100) if position["entry_price"] > 0 else 0
+                entry_price = position.get("entry_price", 0.0)
+                realized_pnl_pct = (realized_pnl / (entry_price * quantity) * 100) if entry_price > 0 else 0
                 hold_time = int((datetime.now(timezone.utc) - datetime.fromisoformat(position.get("entry_time", ""))).total_seconds()) if position.get("entry_time") else 0
 
                 logger.info(
@@ -246,6 +241,11 @@ async def _execute_exit_impl(
                     realized_pnl_pct=realized_pnl_pct,
                     hold_seconds=hold_time
                 )
+
+                # ✅ CRITICAL: Remove position from tracking after successful exit
+                engine.close_position(symbol)
+                logger.info(f"✅ Position {symbol} removed from tracking")
+
                 return True
             else:
                 logger.warning(

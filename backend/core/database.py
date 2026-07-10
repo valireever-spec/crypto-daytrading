@@ -23,6 +23,26 @@ VALID_SYMBOLS = {"BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "DOGEUSDT"}
 VALID_SIDES = {"BUY", "SELL"}
 VALID_STATUSES = {"OPEN", "CLOSED", "FILLED", "CANCELLED"}
 
+# 🔐 CONNECTION POOL: Reuse SQLite connection instead of creating new one per operation
+# This prevents connection exhaustion under high-frequency trading
+_conn_cache = {}  # {db_path: connection}
+import threading
+_conn_lock = threading.RLock()
+
+def get_shared_connection(db_path: str):
+    """Get or create a reusable SQLite connection (WAL mode compatible)."""
+    global _conn_cache
+    with _conn_lock:
+        if db_path not in _conn_cache:
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=FULL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.isolation_level = "DEFERRED"
+            _conn_cache[db_path] = conn
+            logger.info(f"✅ SQLite connection pool initialized: {db_path}")
+        return _conn_cache[db_path]
+
 
 class TradingDatabase:
     """SQLite database for position and trade persistence (Anti-poisoning hardened)."""
@@ -37,6 +57,12 @@ class TradingDatabase:
     def _init_schema(self) -> None:
         """Create tables if they don't exist."""
         conn = sqlite3.connect(self.db_path)
+
+        # 🔐 CRITICAL: Enable crash recovery (WAL mode) and fsync for durability
+        conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging prevents corruption
+        conn.execute("PRAGMA synchronous=FULL")  # Fsync after every write
+        conn.execute("PRAGMA foreign_keys=ON")   # Enforce referential integrity
+
         cursor = conn.cursor()
 
         # Positions table: track open trades
@@ -374,8 +400,7 @@ class TradingDatabase:
         # HARDENING: Validate input before DB write (anti-poisoning)
         self._validate_input(symbol, quantity, entry_price, "BUY")
 
-        conn = sqlite3.connect(self.db_path)
-        conn.isolation_level = "DEFERRED"  # Atomic transaction
+        conn = get_shared_connection(self.db_path)
         try:
             cursor = conn.cursor()
 
@@ -408,9 +433,8 @@ class TradingDatabase:
         Args:
             position_id: Position ID to close
         """
-        conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = get_shared_connection(self.db_path)
             cursor = conn.cursor()
 
             cursor.execute(
@@ -427,9 +451,6 @@ class TradingDatabase:
         except Exception as e:
             logger.error(f"Error closing position {position_id}: {e}", exc_info=True)
             raise
-        finally:
-            if conn:
-                conn.close()
 
     def get_open_positions(self) -> List[Dict]:
         """Get all open positions from database (with error handling).
@@ -542,8 +563,8 @@ class TradingDatabase:
             if slippage_pct < -100 or slippage_pct > 100:
                 raise ValueError(f"slippage_pct out of range: {slippage_pct}")
 
-        conn = sqlite3.connect(self.db_path)
-        conn.isolation_level = "DEFERRED"  # Atomic transaction
+        # 🚀 OPTIMIZATION: Use connection pool instead of creating new connection
+        conn = get_shared_connection(self.db_path)
         try:
             cursor = conn.cursor()
 

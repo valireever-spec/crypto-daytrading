@@ -237,7 +237,7 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
         )
 
         if signal_strength is None:
-            logger.debug(f"{symbol}: {reason}")
+            logger.info(f"⊘ {symbol}: Signal rejected - {reason}")
             return None
 
         # CRITICAL FIX: Include full entry reason in logs and signal
@@ -276,6 +276,17 @@ async def _execute_entry_impl(trader_self, signal) -> bool:
 
         if stream_client and signal.symbol in stream_client.price_cache:
             current_price = stream_client.price_cache[signal.symbol]
+
+            # 🔐 CRITICAL: Check if price is stale (WebSocket may have died)
+            if hasattr(stream_client, 'price_health') and signal.symbol in stream_client.price_health:
+                health = stream_client.price_health[signal.symbol]
+                health.update()
+                if health.age_seconds > 10.0:  # Price older than 10 seconds = REJECT
+                    logger.warning(
+                        f"🚨 {signal.symbol}: Price stale for {health.age_seconds:.1f}s (max 10s). "
+                        f"WebSocket likely disconnected. Rejecting entry to prevent bad fill."
+                    )
+                    return False
 
         if not current_price:
             logger.warning(f"{signal.symbol}: No current price, cannot execute entry")
