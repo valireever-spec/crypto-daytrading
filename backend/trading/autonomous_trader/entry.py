@@ -22,6 +22,11 @@ from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.order_response import validate_order_response
 from backend.exchange.binance_stream import get_stream_client
 from backend.core.market_regime_detector import MarketRegimeDetector, MarketRegime
+from backend.core.emergency_market_halt import (
+    check_emergency_halt,
+    halt_trading_due_to_trend,
+    resume_trading,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +163,11 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
     if not trader_self.config.enabled:
         return None
 
+    # CRITICAL: Check if emergency halt is active (market trending)
+    if check_emergency_halt():
+        logger.debug(f"{symbol}: Skipping (emergency halt active - market trending)")
+        return None
+
     try:
         engine = get_paper_trading()
         if not engine:
@@ -185,19 +195,36 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
         closes_4hr, _ = _extract_candle_data(data_4hr)
 
         # PHASE 3: Market regime detection (proactive trend protection)
-        candles_1hr = [{"high": c[1], "low": c[2], "close": c[4]} for c in data_1hr]
-        regime_analysis = MarketRegimeDetector.analyze_regime(candles_1hr, closes_1hr)
+        try:
+            candles_1hr = [{"high": c[1], "low": c[2], "close": c[4]} for c in data_1hr]
+            regime_analysis = MarketRegimeDetector.analyze_regime(candles_1hr, closes_1hr)
 
-        if regime_analysis.regime in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN]:
-            logger.warning(
-                f"{symbol}: Trend detected ({regime_analysis.regime.value}), "
-                f"skipping entry (volatility: {regime_analysis.volatility_pct:.2f}%)"
-            )
-            return None
+            # CRITICAL FIX: If trending detected, activate emergency halt
+            if regime_analysis.regime in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN]:
+                logger.critical(
+                    f"🛑 TREND DETECTED on {symbol} ({regime_analysis.regime.value}): "
+                    f"ATR {regime_analysis.volatility_pct:.2f}%, Trend {regime_analysis.trend_strength:.1f}% - "
+                    f"HALTING ALL ENTRIES (expected -45% win rate if continues)"
+                )
+                halt_trading_due_to_trend(
+                    regime_analysis.regime.value,
+                    regime_analysis.volatility_pct
+                )
+                return None
 
-        if regime_analysis.regime == MarketRegime.UNKNOWN and regime_analysis.confidence == "LOW":
-            logger.debug(f"{symbol}: Insufficient data for regime analysis, skipping")
-            return None
+            # If market returned to ranging, resume trading
+            if regime_analysis.regime == MarketRegime.RANGING:
+                resume_trading()
+
+            if regime_analysis.regime == MarketRegime.UNKNOWN and regime_analysis.confidence == "LOW":
+                logger.debug(f"{symbol}: Insufficient data for regime analysis, skipping")
+                return None
+
+            regime_status = f"[Regime: {regime_analysis.regime.value}, ATR: {regime_analysis.volatility_pct:.2f}%]"
+        except Exception as e:
+            logger.error(f"Regime detection failed for {symbol}: {e}")
+            regime_status = f"[Regime check error: {e}]"
+            regime_analysis = None
 
         # Calculate signal (using 1h as primary timeframe instead of 5m)
         signal_strength, reason = SignalCalculator.calculate_signal(
@@ -208,9 +235,10 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             logger.debug(f"{symbol}: {reason}")
             return None
 
+        # CRITICAL FIX: Include full entry reason in logs and signal
+        full_reason = f"{reason} ({regime_status})"
         logger.info(
-            f"✅ Signal generated for {symbol}: {reason} (strength: {signal_strength:.0f}) "
-            f"[Regime: {regime_analysis.regime.value}, Vol: {regime_analysis.volatility_pct:.2f}%]"
+            f"✅ ENTRY SIGNAL: {symbol} - {full_reason} (strength: {signal_strength:.0f})"
         )
 
         from .core import TradeSignal
@@ -218,7 +246,7 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             symbol=symbol,
             side="BUY",
             strength=signal_strength,
-            reason=f"{reason} (strength: {signal_strength:.0f})",
+            reason=full_reason,  # CRITICAL: Include regime + reason in signal
             timestamp=datetime.now(timezone.utc),
         )
 
