@@ -600,6 +600,24 @@ class TradingDatabase:
                 ),
             )
 
+            # ✅ BUG FIX: When SELL is inserted, mark corresponding BUY as CLOSED
+            if side == "SELL":
+                cursor.execute(
+                    """
+                    UPDATE trades
+                    SET status = 'CLOSED'
+                    WHERE symbol = ? AND side = 'BUY' AND status IN ('OPEN', 'FILLED')
+                    ORDER BY trade_time DESC
+                    LIMIT 1
+                    """,
+                    (symbol,),
+                )
+                updated_rows = cursor.rowcount
+                if updated_rows > 0:
+                    logger.info(f"✅ STATUS FIX: Marked {updated_rows} BUY {symbol} as CLOSED")
+                else:
+                    logger.info(f"⚠️ STATUS FIX: No OPEN/FILLED BUY found for SELL {symbol}")
+
             conn.commit()
             trade_id = cursor.lastrowid
 
@@ -618,8 +636,7 @@ class TradingDatabase:
             conn.rollback()
             logger.error(f"Failed to insert trade: {e}")
             raise
-        finally:
-            conn.close()
+        # Note: do NOT close shared connection - it stays in the pool for reuse
 
     def get_trades_today(self) -> List[Dict]:
         """Get all trades from today (UTC).
