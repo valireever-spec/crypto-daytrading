@@ -704,22 +704,47 @@ class PaperTradingEngine:
     def _restore_account_state_from_db(self) -> None:
         """Restore account cash and P&L from database on startup (CRITICAL for BACKUP).
 
-        Ensures that BACKUP restarts with the synced cash balance and P&L, not defaults.
+        ROBUST APPROACH: Recalculate from actual trades (source of truth), not stale cache.
+
+        Why: account_state table only updates when trades happen. If API restarts without
+        executing trades, the cache becomes stale. Recalculating from trades ensures accuracy.
+
+        Algorithm:
+        1. Sum all realized_pnl from trades table (ground truth)
+        2. Calculate cash = starting_capital + sum(realized_pnl)
+        3. Update account_state cache so it's current
         """
         try:
             db = get_database()
-            state = db.load_account_state()
 
-            self.cash = state.get("cash", self.starting_capital)
-            self.total_pnl = state.get("total_pnl", 0.0)
-            self.daily_pnl = state.get("daily_pnl", 0.0)
+            # ✅ CRITICAL FIX: Get source of truth (actual trades), not stale cache
+            realized_pnl_sum = db.get_total_realized_pnl()
 
-            if self.cash != self.starting_capital:
-                logger.critical(
-                    f"✅ Restored account state from database: €{self.cash} cash, €{self.total_pnl} P&L"
-                )
+            # Calculate actual cash from trades
+            calculated_cash = self.starting_capital + realized_pnl_sum
+            self.cash = calculated_cash
+            self.total_pnl = realized_pnl_sum
+            self.daily_pnl = 0.0  # Will be recalculated during trading
+
+            # Update account_state cache so it's current
+            db.save_account_state(self.cash, self.total_pnl, self.daily_pnl)
+
+            logger.critical(
+                f"✅ Restored account state from TRADES (not cache): "
+                f"€{self.cash:.2f} cash (€{self.starting_capital} start + €{realized_pnl_sum:.2f} P&L)"
+            )
         except Exception as e:
             logger.error(f"Failed to restore account state from DB: {e}")
+            # Fallback to cache if calculation fails
+            try:
+                db = get_database()
+                state = db.load_account_state()
+                self.cash = state.get("cash", self.starting_capital)
+                self.total_pnl = state.get("total_pnl", 0.0)
+                self.daily_pnl = state.get("daily_pnl", 0.0)
+                logger.warning(f"Using cached account state (fallback): €{self.cash} cash")
+            except Exception as e2:
+                logger.error(f"Fallback also failed: {e2}")
 
 
 # Global paper trading engine (thread-safe access)

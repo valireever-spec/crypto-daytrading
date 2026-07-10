@@ -724,6 +724,24 @@ class TradingDatabase:
 
         logger.info(f"Config snapshot saved: {config_json[:100]}...")
 
+    def get_total_realized_pnl(self) -> float:
+        """Calculate total realized P&L from all trades (ground truth).
+
+        This is the authoritative source for account balance after restart.
+        Returns: sum of realized_pnl from all trades
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT SUM(realized_pnl) FROM trades WHERE realized_pnl IS NOT NULL")
+            result = cursor.fetchone()[0]
+            conn.close()
+
+            return float(result) if result is not None else 0.0
+        except Exception as e:
+            logger.error(f"Failed to calculate total realized P&L: {e}")
+            return 0.0
+
     def save_account_state(
         self, cash: float, total_pnl: float, daily_pnl: float
     ) -> None:
