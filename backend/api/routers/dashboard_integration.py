@@ -32,7 +32,7 @@ async def get_dashboard() -> JSONResponse:
 
         # Get trades safely
         try:
-            all_trades = engine.get_all_trades() if hasattr(engine, 'get_all_trades') else []
+            all_trades = engine.get_trades(limit=1000) if hasattr(engine, 'get_trades') else []
             recent_trades = all_trades[-20:] if all_trades else []
         except Exception as trade_err:
             logger.warning(f"Could not fetch trades: {trade_err}")

@@ -68,7 +68,7 @@ class MetricsCollector:
 
     def record_signal(self, **kwargs) -> None:
         """Record signal generation."""
-        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat() + 'Z'
+        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat()
         self.signals.append(SignalMetric(**kwargs))
         # Keep only last 1000 signals (rolling window)
         if len(self.signals) > 1000:
@@ -76,7 +76,7 @@ class MetricsCollector:
 
     def record_trade(self, **kwargs) -> None:
         """Record trade execution."""
-        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat() + 'Z'
+        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat()
         self.trades.append(TradeMetric(**kwargs))
         # Keep only last 500 trades
         if len(self.trades) > 500:
@@ -84,7 +84,7 @@ class MetricsCollector:
 
     def record_system(self, **kwargs) -> None:
         """Record system health."""
-        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat() + 'Z'
+        kwargs['timestamp'] = datetime.now(timezone.utc).isoformat()
         self.system.append(SystemMetric(**kwargs))
         # Keep only last 1440 (24 hours of minute-by-minute samples)
         if len(self.system) > 1440:
@@ -96,9 +96,12 @@ class MetricsCollector:
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         result = []
         for sig in self.signals:
-            sig_time = datetime.fromisoformat(sig.timestamp.replace('Z', '+00:00'))
-            if sig_time > cutoff:
-                result.append(asdict(sig))
+            try:
+                sig_time = datetime.fromisoformat(sig.timestamp)
+                if sig_time > cutoff:
+                    result.append(asdict(sig))
+            except (ValueError, TypeError):
+                continue
         return result
 
     def get_trades_since(self, minutes: int = 60) -> List[Dict]:
@@ -107,9 +110,12 @@ class MetricsCollector:
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         result = []
         for trade in self.trades:
-            trade_time = datetime.fromisoformat(trade.timestamp.replace('Z', '+00:00'))
-            if trade_time > cutoff:
-                result.append(asdict(trade))
+            try:
+                trade_time = datetime.fromisoformat(trade.timestamp)
+                if trade_time > cutoff:
+                    result.append(asdict(trade))
+            except (ValueError, TypeError):
+                continue
         return result
 
     def get_win_rate(self, trades: Optional[List[TradeMetric]] = None) -> float:

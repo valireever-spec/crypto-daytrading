@@ -79,7 +79,7 @@ async def get_metrics():
         stats = collector.get_statistics()
 
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "statistics": stats,
             "recent_signals_2h": collector.get_signals_since(minutes=120),
             "recent_trades_2h": collector.get_trades_since(minutes=120),
