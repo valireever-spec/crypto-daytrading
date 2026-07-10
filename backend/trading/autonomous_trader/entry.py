@@ -306,6 +306,9 @@ async def _execute_entry_impl(trader_self, signal) -> bool:
             )
             return False
 
+        # DEBUG: Verify entry_reason is being passed
+        logger.debug(f"DEBUG_ENTRY: Passing entry_reason to place_order: {signal.reason[:80] if signal.reason else 'NULL'}")
+
         result = await engine.place_order(
             symbol=signal.symbol,
             side="BUY",

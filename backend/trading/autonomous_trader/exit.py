@@ -95,11 +95,20 @@ async def _check_exits_impl(trader_self: "AutonomousTrader"):
             current_price = stream_client.price_cache.get(symbol)
 
             if not current_price:
+                logger.debug(f"{symbol}: No current price, skipping profit/stop check")
                 continue
 
             entry_price = position["entry_price"]
             _quantity = position["quantity"]
             pnl_pct = (current_price - entry_price) / entry_price * 100
+
+            # DEBUG: Log all P&L values for analysis
+            logger.debug(
+                f"DEBUG_EXIT_CHECK: {symbol} | Hold: {hold_time:.0f}s | Entry: ${entry_price:.2f} | "
+                f"Current: ${current_price:.2f} | P&L: {pnl_pct:.2f}% | "
+                f"ProfitTarget: {trader_self.config.exit_profit_target:.1f}% | "
+                f"StopLoss: {trader_self.config.exit_stop_loss:.1f}%"
+            )
 
             if pnl_pct >= trader_self.config.exit_profit_target:
                 logger.info(
