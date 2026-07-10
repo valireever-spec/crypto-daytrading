@@ -289,6 +289,10 @@ class PaperTradingEngine:
 
             # Create trade record
             order_id = str(uuid.uuid4())
+
+            # DEBUG: Log entry/exit reason values
+            logger.debug(f"DEBUG_TRADE_OBJECT: Creating Trade with entry_reason={entry_reason[:60] if entry_reason else 'NULL'}, exit_reason={exit_reason[:60] if exit_reason else 'NULL'}")
+
             trade = Trade(
                 timestamp=datetime.utcnow(),
                 symbol=symbol,
@@ -320,6 +324,10 @@ class PaperTradingEngine:
             # Log trade to database (Pillar #5: State Persistence - audit trail)
             try:
                 db = get_database()
+
+                # DEBUG: Log parameters being passed to insert_trade
+                logger.debug(f"DEBUG_INSERT_TRADE_CALL: Calling insert_trade with entry_reason={entry_reason[:60] if entry_reason else 'NULL'}, exit_reason={exit_reason[:60] if exit_reason else 'NULL'}")
+
                 db.insert_trade(
                     symbol=symbol,
                     side=side,
@@ -335,6 +343,8 @@ class PaperTradingEngine:
                     entry_reason=entry_reason,
                     exit_reason=exit_reason,
                 )
+
+                logger.debug(f"DEBUG_INSERT_SUCCESS: Trade inserted successfully for {symbol} {side}")
                 # CRITICAL: Persist account state after each trade for crash recovery
                 db.save_account_state(
                     cash=self.cash, total_pnl=self.total_pnl, daily_pnl=self.daily_pnl
