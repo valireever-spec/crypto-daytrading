@@ -21,6 +21,7 @@ import ccxt.async_support as ccxt
 from backend.exchange.paper_trading import get_paper_trading
 from backend.exchange.order_response import validate_order_response
 from backend.exchange.binance_stream import get_stream_client
+from backend.core.market_regime_detector import MarketRegimeDetector, MarketRegime
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,21 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
         closes_1hr, volumes_1hr = _extract_candle_data(data_1hr)
         closes_4hr, _ = _extract_candle_data(data_4hr)
 
+        # PHASE 3: Market regime detection (proactive trend protection)
+        candles_1hr = [{"high": c[1], "low": c[2], "close": c[4]} for c in data_1hr]
+        regime_analysis = MarketRegimeDetector.analyze_regime(candles_1hr, closes_1hr)
+
+        if regime_analysis.regime in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN]:
+            logger.warning(
+                f"{symbol}: Trend detected ({regime_analysis.regime.value}), "
+                f"skipping entry (volatility: {regime_analysis.volatility_pct:.2f}%)"
+            )
+            return None
+
+        if regime_analysis.regime == MarketRegime.UNKNOWN and regime_analysis.confidence == "LOW":
+            logger.debug(f"{symbol}: Insufficient data for regime analysis, skipping")
+            return None
+
         # Calculate signal (using 1h as primary timeframe instead of 5m)
         signal_strength, reason = SignalCalculator.calculate_signal(
             closes_1hr, closes_4hr, closes_4hr, volumes_1hr  # 1h replaces 5m as primary
@@ -192,7 +208,10 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             logger.debug(f"{symbol}: {reason}")
             return None
 
-        logger.info(f"✅ Signal generated for {symbol}: {reason} (strength: {signal_strength:.0f})")
+        logger.info(
+            f"✅ Signal generated for {symbol}: {reason} (strength: {signal_strength:.0f}) "
+            f"[Regime: {regime_analysis.regime.value}, Vol: {regime_analysis.volatility_pct:.2f}%]"
+        )
 
         from .core import TradeSignal
         return TradeSignal(
