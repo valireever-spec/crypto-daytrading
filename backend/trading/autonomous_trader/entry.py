@@ -311,6 +311,7 @@ async def _execute_entry_impl(trader_self, signal) -> bool:
             side="BUY",
             quantity=round(quantity, 4),
             current_price=current_price,
+            entry_reason=signal.reason,
         )
 
         try:

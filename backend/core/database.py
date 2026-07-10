@@ -84,6 +84,21 @@ class TradingDatabase:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Migration: Add entry_reason and exit_reason columns for audit trail
+        try:
+            cursor.execute(
+                "ALTER TABLE trades ADD COLUMN entry_reason TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            cursor.execute(
+                "ALTER TABLE trades ADD COLUMN exit_reason TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # HARDENING (Pillar #10): Prevent DELETE on trades table (append-only audit trail)
         # NOTE: UPDATE is NOT prevented - we need to allow updates to realized_pnl
         # for correcting trade P&L values. Hash verification prevents tampering.
@@ -487,6 +502,8 @@ class TradingDatabase:
         slippage_pct: Optional[float] = None,
         realized_pnl: float = 0.0,
         fee: float = 0.0,
+        entry_reason: Optional[str] = None,
+        exit_reason: Optional[str] = None,
     ) -> int:
         """Log executed trade to audit trail (anti-poisoning validated).
 
@@ -499,6 +516,8 @@ class TradingDatabase:
             order_id: Optional order ID for deduplication
             slippage_pct: Slippage percentage
             realized_pnl: Realized P&L from this trade (for SELL orders)
+            entry_reason: Why the position was entered (for BUY orders)
+            exit_reason: Why the position was exited (for SELL orders)
 
         Returns:
             Trade ID (rowid)
@@ -541,8 +560,8 @@ class TradingDatabase:
 
             cursor.execute(
                 """
-                INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, realized_pnl, fee, status, hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'FILLED', ?)
+                INSERT INTO trades (symbol, side, quantity, price, trade_time, order_id, slippage_pct, realized_pnl, fee, status, hash, entry_reason, exit_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'FILLED', ?, ?, ?)
                 """,
                 (
                     symbol,
@@ -555,6 +574,8 @@ class TradingDatabase:
                     realized_pnl,
                     fee,
                     trade_hash,
+                    entry_reason,
+                    exit_reason,
                 ),
             )
 

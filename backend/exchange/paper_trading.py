@@ -332,6 +332,8 @@ class PaperTradingEngine:
                     ),
                     realized_pnl=realized_pnl,
                     fee=fee,
+                    entry_reason=entry_reason,
+                    exit_reason=exit_reason,
                 )
                 # CRITICAL: Persist account state after each trade for crash recovery
                 db.save_account_state(
