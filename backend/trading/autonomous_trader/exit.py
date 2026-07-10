@@ -154,7 +154,11 @@ async def _execute_exit_impl(
     current_price: float,
     reason: str,
 ) -> bool:
-    """Execute a sell order to close a position."""
+    """Execute a sell order to close a position.
+
+    CRITICAL FIX: Closes ALL quantity held for the symbol, not just one position.
+    This prevents partial exits that leave remainder positions open and block future entries.
+    """
     try:
         engine = get_paper_trading()
         if not engine:
@@ -162,7 +166,23 @@ async def _execute_exit_impl(
             return False
 
         symbol = position["symbol"]
-        quantity = position["quantity"]
+
+        # CRITICAL FIX: Close ALL quantity held for this symbol, not just this position
+        # This prevents the partial closure bug that creates deadlock
+        all_positions = engine.get_positions()
+        total_quantity = sum(p["quantity"] for p in all_positions if p["symbol"] == symbol)
+
+        if total_quantity <= 0:
+            logger.warning(f"Cannot exit {symbol}: no quantity held (position data stale?)")
+            return False
+
+        if total_quantity != position["quantity"]:
+            logger.warning(
+                f"Exit {symbol}: Multiple positions detected. "
+                f"Closing ALL {total_quantity:.4f} units (this position: {position['quantity']:.4f})"
+            )
+
+        quantity = total_quantity  # Use TOTAL quantity, not just this position
 
         smart_executor = get_smart_executor()
         if not smart_executor:

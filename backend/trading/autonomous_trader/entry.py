@@ -174,8 +174,13 @@ async def _check_symbol_impl(trader_self, symbol: str) -> Optional:
             return None
 
         positions = engine.get_positions()
-        if any(p["symbol"] == symbol for p in positions):
-            logger.debug(f"{symbol}: Already have position, skipping")
+
+        # CRITICAL FIX: Check total quantity held, not just "any position exists"
+        total_held = sum(p["quantity"] for p in positions if p["symbol"] == symbol)
+        if total_held > 0:
+            logger.debug(
+                f"{symbol}: Already holding {total_held:.4f} units, skipping new entry"
+            )
             return None
 
         if len(positions) >= trader_self.config.max_positions:
