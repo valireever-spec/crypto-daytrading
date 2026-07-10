@@ -429,7 +429,7 @@
 
         async function loadTransactions() {
             try {
-                const response = await fetch(`${API}/api/paper/trades?limit=100`);
+                const response = await fetch(`${API}/api/paper/trades?limit=10000`);
                 const data = await response.json();
                 allTransactions = Array.isArray(data) ? data : (data.trades || []);
 

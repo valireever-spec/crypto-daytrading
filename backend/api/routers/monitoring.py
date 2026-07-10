@@ -180,6 +180,90 @@ async def get_dashboard_data():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/account-audit")
+async def get_account_audit():
+    """Comprehensive account reconciliation audit.
+
+    Compares: in-memory state vs database ground truth, positions, equity.
+    CRITICAL: Detects the silent corruption bug where cache is wrong but no errors are thrown.
+    """
+    try:
+        from backend.exchange.paper_trading import get_paper_trading
+        from backend.core.database import get_database
+        from backend.core.startup_verification import get_startup_verification_status
+        from backend.core.state_monitor import get_state_monitor_status
+
+        engine = get_paper_trading()
+        db = get_database()
+
+        if not engine:
+            raise HTTPException(status_code=500, detail="Paper trading engine not initialized")
+
+        # Get all the checks
+        verification_status = get_startup_verification_status()
+        monitor_status = get_state_monitor_status()
+
+        # Calculate totals
+        positions = engine.get_positions()
+        positions_value = sum(p.get("quantity", 0) * p.get("current_price", 0) for p in positions)
+        total_equity = engine.cash + positions_value
+
+        # Get database ground truth
+        trades_pnl = db.get_total_realized_pnl()
+        expected_cash = engine.starting_capital + trades_pnl
+
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "account_audit": {
+                "startup_verification": verification_status,
+                "continuous_monitor": monitor_status,
+                "account_state": {
+                    "in_memory_cash": engine.cash,
+                    "in_memory_pnl": engine.total_pnl,
+                    "in_memory_daily_pnl": engine.daily_pnl,
+                },
+                "database_ground_truth": {
+                    "starting_capital": engine.starting_capital,
+                    "trades_sum_pnl": trades_pnl,
+                    "expected_cash": expected_cash,
+                },
+                "positions": {
+                    "count": len(positions),
+                    "total_value": positions_value,
+                    "symbols": [p.get("symbol") for p in positions],
+                },
+                "equity": {
+                    "cash": engine.cash,
+                    "positions_value": positions_value,
+                    "total_equity": total_equity,
+                },
+                "discrepancies": {
+                    "cash_drift": {
+                        "amount": abs(engine.cash - expected_cash),
+                        "status": "OK" if abs(engine.cash - expected_cash) < 1.0 else "CRITICAL",
+                        "description": f"In-memory cash differs from DB by €{abs(engine.cash - expected_cash):.2f}",
+                    },
+                    "pnl_drift": {
+                        "amount": abs(engine.total_pnl - trades_pnl),
+                        "status": "OK" if abs(engine.total_pnl - trades_pnl) < 1.0 else "CRITICAL",
+                        "description": f"In-memory P&L differs from DB by €{abs(engine.total_pnl - trades_pnl):.2f}",
+                    },
+                },
+                "health": {
+                    "consistent": (
+                        abs(engine.cash - expected_cash) < 1.0
+                        and abs(engine.total_pnl - trades_pnl) < 1.0
+                    ),
+                    "trading_safe": verification_status.get("verified", True),
+                },
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting account audit: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/circuit-breaker-status")
 async def get_circuit_breaker_status():
     """Get fragility circuit breaker status (for dashboards/alerting)."""

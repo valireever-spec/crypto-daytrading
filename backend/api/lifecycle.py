@@ -619,6 +619,28 @@ async def lifespan(app: FastAPI):
     except (ImportError, Exception):
         pass  # Not running under systemd or signal failed, ignore
 
+    # CRITICAL: Verify account state integrity before trading (detects corruption bug)
+    try:
+        from backend.core.startup_verification import verify_account_state_integrity
+        verification_ok = await verify_account_state_integrity()
+        if not verification_ok:
+            # Block trading until verified
+            from backend.trading.autonomous_trader.core import get_autonomous_trader
+            trader = get_autonomous_trader()
+            if trader:
+                trader.config.enabled = False
+                logger.critical("⛔ Autonomous trading DISABLED due to account state corruption")
+    except Exception as e:
+        logger.error(f"Account state verification failed: {e}", exc_info=True)
+
+    # Start continuous state monitor (detects drift every 10 seconds)
+    try:
+        from backend.core.state_monitor import continuous_state_monitor
+        state_monitor_task = asyncio.create_task(continuous_state_monitor())
+        logger.info("📊 Continuous state monitor started (checks every 10s for account drift)")
+    except Exception as e:
+        logger.warning(f"Failed to start state monitor: {e}")
+
     # Startup complete
     logger.info("✅ Crypto daytrading platform started successfully")
 
