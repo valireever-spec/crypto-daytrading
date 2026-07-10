@@ -583,6 +583,8 @@ class AutonomousTrader:
         side: str,
         quantity: float,
         price: float,
+        entry_reason: Optional[str] = None,
+        exit_reason: Optional[str] = None,
     ) -> Dict:
         """Place order with all safety hardening checks.
 
@@ -636,7 +638,14 @@ class AutonomousTrader:
 
         # 5. Execute order
         try:
-            result = await engine.place_order(symbol, side, quantity, price)
+            result = await engine.place_order(
+                symbol=symbol,
+                side=side,
+                quantity=quantity,
+                current_price=price,
+                entry_reason=entry_reason,
+                exit_reason=exit_reason,
+            )
             # ✅ BUG FIX #2: Use correct response schema validation with "status" key
             if result.get("status") == "FILLED":
                 self.ha_deduplicator.register_order(order_record.idempotency_key)

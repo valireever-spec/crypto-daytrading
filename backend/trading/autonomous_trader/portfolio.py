@@ -134,6 +134,7 @@ async def _execute_portfolio_decision_impl(
                         side="SELL",
                         quantity=pos["quantity"],
                         current_price=current_prices.get(symbol, pos["entry_price"]),
+                        exit_reason="Portfolio rebalancing decision",
                     )
 
                     if result.get("status") == "FILLED":

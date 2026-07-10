@@ -255,6 +255,7 @@ class SmartExecutor:
                 current_price=context.current_price,
                 order_type="MARKET",
                 strategy_name="smart_gateway",
+                entry_reason=f"Smart entry: {context.regime} regime, confidence={context.confidence:.2%}",
             )
 
             if order_result.get("status") == "filled":

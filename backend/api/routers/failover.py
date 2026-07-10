@@ -223,6 +223,8 @@ async def receive_position_from_primary(request: Request):
                 order_id=trade_data["order_id"],
                 mode=trade_data.get("mode", "PAPER"),
                 status=trade_data.get("status", "FILLED"),
+                entry_reason=trade_data.get("entry_reason"),  # CRITICAL FIX: Preserve from PRIMARY
+                exit_reason=trade_data.get("exit_reason"),    # CRITICAL FIX: Preserve from PRIMARY
             )
 
             # Add to in-memory history
@@ -238,6 +240,8 @@ async def receive_position_from_primary(request: Request):
                     trade_time=trade.timestamp,
                     order_id=trade.order_id,
                     slippage_pct=0.0,  # Already included in price on PRIMARY
+                    entry_reason=trade_data.get("entry_reason"),  # Preserve from PRIMARY
+                    exit_reason=trade_data.get("exit_reason"),    # Preserve from PRIMARY
                 )
                 logger.info(
                     f"✅ Trade persisted to BACKUP database: {trade.symbol} {trade.side} {trade.quantity}"
