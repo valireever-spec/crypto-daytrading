@@ -426,12 +426,12 @@ async def lifespan(app: FastAPI):
                     else:
                         consecutive_failures += 1
                         logger.warning(f"⚠️  Both HTTP and SSH sync failed ({consecutive_failures}x) - BACKUP state may diverge, but PRIMARY trading continues (BACKUP is passive-only)")
-                        # Report to Tier 2 fragility circuit breaker
-                        breaker = get_fragility_breaker()
-                        breaker.check_sync_failure(f"Both HTTP and SSH sync failed ({consecutive_failures}x)")
 
                         # ✅ ARCHITECTURAL FIX: PRIMARY should NOT pause trading on BACKUP sync failure
                         # BACKUP is passive-only replica, so PRIMARY proceeds independently
+                        # DO NOT call fragility circuit breaker - Scenario C (no BACKUP) is expected
+                        # breaker = get_fragility_breaker()
+                        # breaker.check_sync_failure(f"Both HTTP and SSH sync failed ({consecutive_failures}x)")
                         # No alert needed - sync failure is non-critical
                         if consecutive_failures % 10 == 0:
                             logger.warning(f"⚠️  BACKUP state sync offline for {consecutive_failures * constants.STATE_SYNC_INTERVAL}s - resuming manual sync when BACKUP recovers")
