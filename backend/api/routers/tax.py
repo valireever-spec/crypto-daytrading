@@ -14,6 +14,7 @@ from backend.analytics.tax_calculator import (
     Trade,
 )
 from backend.exchange.paper_trading import get_paper_trading
+from backend.core.database import get_database
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/tax", tags=["Tax Tracking"])
@@ -311,9 +312,33 @@ async def get_tax_summary() -> Dict:
     try:
         calc = get_tax_calculator()
         if not calc:
-            raise HTTPException(status_code=400, detail="Tax tracker not initialized.")
+            # Initialize with Germany jurisdiction
+            calc = init_tax_calculator(jurisdiction=Jurisdiction.GERMANY)
 
-        if not calc.tax_events:
+        # Load trades from database if not already loaded
+        if not calc.trades:
+            try:
+                db = get_database()
+                db_trades = db.get_all_trades()
+
+                # Convert database trades to Tax Trade objects
+                calc.trades = [
+                    Trade(
+                        trade_id=str(t.get("id", f"trade_{i}")),
+                        timestamp=datetime.fromisoformat(t["trade_time"].replace('Z', '+00:00')) if isinstance(t["trade_time"], str) else t["trade_time"],
+                        symbol=t["symbol"],
+                        side=t["side"],
+                        quantity=t["quantity"],
+                        price=t["price"],
+                        fees=t.get("fee", 0.0),
+                    )
+                    for i, t in enumerate(db_trades)
+                    if t.get("status") in ["FILLED", "CLOSED"]
+                ]
+            except Exception as e:
+                logger.warning(f"Could not load trades from database: {e}")
+
+        if not calc.tax_events and calc.trades:
             calc.match_trades_fifo()
 
         liability = calc.calculate_liability()

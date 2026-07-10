@@ -197,7 +197,7 @@ async def lifespan(app: FastAPI):
     # Initialize tax calculator
     try:
         from backend.analytics.tax_calculator import init_tax_calculator, Jurisdiction
-        jurisdiction_str = os.getenv("TAX_JURISDICTION", "USA")
+        jurisdiction_str = os.getenv("TAX_JURISDICTION", "DE")  # Default to Germany
         # Map common abbreviations to enum names
         jurisdiction_map = {"US": "USA", "DE": "GERMANY", "GB": "UK", "NL": "NETHERLANDS", "FR": "FRANCE"}
         jurisdiction_enum_name = jurisdiction_map.get(jurisdiction_str, jurisdiction_str)
