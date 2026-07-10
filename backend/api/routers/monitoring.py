@@ -160,7 +160,7 @@ async def get_dashboard_data():
         _win_rate = collector.get_win_rate([None]) if exits else 0
 
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "system": {
                 "status": health.get("status", "unknown"),
                 "cb_state": health.get("circuit_breaker", {}).get("state", "unknown"),

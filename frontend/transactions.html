@@ -406,6 +406,21 @@
         let allTransactions = [];
         let uniqueSymbols = new Set();
 
+        // Format timestamp as UTC (consistent with API)
+        function formatUTCTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-US', {
+                timeZone: 'UTC',
+                hour12: false,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            }) + ' UTC';
+        }
+
         // Load transactions on page load
         document.addEventListener('DOMContentLoaded', () => {
             loadTransactions();
@@ -481,7 +496,7 @@
                         const pnlSign = t.realized_pnl >= 0 ? '+' : '';
                         return `
                             <tr>
-                                <td>${new Date(t.timestamp).toLocaleString()}</td>
+                                <td>${formatUTCTime(t.timestamp)}</td>
                                 <td><span class="symbol">${t.symbol}</span></td>
                                 <td><span class="side ${t.side.toLowerCase()}">${t.side}</span></td>
                                 <td class="number">${parseFloat(t.quantity).toFixed(8)}</td>
@@ -547,7 +562,7 @@
             if (format === 'csv') {
                 const headers = ['Date', 'Symbol', 'Side', 'Quantity', 'Price', 'Total', 'Fee', 'P&L', 'Status'];
                 const rows = allTransactions.map(t => [
-                    new Date(t.timestamp).toLocaleString(),
+                    formatUTCTime(t.timestamp),
                     t.symbol,
                     t.side,
                     t.quantity.toFixed(8),
@@ -605,7 +620,7 @@
         function copyToClipboard() {
             const csv = allTransactions.map(t =>
                 [
-                    new Date(t.timestamp).toLocaleString(),
+                    formatUTCTime(t.timestamp),
                     t.symbol,
                     t.side,
                     t.quantity.toFixed(8),
