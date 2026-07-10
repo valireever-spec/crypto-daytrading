@@ -843,11 +843,75 @@ async def get_split_brain_status() -> JSONResponse:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+# ============================================================================
+# DASHBOARD ROUTES
+# ============================================================================
+
+# Dashboard routes - serve HTML files directly
+frontend_path = Path(__file__).parent.parent.parent / "frontend"
+
+@app.get("/trading-dashboard", include_in_schema=False)
+async def trading_dashboard():
+    """Serve trading dashboard."""
+    dashboard_file = frontend_path / "trading_dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(path=dashboard_file, media_type="text/html")
+    return JSONResponse(status_code=404, content={"error": "Dashboard not found"})
+
+@app.get("/unified-dashboard", include_in_schema=False)
+async def unified_dashboard():
+    """Serve unified dashboard."""
+    dashboard_file = frontend_path / "unified-dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(path=dashboard_file, media_type="text/html")
+    return JSONResponse(status_code=404, content={"error": "Dashboard not found"})
+
+@app.get("/monitoring-dashboard", include_in_schema=False)
+async def monitoring_dashboard():
+    """Serve monitoring dashboard."""
+    dashboard_file = frontend_path / "monitoring-dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(path=dashboard_file, media_type="text/html")
+    return JSONResponse(status_code=404, content={"error": "Dashboard not found"})
+
+@app.get("/autonomous-dashboard", include_in_schema=False)
+async def autonomous_dashboard():
+    """Serve autonomous dashboard."""
+    dashboard_file = frontend_path / "autonomous-dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(path=dashboard_file, media_type="text/html")
+    return JSONResponse(status_code=404, content={"error": "Dashboard not found"})
+
+@app.get("/parameter-monitor", include_in_schema=False)
+async def parameter_monitor():
+    """Serve parameter monitor dashboard."""
+    dashboard_file = frontend_path / "parameter_monitor_dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(path=dashboard_file, media_type="text/html")
+    return JSONResponse(status_code=404, content={"error": "Dashboard not found"})
+
+@app.get("/simple-dashboard", include_in_schema=False)
+async def simple_dashboard():
+    """Serve simple dashboard."""
+    dashboard_file = frontend_path / "simple-dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(path=dashboard_file, media_type="text/html")
+    return JSONResponse(status_code=404, content={"error": "Dashboard not found"})
+
+@app.get("/learning-dashboard", include_in_schema=False)
+async def learning_dashboard():
+    """Serve learning dashboard."""
+    dashboard_file = frontend_path / "learning_dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(path=dashboard_file, media_type="text/html")
+    return JSONResponse(status_code=404, content={"error": "Dashboard not found"})
+
 # Mount static files if they exist
 static_path = Path(__file__).parent.parent.parent / "frontend"
 if static_path.exists():
     try:
         app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+        logger.info("✅ Dashboard routes configured (accessible at /trading-dashboard, /unified-dashboard, etc.)")
     except Exception as e:
         logger.warning(f"Could not mount static files: {e}")
 
